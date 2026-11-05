@@ -23,21 +23,20 @@
               <h2 id="calendar-title">Kalender</h2>
             </div>
             <div class="month-navigation" aria-label="Monat auswählen">
-              <button type="button" aria-label="Vorheriger Monat" disabled>
+              <button id="previous-month" type="button" aria-label="Vorheriger Monat">
                 <span aria-hidden="true">&lsaquo;</span>
               </button>
               <p id="calendar-month" aria-live="polite">Monat wird geladen</p>
-              <button type="button" aria-label="Nächster Monat" disabled>
+              <button id="next-month" type="button" aria-label="Nächster Monat">
                 <span aria-hidden="true">&rsaquo;</span>
               </button>
             </div>
           </div>
 
           <div id="calendar" class="calendar" aria-busy="true">
-            <p class="calendar-placeholder">
-              Der Kalender wird in einem späteren Schritt ergänzt.
-            </p>
+            <p class="calendar-placeholder" role="status">Kalender wird geladen …</p>
           </div>
+          <p id="calendar-error" class="error-message" role="alert" hidden></p>
         </section>
       </main>
     </div>

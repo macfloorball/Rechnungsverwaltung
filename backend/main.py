@@ -9,6 +9,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.database import (
     DATABASE_PATH,
@@ -397,3 +398,10 @@ def get_invoice_pdf(invoice_id: int, database_path: DatabasePath) -> FileRespons
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
         )
     return FileResponse(pdf_path, media_type="application/pdf")
+
+
+app.mount(
+    "/",
+    StaticFiles(directory=PROJECT_ROOT / "frontend", html=True),
+    name="frontend",
+)
