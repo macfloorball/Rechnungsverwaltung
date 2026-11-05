@@ -393,6 +393,78 @@ def test_additional_training_is_saved_to_calendar_and_invoice_preview(
     assert preview.json()["total_amount_cents"] == 4500
 
 
+def test_calendar_and_invoice_preview_handle_month_and_year_boundaries(
+    client: TestClient,
+) -> None:
+    settings = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    )
+    activity_id = settings.json()["activities"][0]["id"]
+
+    for training_date, hours in (
+        ("2026-12-31", 2),
+        ("2027-01-01", 3),
+        ("2028-02-29", 1),
+    ):
+        response = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity_id,
+                "hours": hours,
+                "status": "completed",
+            },
+        )
+        assert response.status_code == 201
+
+    december = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 12},
+    )
+    january = client.post(
+        "/api/invoices/preview",
+        json={"year": 2027, "month": 1},
+    )
+    leap_february = client.post(
+        "/api/invoices/preview",
+        json={"year": 2028, "month": 2},
+    )
+
+    assert (
+        december.status_code
+        == january.status_code
+        == leap_february.status_code
+        == 200
+    )
+    assert [item["training_date"] for item in december.json()["items"]] == [
+        "2026-12-31"
+    ]
+    assert december.json()["total_amount_cents"] == 3000
+    assert [item["training_date"] for item in january.json()["items"]] == [
+        "2027-01-01"
+    ]
+    assert january.json()["total_amount_cents"] == 4500
+    assert [item["training_date"] for item in leap_february.json()["items"]] == [
+        "2028-02-29"
+    ]
+    assert leap_february.json()["total_amount_cents"] == 1500
+
+    december_calendar = client.get("/api/calendar/2026/12").json()
+    january_calendar = client.get("/api/calendar/2027/1").json()
+    leap_calendar = client.get("/api/calendar/2028/2").json()
+    assert len(december_calendar["days"]) == 31
+    assert december_calendar["days"][-1]["date"] == "2026-12-31"
+    assert len(january_calendar["days"]) == 31
+    assert january_calendar["days"][0]["date"] == "2027-01-01"
+    assert len(leap_calendar["days"]) == 29
+    assert leap_calendar["days"][-1]["date"] == "2028-02-29"
+
+
 def test_invoice_preview_only_includes_completed_trainings(
     client: TestClient,
 ) -> None:
