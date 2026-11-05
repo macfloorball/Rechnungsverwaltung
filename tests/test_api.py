@@ -13,6 +13,7 @@ def client(tmp_path: Path):
     invoice_directory = tmp_path / "rechnungen"
     initialize_database(database_path)
     app.state.test_database_path = database_path
+    app.state.test_invoice_directory = invoice_directory
     app.dependency_overrides[get_database_path] = lambda: database_path
     app.dependency_overrides[get_invoice_directory] = lambda: invoice_directory
     with TestClient(app) as test_client:
@@ -231,6 +232,9 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     assert invoice["total_amount_cents"] == 3000
     assert invoice["items"][0]["unit_rate_cents"] == 1500
     assert invoice["pdf_path"] == "Rechnung_TTC_2026-11.pdf"
+    saved_pdf_path = client.app.state.test_invoice_directory / invoice["pdf_path"]
+    assert saved_pdf_path.is_file()
+    assert saved_pdf_path.name == "Rechnung_TTC_2026-11.pdf"
     pdf_response = client.get(f"/api/invoices/{invoice['id']}/pdf")
     assert pdf_response.status_code == 200
     assert pdf_response.headers["content-type"] == "application/pdf"
@@ -240,6 +244,7 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
         in pdf_response.headers["content-disposition"]
     )
     assert pdf_response.content.startswith(b"%PDF-")
+    assert pdf_response.content == saved_pdf_path.read_bytes()
 
     response = client.delete(f"/api/trainings/{training['id']}")
     assert response.status_code == 204
