@@ -1,5 +1,6 @@
 from io import BytesIO
 from datetime import date
+from decimal import Decimal
 
 from reportlab.pdfgen.canvas import Canvas
 
@@ -11,8 +12,13 @@ from backend.invoice_generator import (
     PAGE_HEIGHT,
     PAGE_MARGIN,
     PAGE_WIDTH,
+    POSITION_COLUMN_WIDTHS,
+    POSITION_HEADER,
+    InvoiceLine,
+    build_position_table,
     draw_party_blocks,
     draw_invoice_heading,
+    draw_position_table,
 )
 
 
@@ -84,3 +90,52 @@ def test_invoice_heading_rejects_invalid_month() -> None:
         assert str(error) == "Der Abrechnungsmonat muss zwischen 1 und 12 liegen"
     else:
         raise AssertionError("Ungültiger Abrechnungsmonat wurde akzeptiert")
+
+
+def test_position_table_formats_invoice_fields_like_template() -> None:
+    table = build_position_table(
+        [
+            InvoiceLine(
+                description="Trainingseinheit-Freitag",
+                training_date=date(2026, 7, 3),
+                hours=Decimal("2"),
+                amount_cents=3000,
+            ),
+            InvoiceLine(
+                description="Assistenz-Trainingseinheit",
+                training_date=date(2026, 7, 10),
+                hours=Decimal("1.5"),
+                amount_cents=3050,
+            ),
+        ]
+    )
+
+    header, first_row, second_row = table._cellvalues
+    assert [cell.getPlainText() for cell in header] == list(POSITION_HEADER)
+    assert first_row[0].getPlainText() == "Trainingseinheit-Freitag"
+    assert first_row[1:] == ["03.07.2026", "2", "30€"]
+    assert second_row[0].getPlainText() == "Assistenz-Trainingseinheit"
+    assert second_row[1:] == ["10.07.2026", "1,5", "30,50€"]
+    assert sum(table._colWidths) == PAGE_WIDTH - 2 * PAGE_MARGIN
+    assert tuple(table._colWidths) == POSITION_COLUMN_WIDTHS
+
+
+def test_position_table_draws_to_a_valid_pdf() -> None:
+    output = BytesIO()
+    pdf = Canvas(output, pagesize=(PAGE_WIDTH, PAGE_HEIGHT), pageCompression=0)
+    bottom_y = draw_position_table(
+        pdf,
+        [
+            InvoiceLine(
+                description="Spielbetreuung",
+                training_date=date(2026, 7, 3),
+                hours=Decimal("2"),
+                amount_cents=2400,
+            )
+        ],
+    )
+    pdf.save()
+
+    assert bottom_y < PAGE_HEIGHT
+    assert output.getvalue().startswith(b"%PDF-")
+    assert b"Spielbetreuung" in output.getvalue()

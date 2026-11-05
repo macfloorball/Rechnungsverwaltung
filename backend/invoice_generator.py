@@ -1,8 +1,14 @@
 from dataclasses import dataclass
 from datetime import date
-from typing import Protocol
+from decimal import Decimal
+from html import escape
+from typing import Protocol, Sequence
 
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import Paragraph, Table, TableStyle
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 PAGE_MARGIN = 70
@@ -26,6 +32,9 @@ GERMAN_MONTHS = (
     "November",
     "Dezember",
 )
+POSITION_TABLE_TOP = PAGE_HEIGHT - 330
+POSITION_COLUMN_WIDTHS = (240, 90, 45, PAGE_WIDTH - 2 * PAGE_MARGIN - 375)
+POSITION_HEADER = ("Trainingseinheit:", "Datum", "Std.:", "Betrag:")
 
 
 @dataclass(frozen=True)
@@ -46,6 +55,14 @@ class InvoiceContactDetails:
 
 
 CONTACT_DETAILS = InvoiceContactDetails()
+
+
+@dataclass(frozen=True)
+class InvoiceLine:
+    description: str
+    training_date: date
+    hours: Decimal
+    amount_cents: int
 
 
 class _TextCanvas(Protocol):
@@ -100,3 +117,82 @@ def draw_invoice_heading(
     pdf.drawString(PAGE_MARGIN, HEADING_Y, heading)
     pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
     pdf.drawRightString(PAGE_WIDTH - PAGE_MARGIN, HEADING_Y, invoice_date_text)
+
+
+def _format_hours(hours: Decimal) -> str:
+    return format(hours.normalize(), "f").replace(".", ",")
+
+
+def _format_euros(amount_cents: int) -> str:
+    euros, cents = divmod(amount_cents, 100)
+    whole_euros = f"{euros:,}".replace(",", ".")
+    if cents == 0:
+        return f"{whole_euros}€"
+    return f"{whole_euros},{cents:02d}€"
+
+
+def build_position_table(items: Sequence[InvoiceLine]) -> Table:
+    description_style = ParagraphStyle(
+        "InvoicePosition",
+        fontName=BODY_FONT,
+        fontSize=BODY_FONT_SIZE,
+        leading=13,
+        textColor=colors.black,
+    )
+    header_style = ParagraphStyle(
+        "InvoicePositionHeader",
+        parent=description_style,
+        fontName=BODY_FONT_BOLD,
+    )
+    rows = [
+        [Paragraph(label, header_style) for label in POSITION_HEADER]
+    ]
+    for item in items:
+        if item.hours <= 0 or item.amount_cents < 0:
+            raise ValueError("Rechnungspositionen müssen gültige Werte enthalten")
+        rows.append(
+            [
+                Paragraph(escape(item.description), description_style),
+                item.training_date.strftime("%d.%m.%Y"),
+                _format_hours(item.hours),
+                _format_euros(item.amount_cents),
+            ]
+        )
+
+    table = Table(
+        rows,
+        colWidths=POSITION_COLUMN_WIDTHS,
+        repeatRows=1,
+        hAlign="LEFT",
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (0, 0), (1, -1), "LEFT"),
+                ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+                ("FONTNAME", (0, 0), (-1, 0), BODY_FONT_BOLD),
+                ("FONTNAME", (0, 1), (-1, -1), BODY_FONT),
+                ("FONTSIZE", (0, 0), (-1, -1), BODY_FONT_SIZE),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, 0), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+                ("TOPPADDING", (0, 1), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 1),
+            ]
+        )
+    )
+    return table
+
+
+def draw_position_table(
+    pdf: Canvas,
+    items: Sequence[InvoiceLine],
+    top_y: float = POSITION_TABLE_TOP,
+) -> float:
+    table = build_position_table(items)
+    _, height = table.wrapOn(pdf, PAGE_WIDTH - 2 * PAGE_MARGIN, top_y)
+    bottom_y = top_y - height
+    table.drawOn(pdf, PAGE_MARGIN, bottom_y)
+    return bottom_y
