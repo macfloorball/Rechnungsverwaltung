@@ -18,11 +18,28 @@ from backend.invoice_generator import (
     InvoiceLine,
     InvoiceFooterDetails,
     build_position_table,
+    build_invoice_filename,
     draw_invoice_footer,
     draw_party_blocks,
     draw_invoice_heading,
     draw_position_table,
 )
+
+
+def test_invoice_filename_uses_zero_padded_year_and_month() -> None:
+    assert build_invoice_filename(2026, 1) == "Rechnung_TTC_2026-01.pdf"
+    assert build_invoice_filename(2026, 11) == "Rechnung_TTC_2026-11.pdf"
+    assert build_invoice_filename(1, 12) == "Rechnung_TTC_0001-12.pdf"
+
+
+def test_invoice_filename_rejects_invalid_year_or_month() -> None:
+    for year, month in ((0, 1), (10000, 1), (2026, 0), (2026, 13)):
+        try:
+            build_invoice_filename(year, month)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Ungültiger Rechnungszeitraum wurde akzeptiert")
 
 
 class RecordingCanvas:

@@ -39,6 +39,14 @@ FOOTER_ROW_GAP = 40
 FOOTER_LINE_GAP = 8
 
 
+def build_invoice_filename(year: int, month: int) -> str:
+    if not 1 <= year <= 9999:
+        raise ValueError("Das Rechnungsjahr muss zwischen 1 und 9999 liegen")
+    if not 1 <= month <= 12:
+        raise ValueError("Der Abrechnungsmonat muss zwischen 1 und 12 liegen")
+    return f"Rechnung_TTC_{year:04d}-{month:02d}.pdf"
+
+
 @dataclass(frozen=True)
 class InvoiceContactDetails:
     recipient_lines: tuple[str, ...] = (
