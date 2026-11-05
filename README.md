@@ -80,8 +80,33 @@ Erwartete Rückgabe:
 {"status":"ok"}
 ```
 
+Die automatisierten Tests startest du mit:
+
+```bash
+python -m pytest
+```
+
+## Aktuelle API
+
+- `GET` und `PUT /api/settings`: Tätigkeitsarten und Preise laden bzw. ändern.
+  `PUT` erwartet ein Objekt mit einer `activities`-Liste.
+- `GET` und `PUT /api/weekly-plan`: Wochenplan laden bzw. vollständig ersetzen.
+- `GET /api/calendar/{year}/{month}`: Monatskalender mit geplanten und
+  gespeicherten Terminen laden.
+- `POST`, `PUT /api/trainings/{id}` und `DELETE /api/trainings/{id}`:
+  Trainingstermine verwalten.
+- `POST /api/invoices/preview`: Abgeschlossene Termine eines Monats
+  abrechnen und eine Vorschau liefern.
+- `POST /api/invoices`: Rechnung samt unveränderlichen Positionen und
+  Preis-Snapshots speichern.
+- `GET /api/invoices/{id}/pdf`: gespeicherte PDF abrufen. Bis zur
+  Implementierung des PDF-Generators antwortet dieser Endpunkt mit `404`.
+
+Ungültige Eingaben werden mit `422` zurückgegeben. Konflikte mit
+Datenbankregeln, etwa eine doppelte Tätigkeitsbezeichnung, ergeben `409`.
+
 ## Wichtige Hinweise
 
 - Die virtuelle Umgebung (`.venv`) wird nicht in Git verwaltet.
 - Lokale Datenbanken und generierte Rechnungen sind in `.gitignore` ausgeschlossen.
-- Die eigentliche Anwendung wird in den späteren Phasen Schritt für Schritt erweitert.
+- Benutzeroberfläche und PDF-Erstellung werden in späteren Phasen ergänzt.
