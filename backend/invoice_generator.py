@@ -35,6 +35,8 @@ GERMAN_MONTHS = (
 POSITION_TABLE_TOP = PAGE_HEIGHT - 330
 POSITION_COLUMN_WIDTHS = (240, 90, 45, PAGE_WIDTH - 2 * PAGE_MARGIN - 375)
 POSITION_HEADER = ("Trainingseinheit:", "Datum", "Std.:", "Betrag:")
+FOOTER_ROW_GAP = 40
+FOOTER_LINE_GAP = 8
 
 
 @dataclass(frozen=True)
@@ -65,12 +67,28 @@ class InvoiceLine:
     amount_cents: int
 
 
+@dataclass(frozen=True)
+class InvoiceFooterDetails:
+    account_holder: str = "Danilo Kappen"
+    iban: str = ""
+    bank_name: str = "Volksbank Köln Bonn eG"
+    greeting: str = "Mit freundlichen Grüßen"
+    sender_name: str = "Danilo Kappen"
+
+
+FOOTER_DETAILS = InvoiceFooterDetails()
+
+
 class _TextCanvas(Protocol):
     def setFont(self, name: str, size: int) -> None: ...
 
     def drawString(self, x: float, y: float, text: str) -> None: ...
 
     def drawRightString(self, x: float, y: float, text: str) -> None: ...
+
+    def setLineWidth(self, width: float) -> None: ...
+
+    def line(self, x1: float, y1: float, x2: float, y2: float) -> None: ...
 
 
 def draw_party_blocks(
@@ -196,3 +214,51 @@ def draw_position_table(
     bottom_y = top_y - height
     table.drawOn(pdf, PAGE_MARGIN, bottom_y)
     return bottom_y
+
+
+def draw_invoice_footer(
+    pdf: _TextCanvas,
+    total_amount_cents: int,
+    table_bottom_y: float,
+    details: InvoiceFooterDetails = FOOTER_DETAILS,
+) -> float:
+    if total_amount_cents < 0:
+        raise ValueError("Die Rechnungssumme darf nicht negativ sein")
+
+    total_y = table_bottom_y - FOOTER_ROW_GAP
+    rule_top_y = total_y + FOOTER_LINE_GAP
+    rule_bottom_y = total_y - FOOTER_LINE_GAP
+    bank_top_y = rule_bottom_y - 44
+    bank_lines = [
+        "Bankverbindung:",
+        f"Kontoinhaber: {details.account_holder}",
+    ]
+    if details.iban:
+        bank_lines.append(f"IBAN: {details.iban}")
+    else:
+        bank_lines.append("IBAN:")
+    bank_lines.append(details.bank_name)
+    greeting_y = bank_top_y - len(bank_lines) * LINE_HEIGHT - 48
+    sender_y = greeting_y - 34
+
+    if sender_y < PAGE_MARGIN:
+        raise ValueError("Die Rechnungspositionen passen nicht mit dem Footer auf eine Seite")
+
+    pdf.setLineWidth(0.5)
+    pdf.line(PAGE_MARGIN, rule_top_y, PAGE_WIDTH - PAGE_MARGIN, rule_top_y)
+    pdf.setFont(BODY_FONT_BOLD, BODY_FONT_SIZE)
+    pdf.drawString(PAGE_MARGIN, total_y, "Endsumme:")
+    pdf.drawRightString(
+        PAGE_WIDTH - PAGE_MARGIN,
+        total_y,
+        _format_euros(total_amount_cents),
+    )
+    pdf.line(PAGE_MARGIN, rule_bottom_y, PAGE_WIDTH - PAGE_MARGIN, rule_bottom_y)
+
+    pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
+    for index, line in enumerate(bank_lines):
+        pdf.drawString(PAGE_MARGIN, bank_top_y - index * LINE_HEIGHT, line)
+
+    pdf.drawString(PAGE_MARGIN, greeting_y, details.greeting)
+    pdf.drawString(PAGE_MARGIN, sender_y, details.sender_name)
+    return sender_y

@@ -8,6 +8,7 @@ from backend.invoice_generator import (
     BODY_FONT,
     BODY_FONT_BOLD,
     CONTACT_DETAILS,
+    FOOTER_DETAILS,
     HEADING_Y,
     PAGE_HEIGHT,
     PAGE_MARGIN,
@@ -15,7 +16,9 @@ from backend.invoice_generator import (
     POSITION_COLUMN_WIDTHS,
     POSITION_HEADER,
     InvoiceLine,
+    InvoiceFooterDetails,
     build_position_table,
+    draw_invoice_footer,
     draw_party_blocks,
     draw_invoice_heading,
     draw_position_table,
@@ -27,6 +30,7 @@ class RecordingCanvas:
         self.fonts: list[tuple[str, int]] = []
         self.left_aligned: list[tuple[float, float, str]] = []
         self.right_aligned: list[tuple[float, float, str]] = []
+        self.lines: list[tuple[float, float, float, float]] = []
 
     def setFont(self, name: str, size: int) -> None:
         self.fonts.append((name, size))
@@ -36,6 +40,12 @@ class RecordingCanvas:
 
     def drawRightString(self, x: float, y: float, text: str) -> None:
         self.right_aligned.append((x, y, text))
+
+    def setLineWidth(self, width: float) -> None:
+        pass
+
+    def line(self, x1: float, y1: float, x2: float, y2: float) -> None:
+        self.lines.append((x1, y1, x2, y2))
 
 
 def test_party_blocks_include_template_contact_details() -> None:
@@ -139,3 +149,52 @@ def test_position_table_draws_to_a_valid_pdf() -> None:
     assert bottom_y < PAGE_HEIGHT
     assert output.getvalue().startswith(b"%PDF-")
     assert b"Spielbetreuung" in output.getvalue()
+
+
+def test_invoice_footer_includes_total_bank_details_and_greeting() -> None:
+    pdf = RecordingCanvas()
+    sender_y = draw_invoice_footer(pdf, 27000, 430)
+
+    left_text = [line[2] for line in pdf.left_aligned]
+    assert left_text == [
+        "Endsumme:",
+        "Bankverbindung:",
+        "Kontoinhaber: Danilo Kappen",
+        "IBAN:",
+        "Volksbank Köln Bonn eG",
+        "Mit freundlichen Grüßen",
+        "Danilo Kappen",
+    ]
+    assert pdf.right_aligned == [(PAGE_WIDTH - PAGE_MARGIN, 390, "270€")]
+    assert len(pdf.lines) == 2
+    assert all(line[0] == PAGE_MARGIN and line[2] == PAGE_WIDTH - PAGE_MARGIN for line in pdf.lines)
+    assert sender_y == pdf.left_aligned[-1][1]
+    assert FOOTER_DETAILS.iban == ""
+
+
+def test_invoice_footer_rejects_negative_total_and_page_overflow() -> None:
+    pdf = RecordingCanvas()
+    for total, table_bottom in ((-1, 430), (0, 130)):
+        try:
+            draw_invoice_footer(pdf, total, table_bottom)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Ungültige Footer-Werte wurden akzeptiert")
+
+
+def test_invoice_footer_renders_bank_and_greeting_to_pdf() -> None:
+    output = BytesIO()
+    pdf = Canvas(output, pagesize=(PAGE_WIDTH, PAGE_HEIGHT), pageCompression=0)
+    draw_invoice_footer(
+        pdf,
+        27000,
+        430,
+        InvoiceFooterDetails(iban=""),
+    )
+    pdf.save()
+
+    assert output.getvalue().startswith(b"%PDF-")
+    assert b"Bankverbindung:" in output.getvalue()
+    assert b"Volksbank K" in output.getvalue()
+    assert b"Mit freundlichen Gr" in output.getvalue()
