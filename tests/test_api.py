@@ -47,6 +47,39 @@ def test_settings_conflict_rolls_back_all_changes(client: TestClient) -> None:
     assert client.get("/api/settings").json()["activities"] == []
 
 
+def test_activity_prices_are_centralized_in_settings(client: TestClient) -> None:
+    response = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    activity = response.json()["activities"][0]
+
+    response = client.get("/api/settings")
+    assert response.status_code == 200
+    assert response.json()["activities"][0]["hourly_rate_cents"] == 1500
+
+    response = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {
+                    "id": activity["id"],
+                    "name": "Training",
+                    "hourly_rate_cents": 1750,
+                    "is_active": True,
+                }
+            ]
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["activities"][0]["hourly_rate_cents"] == 1750
+
+
 def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
     response = client.put(
         "/api/settings",
