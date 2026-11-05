@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7fa">
+    <title>TTC-Rechnungsverwaltung</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <p class="eyebrow">Tischtennisclub</p>
+        <h1>Rechnungsverwaltung</h1>
+      </header>
+
+      <main>
+        <section class="calendar-section" aria-labelledby="calendar-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Trainingsübersicht</p>
+              <h2 id="calendar-title">Kalender</h2>
+            </div>
+            <div class="month-navigation" aria-label="Monat auswählen">
+              <button type="button" aria-label="Vorheriger Monat" disabled>
+                <span aria-hidden="true">&lsaquo;</span>
+              </button>
+              <p id="calendar-month" aria-live="polite">Monat wird geladen</p>
+              <button type="button" aria-label="Nächster Monat" disabled>
+                <span aria-hidden="true">&rsaquo;</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="calendar" class="calendar" aria-busy="true">
+            <p class="calendar-placeholder">
+              Der Kalender wird in einem späteren Schritt ergänzt.
+            </p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
