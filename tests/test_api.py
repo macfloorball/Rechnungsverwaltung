@@ -610,6 +610,7 @@ def test_saved_invoice_keeps_original_prices_after_price_change(
         },
     )
     assert response.status_code == 201
+    original_training = response.json()
 
     response = client.post(
         "/api/invoices",
@@ -639,6 +640,15 @@ def test_saved_invoice_keeps_original_prices_after_price_change(
     )
     assert response.status_code == 200
 
+    november_calendar = client.get("/api/calendar/2026/11").json()
+    original_training_after_change = next(
+        training
+        for day in november_calendar["days"]
+        for training in day["trainings"]
+        if training["id"] == original_training["id"]
+    )
+    assert original_training_after_change["unit_rate_cents"] == 1500
+
     persisted_invoice = get_invoice(
         invoice["id"],
         client.app.state.test_database_path,
@@ -647,3 +657,24 @@ def test_saved_invoice_keeps_original_prices_after_price_change(
     assert persisted_invoice["total_amount_cents"] == 3000
     assert persisted_invoice["items"][0]["unit_rate_cents"] == 1500
     assert persisted_invoice["items"][0]["amount_cents"] == 3000
+
+    new_training_response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-12-03",
+            "activity_type_id": activity_id,
+            "hours": 2,
+            "status": "completed",
+        },
+    )
+    assert new_training_response.status_code == 201
+    assert new_training_response.json()["unit_rate_cents"] == 2200
+
+    december_preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 12},
+    )
+    assert december_preview.status_code == 200
+    assert december_preview.json()["items"][0]["unit_rate_cents"] == 2200
+    assert december_preview.json()["items"][0]["amount_cents"] == 4400
+    assert december_preview.json()["total_amount_cents"] == 4400
