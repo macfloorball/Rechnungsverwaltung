@@ -267,3 +267,70 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
     assert item["hours"] == pytest.approx(0.333)
     assert item["amount_cents"] == 500
     assert preview.json()["total_amount_cents"] == 500
+
+
+def test_invoice_preview_only_includes_completed_trainings(
+    client: TestClient,
+) -> None:
+    client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    )
+    activity_id = client.get("/api/settings").json()["activities"][0]["id"]
+    response = client.put(
+        "/api/weekly-plan",
+        json=[
+            {
+                "weekday": 3,
+                "activity_type_id": activity_id,
+                "hours": 1.5,
+            }
+        ],
+    )
+    assert response.status_code == 200
+    training_ids = {}
+    for training_date, training_status in (
+        ("2026-11-03", "planned"),
+        ("2026-11-04", "cancelled"),
+        ("2026-11-05", "completed"),
+        ("2026-10-31", "completed"),
+    ):
+        response = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity_id,
+                "hours": 2,
+                "status": training_status,
+            },
+        )
+        assert response.status_code == 201
+        training_ids[training_date] = response.json()["id"]
+
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-08",
+            "activity_type_id": activity_id,
+            "hours": 2,
+            "status": "completed",
+        },
+    )
+    assert response.status_code == 201
+    training_ids["2026-11-08"] = response.json()["id"]
+
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    items = preview.json()["items"]
+    assert [item["training_id"] for item in items] == [
+        training_ids["2026-11-05"],
+        training_ids["2026-11-08"],
+    ]
+    assert preview.json()["total_amount_cents"] == 6000
