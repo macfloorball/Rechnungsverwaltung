@@ -97,6 +97,34 @@ def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
     assert planned["status"] == "planned"
     assert client.get("/api/calendar/2026/13").status_code == 422
 
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-08",
+            "activity_type_id": activities[1]["id"],
+            "hours": 2,
+            "status": "completed",
+        },
+    )
+    assert response.status_code == 201
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-08",
+            "activity_type_id": activities[0]["id"],
+            "hours": 1.5,
+            "status": "completed",
+        },
+    )
+    assert response.status_code == 201
+    calendar = client.get("/api/calendar/2026/11").json()
+    sunday = next(day for day in calendar["days"] if day["date"] == "2026-11-08")
+    assert len(sunday["trainings"]) == 2
+    assert {
+        training["activity_name"] for training in sunday["trainings"]
+    } == {"Training", "Assistenz"}
+    assert all(training["status"] == "completed" for training in sunday["trainings"])
+
 
 def test_training_and_invoice_endpoints(client: TestClient) -> None:
     client.put(
@@ -127,6 +155,25 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     )
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
+
+    response = client.put(
+        f"/api/trainings/{training['id']}",
+        json={"status": "cancelled"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["total_amount_cents"] == 0
+
+    response = client.put(
+        f"/api/trainings/{training['id']}",
+        json={"status": "completed"},
+    )
+    assert response.status_code == 200
 
     preview = client.post(
         "/api/invoices/preview",

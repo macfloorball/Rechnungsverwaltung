@@ -40,5 +40,43 @@
         </section>
       </main>
     </div>
+
+    <dialog id="training-dialog" aria-labelledby="training-dialog-title">
+      <form id="training-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Trainingstermin</p>
+            <h2 id="training-dialog-title">Termin bearbeiten</h2>
+          </div>
+          <button id="close-training-dialog" class="icon-button" type="button" aria-label="Dialog schließen">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <p id="training-dialog-date" class="dialog-date"></p>
+
+        <label for="training-activity">Tätigkeit</label>
+        <select id="training-activity" name="activity_type_id" required></select>
+
+        <label for="training-hours">Stunden</label>
+        <input id="training-hours" name="hours" type="number" min="0.01" step="0.01" required>
+
+        <label for="training-status">Status</label>
+        <select id="training-status" name="status" required>
+          <option value="planned">Geplant</option>
+          <option value="completed">Durchgeführt</option>
+          <option value="cancelled">Ausgefallen</option>
+        </select>
+
+        <label for="training-note">Notiz <span class="optional-label">(optional)</span></label>
+        <textarea id="training-note" name="note" rows="3" maxlength="1000"></textarea>
+
+        <p id="training-error" class="error-message" role="alert" hidden></p>
+
+        <div class="dialog-actions">
+          <button id="cancel-training-edit" class="secondary-button" type="button">Abbrechen</button>
+          <button id="save-training-edit" class="primary-button" type="submit">Speichern</button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>
