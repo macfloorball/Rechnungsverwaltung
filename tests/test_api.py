@@ -373,3 +373,20 @@ def test_invoice_preview_keeps_multiple_activities_on_same_day(
     assert {item["description"] for item in items} == {"Training", "Assistenz"}
     assert [item["amount_cents"] for item in items] == [2250, 4000]
     assert preview.json()["total_amount_cents"] == 6250
+    assert preview.json()["total_amount_cents"] == sum(
+        item["amount_cents"] for item in items
+    )
+
+    invoice = client.post(
+        "/api/invoices",
+        json={
+            "year": 2026,
+            "month": 11,
+            "invoice_date": "2026-12-01",
+        },
+    )
+    assert invoice.status_code == 201
+    assert invoice.json()["total_amount_cents"] == 6250
+    assert invoice.json()["total_amount_cents"] == sum(
+        item["amount_cents"] for item in invoice.json()["items"]
+    )
