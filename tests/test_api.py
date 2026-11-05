@@ -97,6 +97,22 @@ def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
     assert planned["status"] == "planned"
     assert client.get("/api/calendar/2026/13").status_code == 422
 
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-08",
+            "activity_type_id": activities[1]["id"],
+            "hours": 2,
+            "status": "completed",
+        },
+    )
+    assert response.status_code == 201
+    calendar = client.get("/api/calendar/2026/11").json()
+    sunday = next(day for day in calendar["days"] if day["date"] == "2026-11-08")
+    assert len(sunday["trainings"]) == 1
+    assert sunday["trainings"][0]["activity_name"] == "Assistenz"
+    assert sunday["trainings"][0]["status"] == "completed"
+
 
 def test_training_and_invoice_endpoints(client: TestClient) -> None:
     client.put(

@@ -220,6 +220,28 @@ button {
   color: #526579;
 }
 
+.add-training-button {
+  margin-top: 8px;
+  padding: 4px 6px;
+  color: #315f84;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #fff;
+  border: 1px dashed #a9bdcf;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.add-training-button:hover {
+  background: #edf6fc;
+  border-color: #3b82b7;
+}
+
+.add-training-button:focus-visible {
+  outline: 2px solid #153c61;
+  outline-offset: 2px;
+}
+
 dialog {
   width: min(460px, calc(100% - 32px));
   max-height: min(90vh, 720px);
@@ -412,5 +434,11 @@ dialog textarea {
   .training {
     padding: 4px 3px;
     font-size: 0.62rem;
+  }
+
+  .add-training-button {
+    width: 100%;
+    padding: 4px 2px;
+    font-size: 0.58rem;
   }
 }

@@ -80,6 +80,12 @@ function renderCalendar(container, data) {
       dayCell.append(list);
     }
 
+    const addButton = createElement("button", "add-training-button", "＋ Termin");
+    addButton.type = "button";
+    addButton.dataset.newDate = day.date;
+    addButton.setAttribute("aria-label", `Termin am ${day.date} hinzufügen`);
+    dayCell.append(addButton);
+
     grid.append(dayCell);
   }
 

@@ -25,6 +25,7 @@ async function requestJson(url, options) {
 export function bindTrainingEditor(calendar, onSaved) {
   const dialog = document.querySelector("#training-dialog");
   const form = document.querySelector("#training-form");
+  const dialogTitle = document.querySelector("#training-dialog-title");
   const dateLabel = document.querySelector("#training-dialog-date");
   const activitySelect = document.querySelector("#training-activity");
   const hoursInput = document.querySelector("#training-hours");
@@ -38,6 +39,7 @@ export function bindTrainingEditor(calendar, onSaved) {
   if (
     !(dialog instanceof HTMLDialogElement)
     || !(form instanceof HTMLFormElement)
+    || !(dialogTitle instanceof HTMLElement)
     || !(dateLabel instanceof HTMLElement)
     || !(activitySelect instanceof HTMLSelectElement)
     || !(hoursInput instanceof HTMLInputElement)
@@ -55,6 +57,8 @@ export function bindTrainingEditor(calendar, onSaved) {
 
   async function openEditor(training) {
     selectedTraining = training;
+    const isNewTraining = training.id === null;
+    dialogTitle.textContent = isNewTraining ? "Termin hinzufügen" : "Termin bearbeiten";
     errorMessage.hidden = true;
     dateLabel.textContent = new Intl.DateTimeFormat("de-DE", {
       dateStyle: "long",
@@ -78,10 +82,12 @@ export function bindTrainingEditor(calendar, onSaved) {
         option.textContent = activity.name;
         activitySelect.append(option);
       }
-      activitySelect.value = String(training.activity_type_id);
       if (activities.length === 0) {
         throw new Error("Es sind keine Tätigkeitsarten eingerichtet.");
       }
+      activitySelect.value = String(
+        training.activity_type_id ?? activities[0].id,
+      );
       saveButton.disabled = false;
       activitySelect.focus();
     } catch (error) {
@@ -92,6 +98,18 @@ export function bindTrainingEditor(calendar, onSaved) {
   calendar.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
+      return;
+    }
+    const addButton = target.closest("[data-new-date]");
+    if (addButton instanceof HTMLButtonElement) {
+      openEditor({
+        id: null,
+        training_date: addButton.dataset.newDate,
+        activity_type_id: null,
+        hours: 1,
+        status: "planned",
+        note: null,
+      });
       return;
     }
     const button = target.closest("[data-training]");
