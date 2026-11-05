@@ -99,17 +99,21 @@ python -m pytest
   abrechnen und Positionen mit Trainingseinheit, Datum, Stunden und Betrag
   für die Rechnungsvorschau liefern. Die Weboberfläche stellt diese im
   Tabellenlayout der bereitgestellten Rechnung dar.
-- `POST /api/invoices`: Rechnung samt unveränderlichen Positionen und
-  Preis-Snapshots speichern.
-- `GET /api/invoices/{id}/pdf`: gespeicherte PDF abrufen. Bis zur
-  Implementierung des PDF-Generators antwortet dieser Endpunkt mit `404`.
+- `POST /api/invoices`: Rechnung samt unveränderlichen Positionen,
+  Preis-Snapshots und PDF speichern. Der Dateiname lautet
+  `Rechnung_TTC_YYYY-MM.pdf`; pro Monat wird höchstens eine Rechnung
+  erstellt.
+- `GET /api/invoices/{id}/pdf`: gespeicherte PDF im Browser anzeigen oder
+  herunterladen. Die Weboberfläche bietet beide Aktionen nach dem Erstellen
+  der Rechnung an.
 
-Ungültige Eingaben werden mit `422` zurückgegeben. Konflikte mit
-Datenbankregeln, etwa eine doppelte Tätigkeitsbezeichnung, ergeben `409`.
+Ungültige Eingaben werden mit `422` zurückgegeben. Eine Rechnung ohne
+abrechenbare Termine ergibt `400`; Konflikte, etwa eine doppelte
+Tätigkeitsbezeichnung oder eine Rechnung für einen bereits abgerechneten
+Monat, ergeben `409`.
 
 ## Wichtige Hinweise
 
 - Die virtuelle Umgebung (`.venv`) wird nicht in Git verwaltet.
 - Lokale Datenbanken und generierte Rechnungen sind in `.gitignore` ausgeschlossen.
-- Die Oberfläche und Rechnungsvorschau werden in Phase 3 und 4 ergänzt;
-  die PDF-Erstellung folgt in Phase 5.
+- PDF-Rechnungen werden im Ordner `rechnungen/` gespeichert.

@@ -23,6 +23,7 @@ from backend.invoice_generator import (
     draw_party_blocks,
     draw_invoice_heading,
     draw_position_table,
+    render_invoice_pdf,
 )
 
 
@@ -40,6 +41,26 @@ def test_invoice_filename_rejects_invalid_year_or_month() -> None:
             pass
         else:
             raise AssertionError("Ungültiger Rechnungszeitraum wurde akzeptiert")
+
+
+def test_render_invoice_pdf_creates_complete_pdf_document() -> None:
+    pdf = render_invoice_pdf(
+        2026,
+        11,
+        date(2026, 12, 1),
+        [
+            InvoiceLine(
+                description="Training",
+                training_date=date(2026, 11, 5),
+                hours=Decimal("2"),
+                amount_cents=3000,
+            )
+        ],
+        3000,
+    )
+
+    assert pdf.startswith(b"%PDF-")
+    assert pdf.endswith(b"%%EOF\n")
 
 
 class RecordingCanvas:

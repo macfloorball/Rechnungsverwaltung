@@ -81,6 +81,16 @@
             <p id="invoice-empty" class="invoice-empty" hidden>
               In diesem Monat gibt es keine durchgeführten Termine.
             </p>
+            <div class="invoice-actions">
+              <button id="create-invoice" class="primary-button" type="button" disabled>
+                Rechnung erstellen und speichern
+              </button>
+              <a id="open-invoice-pdf" target="_blank" rel="noopener" hidden>
+                Rechnung im Browser öffnen
+              </a>
+              <a id="download-invoice-pdf" download hidden>PDF herunterladen</a>
+            </div>
+            <p id="invoice-create-error" class="error-message" role="alert" hidden></p>
           </div>
         </section>
       </main>

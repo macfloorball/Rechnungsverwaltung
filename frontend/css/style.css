@@ -159,8 +159,22 @@ button {
   color: #526579;
 }
 
+.invoice-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.invoice-actions a {
+  color: #153c61;
+  font-weight: 700;
+}
+
 .invoice-preview[hidden],
-.invoice-empty[hidden] {
+.invoice-empty[hidden],
+.invoice-actions [hidden] {
   display: none;
 }
 

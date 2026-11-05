@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from html import escape
+from io import BytesIO
 from typing import Protocol, Sequence
 
 from reportlab.lib import colors
@@ -73,6 +74,24 @@ class InvoiceLine:
     training_date: date
     hours: Decimal
     amount_cents: int
+
+
+def render_invoice_pdf(
+    year: int,
+    month: int,
+    invoice_date: date,
+    items: Sequence[InvoiceLine],
+    total_amount_cents: int,
+) -> bytes:
+    build_invoice_filename(year, month)
+    output = BytesIO()
+    pdf = Canvas(output, pagesize=A4)
+    draw_party_blocks(pdf)
+    draw_invoice_heading(pdf, year, month, invoice_date)
+    table_bottom_y = draw_position_table(pdf, items)
+    draw_invoice_footer(pdf, total_amount_cents, table_bottom_y)
+    pdf.save()
+    return output.getvalue()
 
 
 @dataclass(frozen=True)
