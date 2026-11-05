@@ -33,7 +33,7 @@ GERMAN_MONTHS = (
     "November",
     "Dezember",
 )
-POSITION_TABLE_TOP = PAGE_HEIGHT - 330
+POSITION_TABLE_TOP = PAGE_HEIGHT - 307
 POSITION_COLUMN_WIDTHS = (240, 90, 45, PAGE_WIDTH - 2 * PAGE_MARGIN - 375)
 POSITION_HEADER = ("Trainingseinheit:", "Datum", "Std.:", "Betrag:")
 FOOTER_ROW_GAP = 40
@@ -74,6 +74,54 @@ class InvoiceLine:
     training_date: date
     hours: Decimal
     amount_cents: int
+    unit_rate_cents: int | None = None
+
+
+class _TextCanvas(Protocol):
+    def setFont(self, name: str, size: int) -> None: ...
+
+    def drawString(self, x: float, y: float, text: str) -> None: ...
+
+    def drawRightString(self, x: float, y: float, text: str) -> None: ...
+
+    def setLineWidth(self, width: float) -> None: ...
+
+    def line(self, x1: float, y1: float, x2: float, y2: float) -> None: ...
+
+
+def draw_invoice_rate_details(
+    pdf: _TextCanvas,
+    items: Sequence[InvoiceLine],
+) -> float:
+    rates = list(
+        dict.fromkeys(
+            (item.description, item.unit_rate_cents)
+            for item in items
+            if item.unit_rate_cents is not None
+        )
+    )
+    if not rates:
+        raise ValueError("Für die Rechnung fehlen die hinterlegten Stundenpreise")
+
+    rate_heading_y = HEADING_Y - 27
+    pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
+    pdf.drawString(PAGE_MARGIN, rate_heading_y, "Honorar:")
+    rate_y = rate_heading_y - 18
+    for description, rate_cents in rates:
+        pdf.drawString(
+            PAGE_MARGIN,
+            rate_y,
+            f"{_format_euros(rate_cents)} / Stunde {description}",
+        )
+        rate_y -= LINE_HEIGHT
+
+    intro_y = rate_y - 20
+    pdf.drawString(
+        PAGE_MARGIN,
+        intro_y,
+        "Hiermit stelle ich folgenden Betrag in Rechnung:",
+    )
+    return intro_y
 
 
 def render_invoice_pdf(
@@ -88,7 +136,8 @@ def render_invoice_pdf(
     pdf = Canvas(output, pagesize=A4)
     draw_party_blocks(pdf)
     draw_invoice_heading(pdf, year, month, invoice_date)
-    table_bottom_y = draw_position_table(pdf, items)
+    intro_y = draw_invoice_rate_details(pdf, items)
+    table_bottom_y = draw_position_table(pdf, items, intro_y - 13)
     draw_invoice_footer(pdf, total_amount_cents, table_bottom_y)
     pdf.save()
     return output.getvalue()
@@ -104,18 +153,6 @@ class InvoiceFooterDetails:
 
 
 FOOTER_DETAILS = InvoiceFooterDetails()
-
-
-class _TextCanvas(Protocol):
-    def setFont(self, name: str, size: int) -> None: ...
-
-    def drawString(self, x: float, y: float, text: str) -> None: ...
-
-    def drawRightString(self, x: float, y: float, text: str) -> None: ...
-
-    def setLineWidth(self, width: float) -> None: ...
-
-    def line(self, x1: float, y1: float, x2: float, y2: float) -> None: ...
 
 
 def draw_party_blocks(

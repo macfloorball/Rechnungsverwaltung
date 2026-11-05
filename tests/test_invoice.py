@@ -22,6 +22,7 @@ from backend.invoice_generator import (
     draw_invoice_footer,
     draw_party_blocks,
     draw_invoice_heading,
+    draw_invoice_rate_details,
     draw_position_table,
     render_invoice_pdf,
 )
@@ -54,6 +55,7 @@ def test_render_invoice_pdf_creates_complete_pdf_document() -> None:
                 training_date=date(2026, 11, 5),
                 hours=Decimal("2"),
                 amount_cents=3000,
+                unit_rate_cents=1500,
             )
         ],
         3000,
@@ -84,6 +86,36 @@ class RecordingCanvas:
 
     def line(self, x1: float, y1: float, x2: float, y2: float) -> None:
         self.lines.append((x1, y1, x2, y2))
+
+
+def test_invoice_rate_details_include_prices_and_intro_text() -> None:
+    pdf = RecordingCanvas()
+    draw_invoice_rate_details(
+        pdf,
+        [
+            InvoiceLine(
+                description="Trainingseinheit",
+                training_date=date(2026, 7, 3),
+                hours=Decimal("2"),
+                amount_cents=3000,
+                unit_rate_cents=1500,
+            ),
+            InvoiceLine(
+                description="Assistenz-Trainingseinheit",
+                training_date=date(2026, 7, 3),
+                hours=Decimal("1"),
+                amount_cents=2000,
+                unit_rate_cents=2000,
+            ),
+        ],
+    )
+
+    assert [line[2] for line in pdf.left_aligned] == [
+        "Honorar:",
+        "15€ / Stunde Trainingseinheit",
+        "20€ / Stunde Assistenz-Trainingseinheit",
+        "Hiermit stelle ich folgenden Betrag in Rechnung:",
+    ]
 
 
 def test_party_blocks_include_template_contact_details() -> None:

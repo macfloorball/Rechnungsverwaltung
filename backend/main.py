@@ -404,6 +404,7 @@ def post_invoice(
                 training_date=date.fromisoformat(item["training_date"]),
                 hours=Decimal(str(item["hours"])),
                 amount_cents=item["amount_cents"],
+                unit_rate_cents=item["unit_rate_cents"],
             )
             for item in items
         ],
