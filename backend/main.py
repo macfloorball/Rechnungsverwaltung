@@ -23,6 +23,11 @@ from backend.database import (
     list_records,
     update_record,
 )
+from backend.invoice_generator import (
+    InvoiceLine,
+    build_invoice_filename,
+    render_invoice_pdf,
+)
 from backend.models import (
     InvoiceCreate,
     InvoicePeriod,
@@ -47,7 +52,12 @@ def get_database_path() -> Path:
     return DATABASE_PATH
 
 
+def get_invoice_directory() -> Path:
+    return PROJECT_ROOT / "rechnungen"
+
+
 DatabasePath = Annotated[Path, Depends(get_database_path)]
+InvoiceDirectory = Annotated[Path, Depends(get_invoice_directory)]
 
 
 @app.exception_handler(sqlite3.IntegrityError)
@@ -357,28 +367,90 @@ def preview_invoice(
 def post_invoice(
     payload: InvoiceCreate,
     database_path: DatabasePath,
+    invoice_directory: InvoiceDirectory,
 ) -> dict[str, Any]:
     items, total_amount_cents = _build_invoice_items(
         payload.year,
         payload.month,
         database_path,
     )
-    invoice_id = create_invoice_with_items(
-        {
-            "year": payload.year,
-            "month": payload.month,
-            "invoice_date": payload.invoice_date.isoformat(),
-            "invoice_number": payload.invoice_number,
-            "total_amount_cents": total_amount_cents,
-        },
-        items,
+    if not items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Für den ausgewählten Monat gibt es keine abrechenbaren Termine",
+        )
+
+    existing_invoices = list_records(
+        "invoices",
+        {"year": payload.year, "month": payload.month},
         database_path,
     )
-    return get_invoice(invoice_id, database_path) or {}
+    if existing_invoices:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
+        )
+
+    filename = build_invoice_filename(payload.year, payload.month)
+    pdf_path = invoice_directory / filename
+    invoice_directory.mkdir(parents=True, exist_ok=True)
+    pdf_content = render_invoice_pdf(
+        payload.year,
+        payload.month,
+        payload.invoice_date,
+        [
+            InvoiceLine(
+                description=item["description"],
+                training_date=date.fromisoformat(item["training_date"]),
+                hours=Decimal(str(item["hours"])),
+                amount_cents=item["amount_cents"],
+                unit_rate_cents=item["unit_rate_cents"],
+            )
+            for item in items
+        ],
+        total_amount_cents,
+    )
+    try:
+        with pdf_path.open("xb") as pdf_file:
+            pdf_file.write(pdf_content)
+    except FileExistsError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Die PDF-Datei für diesen Monat existiert bereits",
+        ) from error
+    except Exception:
+        pdf_path.unlink(missing_ok=True)
+        raise
+
+    try:
+        invoice_id = create_invoice_with_items(
+            {
+                "year": payload.year,
+                "month": payload.month,
+                "invoice_date": payload.invoice_date.isoformat(),
+                "invoice_number": payload.invoice_number,
+                "total_amount_cents": total_amount_cents,
+                "pdf_path": filename,
+            },
+            items,
+            database_path,
+        )
+    except Exception:
+        pdf_path.unlink(missing_ok=True)
+        raise
+
+    invoice = get_invoice(invoice_id, database_path)
+    if invoice is None:
+        raise RuntimeError(f"Die soeben erstellte Rechnung {invoice_id} fehlt")
+    return invoice
 
 
 @app.get("/api/invoices/{invoice_id}/pdf")
-def get_invoice_pdf(invoice_id: int, database_path: DatabasePath) -> FileResponse:
+def get_invoice_pdf(
+    invoice_id: int,
+    database_path: DatabasePath,
+    invoice_directory: InvoiceDirectory,
+) -> FileResponse:
     invoice = get_invoice(invoice_id, database_path)
     if invoice is None or not invoice["pdf_path"]:
         raise HTTPException(
@@ -386,10 +458,14 @@ def get_invoice_pdf(invoice_id: int, database_path: DatabasePath) -> FileRespons
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
         )
 
-    pdf_path = Path(invoice["pdf_path"]).resolve()
-    invoice_directory = (PROJECT_ROOT / "rechnungen").resolve()
+    stored_path = Path(invoice["pdf_path"])
+    pdf_path = (invoice_directory / stored_path).resolve()
+    invoice_directory = invoice_directory.resolve()
     if (
-        not pdf_path.is_relative_to(invoice_directory)
+        stored_path.is_absolute()
+        or stored_path
+        != Path(build_invoice_filename(invoice["year"], invoice["month"]))
+        or not pdf_path.is_relative_to(invoice_directory)
         or not pdf_path.is_file()
         or pdf_path.suffix.lower() != ".pdf"
     ):
@@ -397,7 +473,12 @@ def get_invoice_pdf(invoice_id: int, database_path: DatabasePath) -> FileRespons
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
         )
-    return FileResponse(pdf_path, media_type="application/pdf")
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=build_invoice_filename(invoice["year"], invoice["month"]),
+        content_disposition_type="inline",
+    )
 
 
 app.mount(

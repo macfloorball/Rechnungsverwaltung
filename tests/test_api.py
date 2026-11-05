@@ -4,15 +4,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.database import get_invoice, initialize_database
-from backend.main import app, get_database_path
+from backend.main import app, get_database_path, get_invoice_directory
 
 
 @pytest.fixture
 def client(tmp_path: Path):
     database_path = tmp_path / "api.db"
+    invoice_directory = tmp_path / "rechnungen"
     initialize_database(database_path)
     app.state.test_database_path = database_path
     app.dependency_overrides[get_database_path] = lambda: database_path
+    app.dependency_overrides[get_invoice_directory] = lambda: invoice_directory
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -228,11 +230,66 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     invoice = response.json()
     assert invoice["total_amount_cents"] == 3000
     assert invoice["items"][0]["unit_rate_cents"] == 1500
-    assert client.get(f"/api/invoices/{invoice['id']}/pdf").status_code == 404
+    assert invoice["pdf_path"] == "Rechnung_TTC_2026-11.pdf"
+    pdf_response = client.get(f"/api/invoices/{invoice['id']}/pdf")
+    assert pdf_response.status_code == 200
+    assert pdf_response.headers["content-type"] == "application/pdf"
+    assert "inline" in pdf_response.headers["content-disposition"]
+    assert (
+        "Rechnung_TTC_2026-11.pdf"
+        in pdf_response.headers["content-disposition"]
+    )
+    assert pdf_response.content.startswith(b"%PDF-")
 
     response = client.delete(f"/api/trainings/{training['id']}")
     assert response.status_code == 204
     assert client.delete(f"/api/trainings/{training['id']}").status_code == 404
+
+
+def test_invoice_rejects_empty_period_and_prevents_overwriting_monthly_pdf(
+    client: TestClient,
+) -> None:
+    empty_response = client.post(
+        "/api/invoices",
+        json={
+            "year": 2026,
+            "month": 11,
+            "invoice_date": "2026-12-01",
+        },
+    )
+    assert empty_response.status_code == 400
+
+    activity = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    ).json()["activities"][0]
+    client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-12",
+            "activity_type_id": activity["id"],
+            "hours": 2,
+            "status": "completed",
+        },
+    )
+    invoice_payload = {
+        "year": 2026,
+        "month": 11,
+        "invoice_date": "2026-12-01",
+    }
+    invoice_response = client.post("/api/invoices", json=invoice_payload)
+    assert invoice_response.status_code == 201
+    invoice_id = invoice_response.json()["id"]
+    original_pdf = client.get(f"/api/invoices/{invoice_id}/pdf").content
+
+    duplicate_response = client.post("/api/invoices", json=invoice_payload)
+    assert duplicate_response.status_code == 409
+    saved_pdf = client.get(f"/api/invoices/{invoice_id}/pdf").content
+    assert saved_pdf == original_pdf
 
 
 def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
