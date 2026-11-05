@@ -118,3 +118,39 @@ Monat, ergeben `409`.
 - Die virtuelle Umgebung (`.venv`) wird nicht in Git verwaltet.
 - Lokale Datenbanken und generierte Rechnungen sind in `.gitignore` ausgeschlossen.
 - PDF-Rechnungen werden im Ordner `rechnungen/` gespeichert.
+- Datenbanksicherungen werden wöchentlich sonntags um 03:00 Uhr unter
+  `~/ttc-rechnungsverwaltung-backups` angelegt; 30 Tage alte Sicherungen
+  werden entfernt. Der Backup-Ordner ist nicht Teil des Git-Repositories.
+
+## Datenbank-Backups
+
+Nach dem Einrichten der virtuellen Umgebung den wöchentlichen systemd-Timer
+einmalig installieren und aktivieren:
+
+```bash
+./.venv/bin/python scripts/install_backup_timer.py
+```
+
+Eine Sicherung kann jederzeit manuell erstellt werden:
+
+```bash
+./.venv/bin/python scripts/backup_database.py
+```
+
+Der Backup-Prozess verwendet SQLite Online Backup, prüft die Sicherung auf
+Konsistenz und vergibt private Dateirechte (`0700` für den Ordner, `0600`
+für Sicherungsdateien). Der Timer läuft sonntags um 03:00 Uhr; falls der
+Rechner zu diesem Zeitpunkt ausgeschaltet war, holt systemd die Sicherung
+nach, sobald der Benutzerdienst wieder startet.
+
+Timerstatus und Ausführungsprotokoll:
+
+```bash
+systemctl --user status ttc-rechnungsverwaltung-backup.timer
+journalctl --user -u ttc-rechnungsverwaltung-backup.service
+```
+
+Für den späteren Serverbetrieb muss der systemd-Benutzerdienst auch ohne
+interaktive Anmeldung laufen dürfen (Linger). Datenbank-Backups enthalten
+persönliche Daten und dürfen nicht in Git oder einen ungeschützten
+Cloudspeicher kopiert werden.

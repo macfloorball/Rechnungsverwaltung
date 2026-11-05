@@ -13,6 +13,7 @@ def client(tmp_path: Path):
     invoice_directory = tmp_path / "rechnungen"
     initialize_database(database_path)
     app.state.test_database_path = database_path
+    app.state.test_invoice_directory = invoice_directory
     app.dependency_overrides[get_database_path] = lambda: database_path
     app.dependency_overrides[get_invoice_directory] = lambda: invoice_directory
     with TestClient(app) as test_client:
@@ -231,6 +232,9 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     assert invoice["total_amount_cents"] == 3000
     assert invoice["items"][0]["unit_rate_cents"] == 1500
     assert invoice["pdf_path"] == "Rechnung_TTC_2026-11.pdf"
+    saved_pdf_path = client.app.state.test_invoice_directory / invoice["pdf_path"]
+    assert saved_pdf_path.is_file()
+    assert saved_pdf_path.name == "Rechnung_TTC_2026-11.pdf"
     pdf_response = client.get(f"/api/invoices/{invoice['id']}/pdf")
     assert pdf_response.status_code == 200
     assert pdf_response.headers["content-type"] == "application/pdf"
@@ -240,10 +244,20 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
         in pdf_response.headers["content-disposition"]
     )
     assert pdf_response.content.startswith(b"%PDF-")
+    assert pdf_response.content == saved_pdf_path.read_bytes()
+    original_pdf = pdf_response.content
+    reopened_pdf_response = client.get(f"/api/invoices/{invoice['id']}/pdf")
+    assert reopened_pdf_response.status_code == 200
+    assert reopened_pdf_response.content == original_pdf
 
     response = client.delete(f"/api/trainings/{training['id']}")
     assert response.status_code == 204
     assert client.delete(f"/api/trainings/{training['id']}").status_code == 404
+    reopened_after_source_deletion = client.get(
+        f"/api/invoices/{invoice['id']}/pdf"
+    )
+    assert reopened_after_source_deletion.status_code == 200
+    assert reopened_after_source_deletion.content == original_pdf
 
 
 def test_invoice_rejects_empty_period_and_prevents_overwriting_monthly_pdf(
@@ -325,6 +339,144 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
     assert item["hours"] == pytest.approx(0.333)
     assert item["amount_cents"] == 500
     assert preview.json()["total_amount_cents"] == 500
+
+
+def test_additional_training_is_saved_to_calendar_and_invoice_preview(
+    client: TestClient,
+) -> None:
+    settings = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Zusatztraining", "hourly_rate_cents": 1800},
+            ]
+        },
+    )
+    activity_id = settings.json()["activities"][0]["id"]
+    weekly_plan = client.put(
+        "/api/weekly-plan",
+        json=[
+            {
+                "weekday": 2,
+                "activity_type_id": activity_id,
+                "hours": 1,
+            }
+        ],
+    )
+    assert weekly_plan.status_code == 200
+
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-06",
+            "activity_type_id": activity_id,
+            "hours": 2.5,
+            "status": "completed",
+            "note": "Zusätzlicher Freitagseinsatz",
+        },
+    )
+    assert response.status_code == 201
+    additional_training = response.json()
+    assert additional_training["training_date"] == "2026-11-06"
+    assert additional_training["unit_rate_cents"] == 1800
+
+    calendar = client.get("/api/calendar/2026/11")
+    assert calendar.status_code == 200
+    friday = next(
+        day for day in calendar.json()["days"] if day["date"] == "2026-11-06"
+    )
+    assert [training["id"] for training in friday["trainings"]] == [
+        additional_training["id"]
+    ]
+
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["items"] == [
+        {
+            "training_id": additional_training["id"],
+            "description": "Zusatztraining",
+            "training_date": "2026-11-06",
+            "hours": 2.5,
+            "unit_rate_cents": 1800,
+            "amount_cents": 4500,
+        }
+    ]
+    assert preview.json()["total_amount_cents"] == 4500
+
+
+def test_calendar_and_invoice_preview_handle_month_and_year_boundaries(
+    client: TestClient,
+) -> None:
+    settings = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    )
+    activity_id = settings.json()["activities"][0]["id"]
+
+    for training_date, hours in (
+        ("2026-12-31", 2),
+        ("2027-01-01", 3),
+        ("2028-02-29", 1),
+    ):
+        response = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity_id,
+                "hours": hours,
+                "status": "completed",
+            },
+        )
+        assert response.status_code == 201
+
+    december = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 12},
+    )
+    january = client.post(
+        "/api/invoices/preview",
+        json={"year": 2027, "month": 1},
+    )
+    leap_february = client.post(
+        "/api/invoices/preview",
+        json={"year": 2028, "month": 2},
+    )
+
+    assert (
+        december.status_code
+        == january.status_code
+        == leap_february.status_code
+        == 200
+    )
+    assert [item["training_date"] for item in december.json()["items"]] == [
+        "2026-12-31"
+    ]
+    assert december.json()["total_amount_cents"] == 3000
+    assert [item["training_date"] for item in january.json()["items"]] == [
+        "2027-01-01"
+    ]
+    assert january.json()["total_amount_cents"] == 4500
+    assert [item["training_date"] for item in leap_february.json()["items"]] == [
+        "2028-02-29"
+    ]
+    assert leap_february.json()["total_amount_cents"] == 1500
+
+    december_calendar = client.get("/api/calendar/2026/12").json()
+    january_calendar = client.get("/api/calendar/2027/1").json()
+    leap_calendar = client.get("/api/calendar/2028/2").json()
+    assert len(december_calendar["days"]) == 31
+    assert december_calendar["days"][-1]["date"] == "2026-12-31"
+    assert len(january_calendar["days"]) == 31
+    assert january_calendar["days"][0]["date"] == "2027-01-01"
+    assert len(leap_calendar["days"]) == 29
+    assert leap_calendar["days"][-1]["date"] == "2028-02-29"
 
 
 def test_invoice_preview_only_includes_completed_trainings(
@@ -472,6 +624,7 @@ def test_saved_invoice_keeps_original_prices_after_price_change(
         },
     )
     assert response.status_code == 201
+    original_training = response.json()
 
     response = client.post(
         "/api/invoices",
@@ -501,6 +654,15 @@ def test_saved_invoice_keeps_original_prices_after_price_change(
     )
     assert response.status_code == 200
 
+    november_calendar = client.get("/api/calendar/2026/11").json()
+    original_training_after_change = next(
+        training
+        for day in november_calendar["days"]
+        for training in day["trainings"]
+        if training["id"] == original_training["id"]
+    )
+    assert original_training_after_change["unit_rate_cents"] == 1500
+
     persisted_invoice = get_invoice(
         invoice["id"],
         client.app.state.test_database_path,
@@ -509,3 +671,24 @@ def test_saved_invoice_keeps_original_prices_after_price_change(
     assert persisted_invoice["total_amount_cents"] == 3000
     assert persisted_invoice["items"][0]["unit_rate_cents"] == 1500
     assert persisted_invoice["items"][0]["amount_cents"] == 3000
+
+    new_training_response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-12-03",
+            "activity_type_id": activity_id,
+            "hours": 2,
+            "status": "completed",
+        },
+    )
+    assert new_training_response.status_code == 201
+    assert new_training_response.json()["unit_rate_cents"] == 2200
+
+    december_preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 12},
+    )
+    assert december_preview.status_code == 200
+    assert december_preview.json()["items"][0]["unit_rate_cents"] == 2200
+    assert december_preview.json()["items"][0]["amount_cents"] == 4400
+    assert december_preview.json()["total_amount_cents"] == 4400
