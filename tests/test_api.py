@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.database import initialize_database
+from backend.database import get_invoice, initialize_database
 from backend.main import app, get_database_path
 
 
@@ -11,6 +11,7 @@ from backend.main import app, get_database_path
 def client(tmp_path: Path):
     database_path = tmp_path / "api.db"
     initialize_database(database_path)
+    app.state.test_database_path = database_path
     app.dependency_overrides[get_database_path] = lambda: database_path
     with TestClient(app) as test_client:
         yield test_client
@@ -390,3 +391,64 @@ def test_invoice_preview_keeps_multiple_activities_on_same_day(
     assert invoice.json()["total_amount_cents"] == sum(
         item["amount_cents"] for item in invoice.json()["items"]
     )
+
+
+def test_saved_invoice_keeps_original_prices_after_price_change(
+    client: TestClient,
+) -> None:
+    response = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    )
+    activity_id = response.json()["activities"][0]["id"]
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-12",
+            "activity_type_id": activity_id,
+            "hours": 2,
+            "status": "completed",
+        },
+    )
+    assert response.status_code == 201
+
+    response = client.post(
+        "/api/invoices",
+        json={
+            "year": 2026,
+            "month": 11,
+            "invoice_date": "2026-12-01",
+        },
+    )
+    assert response.status_code == 201
+    invoice = response.json()
+    assert invoice["total_amount_cents"] == 3000
+    assert invoice["items"][0]["unit_rate_cents"] == 1500
+
+    response = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {
+                    "id": activity_id,
+                    "name": "Training",
+                    "hourly_rate_cents": 2200,
+                    "is_active": True,
+                }
+            ]
+        },
+    )
+    assert response.status_code == 200
+
+    persisted_invoice = get_invoice(
+        invoice["id"],
+        client.app.state.test_database_path,
+    )
+    assert persisted_invoice is not None
+    assert persisted_invoice["total_amount_cents"] == 3000
+    assert persisted_invoice["items"][0]["unit_rate_cents"] == 1500
+    assert persisted_invoice["items"][0]["amount_cents"] == 3000
