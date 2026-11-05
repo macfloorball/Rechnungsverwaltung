@@ -60,6 +60,110 @@ button {
   box-shadow: 0 8px 24px rgb(23 33 47 / 5%);
 }
 
+.invoice-section {
+  margin-top: 24px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #e0e6ed;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgb(23 33 47 / 5%);
+}
+
+.invoice-preview-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.invoice-preview-form label {
+  display: grid;
+  gap: 6px;
+  color: #40566d;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.invoice-preview-form input {
+  min-height: 40px;
+  padding: 8px 10px;
+  color: inherit;
+  font: inherit;
+  background: #fff;
+  border: 1px solid #cbd6e0;
+  border-radius: 8px;
+}
+
+.invoice-preview-form input:focus {
+  border-color: #3b82b7;
+  outline: 3px solid rgb(59 130 183 / 18%);
+}
+
+.invoice-preview {
+  margin-top: 28px;
+}
+
+.invoice-preview h3 {
+  margin: 0 0 18px;
+  font-size: 1.1rem;
+}
+
+.invoice-intro {
+  margin: 0 0 12px;
+}
+
+.invoice-table-wrapper {
+  overflow-x: auto;
+}
+
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.invoice-table th,
+.invoice-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e0e6ed;
+}
+
+.invoice-table thead th {
+  color: #40566d;
+  background: #f5f7fa;
+  font-size: 0.85rem;
+}
+
+.invoice-table tbody th {
+  font-weight: 500;
+}
+
+.invoice-table th:nth-last-child(-n + 2),
+.invoice-table td:nth-last-child(-n + 2) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.invoice-table tfoot th,
+.invoice-table tfoot td {
+  padding-top: 14px;
+  border-bottom: 0;
+  font-weight: 800;
+}
+
+.invoice-table tfoot th {
+  text-align: right;
+}
+
+.invoice-empty {
+  margin: 12px 0 0;
+  color: #526579;
+}
+
+.invoice-preview[hidden],
+.invoice-empty[hidden] {
+  display: none;
+}
+
 .section-heading,
 .month-navigation {
   display: flex;
@@ -405,6 +509,26 @@ dialog textarea {
     margin-top: 16px;
     padding: 14px 10px;
     border-radius: 12px;
+  }
+
+  .invoice-section {
+    margin-top: 16px;
+    padding: 16px 10px;
+    border-radius: 12px;
+  }
+
+  .invoice-preview-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .invoice-preview-form input,
+  .invoice-preview-form .primary-button {
+    width: 100%;
+  }
+
+  .invoice-table {
+    min-width: 440px;
   }
 
   .section-heading {
