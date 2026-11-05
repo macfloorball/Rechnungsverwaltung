@@ -232,3 +232,38 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     response = client.delete(f"/api/trainings/{training['id']}")
     assert response.status_code == 204
     assert client.delete(f"/api/trainings/{training['id']}").status_code == 404
+
+
+def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
+    client: TestClient,
+) -> None:
+    client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    )
+    activity_id = client.get("/api/settings").json()["activities"][0]["id"]
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-05",
+            "activity_type_id": activity_id,
+            "hours": 0.333,
+            "status": "completed",
+        },
+    )
+    assert response.status_code == 201
+
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    item = preview.json()["items"][0]
+    assert item["unit_rate_cents"] == 1500
+    assert item["hours"] == pytest.approx(0.333)
+    assert item["amount_cents"] == 500
+    assert preview.json()["total_amount_cents"] == 500
