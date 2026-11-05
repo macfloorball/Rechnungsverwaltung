@@ -334,3 +334,42 @@ def test_invoice_preview_only_includes_completed_trainings(
         training_ids["2026-11-08"],
     ]
     assert preview.json()["total_amount_cents"] == 6000
+
+
+def test_invoice_preview_keeps_multiple_activities_on_same_day(
+    client: TestClient,
+) -> None:
+    response = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+                {"name": "Assistenz", "hourly_rate_cents": 2000},
+            ]
+        },
+    )
+    activities = response.json()["activities"]
+    training_ids = []
+    for activity, hours in zip(activities, (1.5, 2), strict=True):
+        response = client.post(
+            "/api/trainings",
+            json={
+                "training_date": "2026-11-12",
+                "activity_type_id": activity["id"],
+                "hours": hours,
+                "status": "completed",
+            },
+        )
+        assert response.status_code == 201
+        training_ids.append(response.json()["id"])
+
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    items = preview.json()["items"]
+    assert [item["training_id"] for item in items] == training_ids
+    assert {item["description"] for item in items} == {"Training", "Assistenz"}
+    assert [item["amount_cents"] for item in items] == [2250, 4000]
+    assert preview.json()["total_amount_cents"] == 6250
