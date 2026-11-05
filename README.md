@@ -104,8 +104,9 @@ python -m pytest
   `Rechnung_TTC_YYYY-MM.pdf`; pro Monat wird höchstens eine Rechnung
   erstellt.
 - `GET /api/invoices/{id}/pdf`: gespeicherte PDF im Browser anzeigen oder
-  herunterladen. Die Weboberfläche bietet beide Aktionen nach dem Erstellen
-  der Rechnung an.
+  herunterladen. Die Weboberfläche öffnet die PDF zum Drucken im
+  Browser-PDF-Viewer; dort kann der Druckdialog des Browsers verwendet
+  werden, außerdem steht ein separater Download bereit.
 
 Ungültige Eingaben werden mit `422` zurückgegeben. Eine Rechnung ohne
 abrechenbare Termine ergibt `400`; Konflikte, etwa eine doppelte
