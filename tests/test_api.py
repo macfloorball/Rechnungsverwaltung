@@ -327,6 +327,72 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
     assert preview.json()["total_amount_cents"] == 500
 
 
+def test_additional_training_is_saved_to_calendar_and_invoice_preview(
+    client: TestClient,
+) -> None:
+    settings = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Zusatztraining", "hourly_rate_cents": 1800},
+            ]
+        },
+    )
+    activity_id = settings.json()["activities"][0]["id"]
+    weekly_plan = client.put(
+        "/api/weekly-plan",
+        json=[
+            {
+                "weekday": 2,
+                "activity_type_id": activity_id,
+                "hours": 1,
+            }
+        ],
+    )
+    assert weekly_plan.status_code == 200
+
+    response = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-06",
+            "activity_type_id": activity_id,
+            "hours": 2.5,
+            "status": "completed",
+            "note": "Zusätzlicher Freitagseinsatz",
+        },
+    )
+    assert response.status_code == 201
+    additional_training = response.json()
+    assert additional_training["training_date"] == "2026-11-06"
+    assert additional_training["unit_rate_cents"] == 1800
+
+    calendar = client.get("/api/calendar/2026/11")
+    assert calendar.status_code == 200
+    friday = next(
+        day for day in calendar.json()["days"] if day["date"] == "2026-11-06"
+    )
+    assert [training["id"] for training in friday["trainings"]] == [
+        additional_training["id"]
+    ]
+
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["items"] == [
+        {
+            "training_id": additional_training["id"],
+            "description": "Zusatztraining",
+            "training_date": "2026-11-06",
+            "hours": 2.5,
+            "unit_rate_cents": 1800,
+            "amount_cents": 4500,
+        }
+    ]
+    assert preview.json()["total_amount_cents"] == 4500
+
+
 def test_invoice_preview_only_includes_completed_trainings(
     client: TestClient,
 ) -> None:
