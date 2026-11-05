@@ -28,6 +28,7 @@ export function bindTrainingEditor(calendar, onSaved) {
   const dateLabel = document.querySelector("#training-dialog-date");
   const activitySelect = document.querySelector("#training-activity");
   const hoursInput = document.querySelector("#training-hours");
+  const statusSelect = document.querySelector("#training-status");
   const noteInput = document.querySelector("#training-note");
   const errorMessage = document.querySelector("#training-error");
   const saveButton = document.querySelector("#save-training-edit");
@@ -40,6 +41,7 @@ export function bindTrainingEditor(calendar, onSaved) {
     || !(dateLabel instanceof HTMLElement)
     || !(activitySelect instanceof HTMLSelectElement)
     || !(hoursInput instanceof HTMLInputElement)
+    || !(statusSelect instanceof HTMLSelectElement)
     || !(noteInput instanceof HTMLTextAreaElement)
     || !(errorMessage instanceof HTMLElement)
     || !(saveButton instanceof HTMLButtonElement)
@@ -59,6 +61,7 @@ export function bindTrainingEditor(calendar, onSaved) {
       timeZone: "UTC",
     }).format(new Date(`${training.training_date}T00:00:00Z`));
     hoursInput.value = String(training.hours);
+    statusSelect.value = training.status || "planned";
     noteInput.value = training.note || "";
     activitySelect.replaceChildren();
     saveButton.disabled = true;
@@ -112,6 +115,7 @@ export function bindTrainingEditor(calendar, onSaved) {
     const payload = {
       activity_type_id: Number(activitySelect.value),
       hours: Number(hoursInput.value),
+      status: statusSelect.value,
       note: noteInput.value.trim() || null,
     };
     const isNewTraining = selectedTraining.id === null;

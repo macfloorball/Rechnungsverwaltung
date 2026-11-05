@@ -60,6 +60,13 @@
         <label for="training-hours">Stunden</label>
         <input id="training-hours" name="hours" type="number" min="0.01" step="0.01" required>
 
+        <label for="training-status">Status</label>
+        <select id="training-status" name="status" required>
+          <option value="planned">Geplant</option>
+          <option value="completed">Durchgeführt</option>
+          <option value="cancelled">Ausgefallen</option>
+        </select>
+
         <label for="training-note">Notiz <span class="optional-label">(optional)</span></label>
         <textarea id="training-note" name="note" rows="3" maxlength="1000"></textarea>
 

@@ -128,6 +128,25 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
 
+    response = client.put(
+        f"/api/trainings/{training['id']}",
+        json={"status": "cancelled"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["total_amount_cents"] == 0
+
+    response = client.put(
+        f"/api/trainings/{training['id']}",
+        json={"status": "completed"},
+    )
+    assert response.status_code == 200
+
     preview = client.post(
         "/api/invoices/preview",
         json={"year": 2026, "month": 11},
