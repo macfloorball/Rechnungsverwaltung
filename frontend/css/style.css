@@ -198,8 +198,153 @@ button {
   font-weight: 700;
 }
 
+.training__button {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.training__button:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #153c61;
+  outline-offset: 3px;
+}
+
 .training__details {
   color: #526579;
+}
+
+dialog {
+  width: min(460px, calc(100% - 32px));
+  max-height: min(90vh, 720px);
+  padding: 24px;
+  color: #17212f;
+  background: #fff;
+  border: 1px solid #d6e0e9;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgb(15 31 48 / 25%);
+}
+
+dialog::backdrop {
+  background: rgb(15 31 48 / 48%);
+}
+
+dialog form {
+  display: grid;
+  gap: 10px;
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dialog-heading h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.dialog-heading .eyebrow {
+  color: #55718b;
+}
+
+.icon-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  color: #40566d;
+  background: #f0f5f9;
+  border: 1px solid #d6e0e9;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.icon-button span {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.dialog-date {
+  margin: 0 0 8px;
+  color: #526579;
+}
+
+dialog label {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+dialog input,
+dialog select,
+dialog textarea {
+  width: 100%;
+  padding: 10px 12px;
+  color: inherit;
+  font: inherit;
+  background: #fff;
+  border: 1px solid #cbd6e0;
+  border-radius: 8px;
+}
+
+dialog input:focus,
+dialog select:focus,
+dialog textarea:focus {
+  border-color: #3b82b7;
+  outline: 3px solid rgb(59 130 183 / 18%);
+}
+
+dialog textarea {
+  resize: vertical;
+}
+
+.optional-label {
+  color: #63778b;
+  font-weight: 400;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 40px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.primary-button {
+  color: #fff;
+  background: #153c61;
+  border: 1px solid #153c61;
+}
+
+.secondary-button {
+  color: #153c61;
+  background: #fff;
+  border: 1px solid #cbd6e0;
+}
+
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .calendar-placeholder {

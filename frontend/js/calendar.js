@@ -1,3 +1,5 @@
+import { bindTrainingEditor } from "./trainings.js";
+
 const monthFormatter = new Intl.DateTimeFormat("de-DE", {
   month: "long",
   year: "numeric",
@@ -26,16 +28,24 @@ function createElement(tagName, className, text) {
 
 function createTraining(training) {
   const item = createElement("li", `training training--${training.status}`);
+  const button = createElement("button", "training__button");
+  button.type = "button";
+  button.dataset.training = JSON.stringify(training);
+  button.setAttribute(
+    "aria-label",
+    `${training.activity_name || "Tätigkeit"} am ${training.training_date} bearbeiten`,
+  );
   const name = training.activity_name || "Tätigkeit";
   const statusLabels = {
     planned: "Geplant",
     completed: "Durchgeführt",
     cancelled: "Ausgefallen",
   };
-  item.append(
+  button.append(
     createElement("span", "training__name", name),
     createElement("span", "training__details", `${training.hours} Std. · ${statusLabels[training.status] || training.status}`),
   );
+  item.append(button);
   return item;
 }
 
@@ -123,6 +133,8 @@ export function initializeCalendar() {
       nextButton.disabled = false;
     }
   }
+
+  bindTrainingEditor(calendar, () => loadMonth(visibleMonth));
 
   previousButton.addEventListener("click", () => {
     loadMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1));
