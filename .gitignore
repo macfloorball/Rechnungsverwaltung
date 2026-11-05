@@ -1,0 +1,22 @@
+# Python environments
+.venv/
+venv/
+env/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Local application data and generated invoices
+data/*.db
+data/*.db-*
+rechnungen/*
+!rechnungen/.gitkeep
