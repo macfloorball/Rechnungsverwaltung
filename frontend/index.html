@@ -38,6 +38,51 @@
           </div>
           <p id="calendar-error" class="error-message" role="alert" hidden></p>
         </section>
+
+        <section class="invoice-section" aria-labelledby="invoice-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Abrechnung</p>
+              <h2 id="invoice-title">Rechnungsvorschau</h2>
+            </div>
+          </div>
+
+          <form id="invoice-preview-form" class="invoice-preview-form">
+            <label for="invoice-month">Abrechnungsmonat</label>
+            <input id="invoice-month" name="month" type="month" required>
+            <button id="load-invoice-preview" class="primary-button" type="submit">
+              Vorschau anzeigen
+            </button>
+          </form>
+
+          <p id="invoice-preview-error" class="error-message" role="alert" hidden></p>
+          <div id="invoice-preview" class="invoice-preview" aria-live="polite" hidden>
+            <h3 id="invoice-period-title"></h3>
+            <p class="invoice-intro">Hiermit stelle ich folgenden Betrag in Rechnung:</p>
+            <div class="invoice-table-wrapper">
+              <table class="invoice-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Trainingseinheit</th>
+                    <th scope="col">Datum</th>
+                    <th scope="col">Std.</th>
+                    <th scope="col">Betrag</th>
+                  </tr>
+                </thead>
+                <tbody id="invoice-items"></tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="3" scope="row">Endsumme:</th>
+                    <td id="invoice-total"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p id="invoice-empty" class="invoice-empty" hidden>
+              In diesem Monat gibt es keine durchgeführten Termine.
+            </p>
+          </div>
+        </section>
       </main>
     </div>
 

@@ -96,7 +96,9 @@ python -m pytest
 - `POST`, `PUT /api/trainings/{id}` und `DELETE /api/trainings/{id}`:
   Trainingstermine verwalten.
 - `POST /api/invoices/preview`: Abgeschlossene Termine eines Monats
-  abrechnen und eine Vorschau liefern.
+  abrechnen und Positionen mit Trainingseinheit, Datum, Stunden und Betrag
+  für die Rechnungsvorschau liefern. Die Weboberfläche stellt diese im
+  Tabellenlayout der bereitgestellten Rechnung dar.
 - `POST /api/invoices`: Rechnung samt unveränderlichen Positionen und
   Preis-Snapshots speichern.
 - `GET /api/invoices/{id}/pdf`: gespeicherte PDF abrufen. Bis zur
@@ -109,4 +111,5 @@ Datenbankregeln, etwa eine doppelte Tätigkeitsbezeichnung, ergeben `409`.
 
 - Die virtuelle Umgebung (`.venv`) wird nicht in Git verwaltet.
 - Lokale Datenbanken und generierte Rechnungen sind in `.gitignore` ausgeschlossen.
-- Benutzeroberfläche und PDF-Erstellung werden in späteren Phasen ergänzt.
+- Die Oberfläche und Rechnungsvorschau werden in Phase 3 und 4 ergänzt;
+  die PDF-Erstellung folgt in Phase 5.
