@@ -245,10 +245,19 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     )
     assert pdf_response.content.startswith(b"%PDF-")
     assert pdf_response.content == saved_pdf_path.read_bytes()
+    original_pdf = pdf_response.content
+    reopened_pdf_response = client.get(f"/api/invoices/{invoice['id']}/pdf")
+    assert reopened_pdf_response.status_code == 200
+    assert reopened_pdf_response.content == original_pdf
 
     response = client.delete(f"/api/trainings/{training['id']}")
     assert response.status_code == 204
     assert client.delete(f"/api/trainings/{training['id']}").status_code == 404
+    reopened_after_source_deletion = client.get(
+        f"/api/invoices/{invoice['id']}/pdf"
+    )
+    assert reopened_after_source_deletion.status_code == 200
+    assert reopened_after_source_deletion.content == original_pdf
 
 
 def test_invoice_rejects_empty_period_and_prevents_overwriting_monthly_pdf(
