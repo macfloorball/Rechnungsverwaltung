@@ -1,8 +1,48 @@
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATABASE_PATH = PROJECT_ROOT / "data" / "ttc.db"
+
+TABLE_COLUMNS = {
+    "activity_types": {
+        "name",
+        "hourly_rate_cents",
+        "is_active",
+    },
+    "weekly_plan": {
+        "weekday",
+        "activity_type_id",
+        "hours",
+        "is_active",
+    },
+    "trainings": {
+        "training_date",
+        "activity_type_id",
+        "hours",
+        "status",
+        "note",
+        "unit_rate_cents",
+    },
+    "invoices": {
+        "year",
+        "month",
+        "invoice_date",
+        "invoice_number",
+        "total_amount_cents",
+        "pdf_path",
+    },
+    "invoice_items": {
+        "invoice_id",
+        "training_id",
+        "description",
+        "training_date",
+        "hours",
+        "unit_rate_cents",
+        "amount_cents",
+    },
+}
 
 
 def get_connection(database_path: Path = DATABASE_PATH) -> sqlite3.Connection:
@@ -81,3 +121,169 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                 ON invoice_items (invoice_id);
             """
         )
+
+
+def _validate_table(table: str) -> set[str]:
+    try:
+        return TABLE_COLUMNS[table]
+    except KeyError as error:
+        raise ValueError(f"Unbekannte Tabelle: {table}") from error
+
+
+def _validate_fields(table: str, fields: dict[str, Any]) -> None:
+    allowed_columns = _validate_table(table)
+    unknown_columns = fields.keys() - allowed_columns
+    if unknown_columns:
+        names = ", ".join(sorted(unknown_columns))
+        raise ValueError(f"Ungültige Spalten für {table}: {names}")
+
+
+def create_record(
+    table: str,
+    values: dict[str, Any],
+    database_path: Path = DATABASE_PATH,
+) -> int:
+    _validate_fields(table, values)
+    if not values:
+        raise ValueError("Zum Anlegen eines Datensatzes sind Werte erforderlich")
+
+    columns = ", ".join(values)
+    placeholders = ", ".join("?" for _ in values)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        cursor = connection.execute(
+            f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
+            tuple(values.values()),
+        )
+        return int(cursor.lastrowid)
+
+
+def get_record(
+    table: str,
+    record_id: int,
+    database_path: Path = DATABASE_PATH,
+) -> dict[str, Any] | None:
+    _validate_table(table)
+    with sqlite3.connect(database_path) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            f"SELECT * FROM {table} WHERE id = ?",
+            (record_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+
+def list_records(
+    table: str,
+    filters: dict[str, Any] | None = None,
+    database_path: Path = DATABASE_PATH,
+) -> list[dict[str, Any]]:
+    filters = filters or {}
+    _validate_fields(table, filters)
+    where_clause = ""
+    parameters: tuple[Any, ...] = ()
+    if filters:
+        where_clause = " WHERE " + " AND ".join(
+            f"{column} = ?" for column in filters
+        )
+        parameters = tuple(filters.values())
+
+    with sqlite3.connect(database_path) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            f"SELECT * FROM {table}{where_clause} ORDER BY id",
+            parameters,
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def update_record(
+    table: str,
+    record_id: int,
+    values: dict[str, Any],
+    database_path: Path = DATABASE_PATH,
+) -> bool:
+    _validate_fields(table, values)
+    if not values:
+        raise ValueError("Zum Ändern eines Datensatzes sind Werte erforderlich")
+
+    assignments = ", ".join(f"{column} = ?" for column in values)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        cursor = connection.execute(
+            f"UPDATE {table} SET {assignments} WHERE id = ?",
+            (*values.values(), record_id),
+        )
+        return cursor.rowcount > 0
+
+
+def delete_record(
+    table: str,
+    record_id: int,
+    database_path: Path = DATABASE_PATH,
+) -> bool:
+    _validate_table(table)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        cursor = connection.execute(
+            f"DELETE FROM {table} WHERE id = ?",
+            (record_id,),
+        )
+        return cursor.rowcount > 0
+
+
+def create_invoice_with_items(
+    invoice: dict[str, Any],
+    items: list[dict[str, Any]],
+    database_path: Path = DATABASE_PATH,
+) -> int:
+    _validate_fields("invoices", invoice)
+    if not invoice:
+        raise ValueError("Rechnungsdaten sind erforderlich")
+    for item in items:
+        _validate_fields("invoice_items", item)
+
+    invoice_columns = ", ".join(invoice)
+    invoice_placeholders = ", ".join("?" for _ in invoice)
+    item_fields = tuple(items[0]) if items else ()
+    if any(set(item) != set(item_fields) for item in items):
+        raise ValueError("Alle Rechnungspositionen müssen dieselben Felder haben")
+    item_columns = ", ".join(("invoice_id", *item_fields))
+    item_placeholders = ", ".join("?" for _ in range(len(item_fields) + 1))
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        invoice_cursor = connection.execute(
+            f"INSERT INTO invoices ({invoice_columns}) "
+            f"VALUES ({invoice_placeholders})",
+            tuple(invoice.values()),
+        )
+        invoice_id = int(invoice_cursor.lastrowid)
+        if items:
+            statement = (
+                f"INSERT INTO invoice_items ({item_columns}) "
+                f"VALUES ({item_placeholders})"
+            )
+            connection.executemany(
+                statement,
+                [
+                    (invoice_id, *(item[field] for field in item_fields))
+                    for item in items
+                ],
+            )
+        return invoice_id
+
+
+def get_invoice(
+    invoice_id: int,
+    database_path: Path = DATABASE_PATH,
+) -> dict[str, Any] | None:
+    invoice = get_record("invoices", invoice_id, database_path)
+    if invoice is None:
+        return None
+    invoice["items"] = list_records(
+        "invoice_items",
+        {"invoice_id": invoice_id},
+        database_path,
+    )
+    return invoice
