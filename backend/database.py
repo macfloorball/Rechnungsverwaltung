@@ -12,6 +12,11 @@ TABLE_COLUMNS = {
         "street",
         "postal_code",
         "city",
+        "recipient_name",
+        "recipient_street",
+        "recipient_postal_code",
+        "recipient_city",
+        "recipient_email",
         "issuer_first_name",
         "issuer_last_name",
         "email",
@@ -102,6 +107,11 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                 street TEXT NOT NULL DEFAULT '',
                 postal_code TEXT NOT NULL DEFAULT '',
                 city TEXT NOT NULL DEFAULT '',
+                recipient_name TEXT NOT NULL DEFAULT '',
+                recipient_street TEXT NOT NULL DEFAULT '',
+                recipient_postal_code TEXT NOT NULL DEFAULT '',
+                recipient_city TEXT NOT NULL DEFAULT '',
+                recipient_email TEXT NOT NULL DEFAULT '',
                 issuer_first_name TEXT NOT NULL DEFAULT '',
                 issuer_last_name TEXT NOT NULL DEFAULT '',
                 email TEXT NOT NULL DEFAULT '',
@@ -118,7 +128,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                 logo_media_type TEXT,
                 logo_enabled INTEGER NOT NULL DEFAULT 0
                     CHECK (logo_enabled IN (0, 1)),
-                invoice_number_prefix TEXT NOT NULL DEFAULT '',
+                invoice_number_prefix TEXT NOT NULL DEFAULT 'RE',
                 next_invoice_number INTEGER NOT NULL DEFAULT 1
                     CHECK (next_invoice_number > 0),
                 payment_due_days INTEGER NOT NULL DEFAULT 14
@@ -217,6 +227,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
         )
         connection.commit()
         _migrate_organization_support(connection)
+        _migrate_organization_invoice_fields(connection)
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:
@@ -326,6 +337,85 @@ def _migrate_organization_support(connection: sqlite3.Connection) -> None:
     except Exception:
         connection.rollback()
         raise
+
+
+def _migrate_organization_invoice_fields(
+    connection: sqlite3.Connection,
+) -> None:
+    migration_version = 2
+    current_version = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()[0]
+    if current_version >= migration_version:
+        return
+
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(organizations)")
+        }
+        added_columns = {
+            "recipient_name": "TEXT NOT NULL DEFAULT ''",
+            "recipient_street": "TEXT NOT NULL DEFAULT ''",
+            "recipient_postal_code": "TEXT NOT NULL DEFAULT ''",
+            "recipient_city": "TEXT NOT NULL DEFAULT ''",
+            "recipient_email": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in added_columns.items():
+            if column not in existing_columns:
+                connection.execute(
+                    f"ALTER TABLE organizations ADD COLUMN {column} {definition}"
+                )
+        connection.execute(
+            """
+            UPDATE organizations
+            SET invoice_number_prefix = 'RE'
+            WHERE TRIM(invoice_number_prefix) = ''
+            """
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (migration_version,),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def get_organization(
+    database_path: Path = DATABASE_PATH,
+    organization_id: int = 1,
+) -> dict[str, Any] | None:
+    with sqlite3.connect(database_path) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT * FROM organizations WHERE id = ?",
+            (organization_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+
+def update_organization(
+    values: dict[str, Any],
+    database_path: Path = DATABASE_PATH,
+    organization_id: int = 1,
+) -> bool:
+    _validate_fields("organizations", values)
+    if not values:
+        return False
+
+    assignments = ", ".join(f"{column} = ?" for column in values)
+    with sqlite3.connect(database_path) as connection:
+        cursor = connection.execute(
+            f"""
+            UPDATE organizations
+            SET {assignments}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (*values.values(), organization_id),
+        )
+        return cursor.rowcount > 0
 
 
 def _validate_table(table: str) -> set[str]:
@@ -441,6 +531,8 @@ def create_invoice_with_items(
     invoice: dict[str, Any],
     items: list[dict[str, Any]],
     database_path: Path = DATABASE_PATH,
+    expected_next_invoice_number: int | None = None,
+    updated_next_invoice_number: int | None = None,
 ) -> int:
     _validate_fields("invoices", invoice)
     if not invoice:
@@ -458,6 +550,23 @@ def create_invoice_with_items(
 
     with sqlite3.connect(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
+        if expected_next_invoice_number is not None:
+            organization_id = invoice.get("organization_id", 1)
+            cursor = connection.execute(
+                """
+                UPDATE organizations
+                SET next_invoice_number = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND next_invoice_number = ?
+                """,
+                (
+                    updated_next_invoice_number or expected_next_invoice_number + 1,
+                    organization_id,
+                    expected_next_invoice_number,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert")
         invoice_cursor = connection.execute(
             f"INSERT INTO invoices ({invoice_columns}) "
             f"VALUES ({invoice_placeholders})",

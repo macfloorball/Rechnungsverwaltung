@@ -1,6 +1,10 @@
 import calendar
+import base64
+import binascii
+import json
 import logging
 import sqlite3
+import struct
 from contextlib import asynccontextmanager
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
@@ -18,9 +22,11 @@ from backend.database import (
     create_record,
     delete_record,
     get_invoice,
+    get_organization,
     get_record,
     initialize_database,
     list_records,
+    update_organization,
     update_record,
 )
 from backend.invoice_generator import (
@@ -31,6 +37,8 @@ from backend.invoice_generator import (
 from backend.models import (
     InvoiceCreate,
     InvoicePeriod,
+    LogoUpload,
+    OrganizationSettingsUpdate,
     SettingsUpdate,
     TrainingCreate,
     TrainingUpdate,
@@ -58,6 +66,97 @@ def get_invoice_directory() -> Path:
 
 DatabasePath = Annotated[Path, Depends(get_database_path)]
 InvoiceDirectory = Annotated[Path, Depends(get_invoice_directory)]
+MAX_LOGO_BYTES = 2_000_000
+MAX_LOGO_DIMENSION = 4000
+MAX_LOGO_PIXELS = 16_000_000
+
+
+def _validate_logo_image(data: bytes, media_type: str) -> None:
+    if not data or len(data) > MAX_LOGO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Das Logo darf höchstens 2 MB groß sein",
+        )
+
+    if media_type == "image/png":
+        if (
+            not data.startswith(b"\x89PNG\r\n\x1a\n")
+            or len(data) < 33
+            or data[12:16] != b"IHDR"
+            or b"IEND" not in data[-12:]
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Die Logo-Datei ist kein gültiges PNG-Bild",
+            )
+        width, height = struct.unpack(">II", data[16:24])
+    else:
+        if not data.startswith(b"\xff\xd8") or not data.endswith(b"\xff\xd9"):
+            raise HTTPException(
+                status_code=422,
+                detail="Die Logo-Datei ist kein gültiges JPEG-Bild",
+            )
+        width = height = 0
+        position = 2
+        start_of_frame = {
+            0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+            0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
+        }
+        while position < len(data) - 2:
+            if data[position] != 0xFF:
+                break
+            while position < len(data) and data[position] == 0xFF:
+                position += 1
+            if position >= len(data):
+                break
+            marker = data[position]
+            position += 1
+            if marker == 0xDA:
+                break
+            if marker in {0xD8, 0xD9, 0x01} or 0xD0 <= marker <= 0xD7:
+                continue
+            if position + 2 > len(data):
+                break
+            segment_length = int.from_bytes(data[position:position + 2], "big")
+            if segment_length < 2 or position + segment_length > len(data):
+                break
+            if marker in start_of_frame and segment_length >= 7:
+                height = int.from_bytes(data[position + 3:position + 5], "big")
+                width = int.from_bytes(data[position + 5:position + 7], "big")
+                break
+            position += segment_length
+        if width == 0 or height == 0:
+            raise HTTPException(
+                status_code=422,
+                detail="Die Logo-Datei ist kein gültiges JPEG-Bild",
+            )
+
+    if (
+        width < 1
+        or height < 1
+        or width > MAX_LOGO_DIMENSION
+        or height > MAX_LOGO_DIMENSION
+        or width * height > MAX_LOGO_PIXELS
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Das Logo darf höchstens 4000 × 4000 Pixel groß sein",
+        )
+
+
+def _public_organization_settings(
+    organization: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if organization is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organisationseinstellungen wurden nicht gefunden",
+        )
+    return {
+        key: value
+        for key, value in organization.items()
+        if key not in {"logo_data", "logo_path"}
+    } | {"logo_available": organization["logo_data"] is not None}
 
 
 @app.exception_handler(sqlite3.IntegrityError)
@@ -74,6 +173,90 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/organization/settings")
+def get_organization_settings(database_path: DatabasePath) -> dict[str, Any]:
+    return _public_organization_settings(get_organization(database_path))
+
+
+@app.put("/api/organization/settings")
+def put_organization_settings(
+    payload: OrganizationSettingsUpdate,
+    database_path: DatabasePath,
+) -> dict[str, Any]:
+    values = payload.model_dump(exclude_unset=True)
+    if values.get("logo_enabled"):
+        organization = get_organization(database_path)
+        if organization is None or organization["logo_data"] is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Lade zuerst ein Logo hoch, bevor du es aktivierst",
+            )
+    if not update_organization(values, database_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organisationseinstellungen wurden nicht gefunden",
+        )
+    return _public_organization_settings(get_organization(database_path))
+
+
+@app.post("/api/organization/logo")
+def upload_organization_logo(
+    payload: LogoUpload,
+    database_path: DatabasePath,
+) -> dict[str, Any]:
+    try:
+        logo_data = base64.b64decode(payload.data_base64, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail="Die Logo-Datei ist ungültig kodiert",
+        ) from error
+    _validate_logo_image(logo_data, payload.media_type)
+    update_organization(
+        {
+            "logo_data": logo_data,
+            "logo_media_type": payload.media_type,
+            "logo_path": None,
+            "logo_enabled": True,
+        },
+        database_path,
+    )
+    return _public_organization_settings(get_organization(database_path))
+
+
+@app.delete("/api/organization/logo")
+def delete_organization_logo(database_path: DatabasePath) -> dict[str, Any]:
+    update_organization(
+        {
+            "logo_data": None,
+            "logo_media_type": None,
+            "logo_path": None,
+            "logo_enabled": False,
+        },
+        database_path,
+    )
+    return _public_organization_settings(get_organization(database_path))
+
+
+@app.get("/api/organization/logo")
+def get_organization_logo(database_path: DatabasePath) -> Response:
+    organization = get_organization(database_path)
+    if (
+        organization is None
+        or organization["logo_data"] is None
+        or not organization["logo_media_type"]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Es ist kein Logo gespeichert",
+        )
+    return Response(
+        content=organization["logo_data"],
+        media_type=organization["logo_media_type"],
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/api/settings")
 def get_settings(database_path: DatabasePath) -> dict[str, Any]:
     return {"activities": list_records("activity_types", database_path=database_path)}
@@ -86,7 +269,7 @@ def put_settings(
 ) -> dict[str, Any]:
     if len(payload.activities) > 4:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="Es können höchstens vier Tätigkeitsarten verwaltet werden",
         )
 
@@ -372,7 +555,7 @@ def preview_invoice(
 @app.get("/api/invoices")
 def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
     invoices = list_records("invoices", database_path=database_path)
-    return sorted(
+    sorted_invoices = sorted(
         invoices,
         key=lambda invoice: (
             invoice["year"],
@@ -382,6 +565,11 @@ def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
         ),
         reverse=True,
     )
+    private_fields = {"invoice_snapshot_json", "logo_snapshot", "logo_media_type"}
+    return [
+        {key: value for key, value in invoice.items() if key not in private_fields}
+        for invoice in sorted_invoices
+    ]
 
 
 @app.post("/api/invoices", status_code=status.HTTP_201_CREATED)
@@ -412,13 +600,54 @@ def post_invoice(
             detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
         )
 
+    organization = get_organization(database_path)
+    if organization is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organisationseinstellungen wurden nicht gefunden",
+        )
+    sequence = organization["next_invoice_number"]
+    prefix = organization["invoice_number_prefix"].strip()
+    existing_numbers = (
+        invoice["invoice_number"]
+        for invoice in list_records("invoices", database_path=database_path)
+        if invoice["invoice_number"]
+    )
+    previous_sequence = 0
+    for existing_number in existing_numbers:
+        parts = existing_number.split("-")
+        if (
+            len(parts) >= 3
+            and "-".join(parts[:-2]) == prefix
+            and parts[-2].isdigit()
+            and parts[-1].isdigit()
+        ):
+            previous_sequence = max(previous_sequence, int(parts[-1]))
+    sequence = max(sequence, previous_sequence + 1)
+    invoice_number = f"{prefix}-{payload.year}-{sequence:04d}"
+    invoice_date = date.today()
+    invoice_snapshot = {
+        key: value
+        for key, value in organization.items()
+        if key not in {"id", "logo_data", "logo_path", "created_at", "updated_at"}
+    }
+    invoice_snapshot.update(
+        {
+            "invoice_number": invoice_number,
+            "invoice_date": invoice_date.isoformat(),
+            "year": payload.year,
+            "month": payload.month,
+            "items": items,
+        }
+    )
+
     filename = build_invoice_filename(payload.year, payload.month)
     pdf_path = invoice_directory / filename
     invoice_directory.mkdir(parents=True, exist_ok=True)
     pdf_content = render_invoice_pdf(
         payload.year,
         payload.month,
-        payload.invoice_date,
+        invoice_date,
         [
             InvoiceLine(
                 description=item["description"],
@@ -448,14 +677,43 @@ def post_invoice(
             {
                 "year": payload.year,
                 "month": payload.month,
-                "invoice_date": payload.invoice_date.isoformat(),
-                "invoice_number": payload.invoice_number,
+                "organization_id": organization["id"],
+                "invoice_date": invoice_date.isoformat(),
+                "invoice_number": invoice_number,
                 "total_amount_cents": total_amount_cents,
                 "pdf_path": filename,
+                "invoice_snapshot_json": json.dumps(
+                    invoice_snapshot,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                "logo_snapshot": (
+                    organization["logo_data"]
+                    if organization["logo_enabled"]
+                    else None
+                ),
+                "logo_media_type": (
+                    organization["logo_media_type"]
+                    if organization["logo_enabled"]
+                    else None
+                ),
             },
-            items,
+            [
+                {**item, "organization_id": organization["id"]}
+                for item in items
+            ],
             database_path,
+            expected_next_invoice_number=organization["next_invoice_number"],
+            updated_next_invoice_number=sequence + 1,
         )
+    except ValueError as error:
+        pdf_path.unlink(missing_ok=True)
+        if "rechnungsnummernkreis" in str(error):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Der Rechnungsnummernkreis wurde parallel geändert. Bitte versuche es erneut.",
+            ) from error
+        raise
     except Exception:
         pdf_path.unlink(missing_ok=True)
         raise
@@ -463,7 +721,11 @@ def post_invoice(
     invoice = get_invoice(invoice_id, database_path)
     if invoice is None:
         raise RuntimeError(f"Die soeben erstellte Rechnung {invoice_id} fehlt")
-    return invoice
+    return {
+        key: value
+        for key, value in invoice.items()
+        if key not in {"invoice_snapshot_json", "logo_snapshot", "logo_media_type"}
+    }
 
 
 @app.get("/api/invoices/{invoice_id}/pdf")
