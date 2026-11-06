@@ -89,8 +89,12 @@ python -m pytest
 ## Aktuelle API
 
 - `GET` und `PUT /api/settings`: Tätigkeitsarten und Preise laden bzw. ändern.
-  `PUT` erwartet ein Objekt mit einer `activities`-Liste.
-- `GET` und `PUT /api/weekly-plan`: Wochenplan laden bzw. vollständig ersetzen.
+  `PUT` erwartet ein Objekt mit bis zu vier Einträgen in einer
+  `activities`-Liste. Verwendete Tätigkeiten bleiben erhalten und können
+  deaktiviert werden.
+- `GET` und `PUT /api/weekly-plan`: Wochenplan laden bzw. vollständig
+  ersetzen. Änderungen am Plan ändern keine bereits gespeicherten
+  Trainingstermine.
 - `GET /api/calendar/{year}/{month}`: Monatskalender mit geplanten und
   gespeicherten Terminen laden.
 - `POST`, `PUT /api/trainings/{id}` und `DELETE /api/trainings/{id}`:
@@ -103,6 +107,9 @@ python -m pytest
   Preis-Snapshots und PDF speichern. Der Dateiname lautet
   `Rechnung_TTC_YYYY-MM.pdf`; pro Monat wird höchstens eine Rechnung
   erstellt.
+- `GET /api/invoices`: gespeicherte Rechnungen chronologisch, neueste zuerst,
+  als Übersicht laden. Rechnungspositionen und PDF werden beim Öffnen nicht
+  aus aktuellen Terminen neu berechnet.
 - `GET /api/invoices/{id}/pdf`: gespeicherte PDF im Browser anzeigen oder
   herunterladen. Die Weboberfläche öffnet die PDF zum Drucken im
   Browser-PDF-Viewer; dort kann der Druckdialog des Browsers verwendet
@@ -118,6 +125,8 @@ Monat, ergeben `409`.
 - Die virtuelle Umgebung (`.venv`) wird nicht in Git verwaltet.
 - Lokale Datenbanken und generierte Rechnungen sind in `.gitignore` ausgeschlossen.
 - PDF-Rechnungen werden im Ordner `rechnungen/` gespeichert.
+- Tätigkeiten, Wochenplan und Rechnungsarchiv werden direkt auf der
+  Startseite verwaltet.
 - Datenbanksicherungen werden wöchentlich sonntags um 03:00 Uhr unter
   `~/ttc-rechnungsverwaltung-backups` angelegt; 30 Tage alte Sicherungen
   werden entfernt. Der Backup-Ordner ist nicht Teil des Git-Repositories.

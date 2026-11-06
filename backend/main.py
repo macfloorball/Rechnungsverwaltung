@@ -84,6 +84,12 @@ def put_settings(
     payload: SettingsUpdate,
     database_path: DatabasePath,
 ) -> dict[str, Any]:
+    if len(payload.activities) > 4:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Es können höchstens vier Tätigkeitsarten verwaltet werden",
+        )
+
     with sqlite3.connect(database_path) as connection:
         for activity in payload.activities:
             if activity.id is None:
@@ -204,7 +210,7 @@ def get_calendar(
                 and activity_id not in saved_activity_ids
             ):
                 activity = activities.get(activity_id)
-                if activity is not None:
+                if activity is not None and activity["is_active"]:
                     day_trainings.append(
                         {
                             "id": None,
@@ -361,6 +367,21 @@ def preview_invoice(
         "items": items,
         "total_amount_cents": total_amount_cents,
     }
+
+
+@app.get("/api/invoices")
+def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
+    invoices = list_records("invoices", database_path=database_path)
+    return sorted(
+        invoices,
+        key=lambda invoice: (
+            invoice["year"],
+            invoice["month"],
+            invoice["created_at"],
+            invoice["id"],
+        ),
+        reverse=True,
+    )
 
 
 @app.post("/api/invoices", status_code=status.HTTP_201_CREATED)
