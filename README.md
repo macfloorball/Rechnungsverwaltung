@@ -88,6 +88,16 @@ python -m pytest
 
 ## Aktuelle API
 
+- `GET` und `PUT /api/organization/settings`: Absender, Empfänger,
+  Bankverbindung, Steuerdaten, Rechnungstexte, Zahlungsziel und
+  Nummernkreis der Standardorganisation laden bzw. ändern.
+- `POST /api/organization/logo`: Logo als JSON mit `media_type`
+  (`image/png` oder `image/jpeg`) und Base64-kodiertem `data_base64`
+  hochladen. Es gelten 2 MB und höchstens 4000 × 4000 Pixel. Die
+  Bildsignatur wird geprüft; SVG und beliebige Pfade werden nicht
+  akzeptiert.
+- `GET` und `DELETE /api/organization/logo`: gespeichertes Logo anzeigen
+  beziehungsweise entfernen.
 - `GET` und `PUT /api/settings`: Tätigkeitsarten und Preise laden bzw. ändern.
   `PUT` erwartet ein Objekt mit bis zu vier Einträgen in einer
   `activities`-Liste. Verwendete Tätigkeiten bleiben erhalten und können
@@ -104,16 +114,57 @@ python -m pytest
   für die Rechnungsvorschau liefern. Die Weboberfläche stellt diese im
   Tabellenlayout der bereitgestellten Rechnung dar.
 - `POST /api/invoices`: Rechnung samt unveränderlichen Positionen,
-  Preis-Snapshots und PDF speichern. Der Dateiname lautet
-  `Rechnung_TTC_YYYY-MM.pdf`; pro Monat wird höchstens eine Rechnung
-  erstellt.
+  Preis- und Rechnungseinstellungs-Snapshots sowie PDF speichern. Das
+  Rechnungsdatum wird serverseitig gesetzt. Die Nummer wird aus dem
+  konfigurierten Präfix, Jahr und Zähler gebildet, zum Beispiel
+  `RE-2026-0001`. Der Dateiname lautet `Rechnung_TTC_YYYY-MM.pdf`; pro
+  Monat wird höchstens eine Rechnung erstellt.
 - `GET /api/invoices`: gespeicherte Rechnungen chronologisch, neueste zuerst,
   als Übersicht laden. Rechnungspositionen und PDF werden beim Öffnen nicht
-  aus aktuellen Terminen neu berechnet.
+  aus aktuellen Terminen neu berechnet. Interne Snapshot- und Logo-Daten
+  werden nicht in die Übersicht ausgegeben.
 - `GET /api/invoices/{id}/pdf`: gespeicherte PDF im Browser anzeigen oder
   herunterladen. Die Weboberfläche öffnet die PDF zum Drucken im
   Browser-PDF-Viewer; dort kann der Druckdialog des Browsers verwendet
   werden, außerdem steht ein separater Download bereit.
+
+## Rechnungseinstellungen und Datenbankmigration
+
+Der Bereich **Rechnungseinstellungen** auf der Startseite verwaltet
+Absender- und Empfängerdaten, Bankverbindung, Steuerangaben, Texte,
+Zahlungsziel, Rechnungsnummern-Präfix und Logo. Optionale Angaben wie
+Telefonnummer, BIC und Steuerdaten müssen nicht ausgefüllt werden.
+Eine Organisation wird automatisch verwendet; Organisationen auswählen,
+Benutzerkonten, Login und Mehrbenutzeroberfläche sind nicht implementiert.
+
+Die Tabelle `organizations` hält diese Angaben und einen Nummernzähler.
+Tätigkeiten, Wochenplan, Trainingstermine, Rechnungen und
+Rechnungspositionen besitzen eine `organization_id`. Rechnungspositionen
+bleiben außerdem über `invoice_id` ihrer Rechnung zugeordnet. Damit ist die
+Datenstruktur für spätere Organisationen vorbereitet; derzeit wird nur die
+Standardorganisation mit ID `1` verwendet.
+
+Beim Anwendungsstart führt `initialize_database()` die versionierten
+Migrationen aus der Tabelle `schema_migrations` aus. Die Migrationen
+ergänzen Organisations- und Snapshot-Spalten und ordnen vorhandene
+Datensätze der Standardorganisation zu. Tätigkeiten, Wochenplan,
+Trainingseinträge, Rechnungen und Rechnungspositionen werden nicht gelöscht.
+Bestehende Rechnungsnummern, PDF-Pfade und Dateien bleiben erhalten.
+Migrationen können bei einem Neustart erneut aufgerufen werden, ohne sie
+doppelt anzuwenden.
+
+Neue Rechnungen speichern die verwendeten Tätigkeitspositionen,
+Rechnungseinstellungen und – wenn aktiviert – die Logodaten als Snapshot.
+Spätere Änderungen an Organisation, Logo oder Preisen verändern weder diese
+Snapshots noch das bereits generierte PDF. Ältere Rechnungen behalten ihr
+ursprünglich gespeichertes PDF; für sie wird nachträglich kein
+Rechnungseinstellungs-Snapshot erzeugt.
+
+Logos liegen als Bilddaten in SQLite. Sie sind daher Teil des SQLite-
+Datenbankbackups. Der bestehende Backup-Job sichert jedoch nicht den
+separaten Ordner `rechnungen/`; PDF-Dateien müssen zusätzlich gesichert
+werden, wenn sie über einen Verlust des Anwendungsordners hinaus erhalten
+bleiben sollen.
 
 Ungültige Eingaben werden mit `422` zurückgegeben. Eine Rechnung ohne
 abrechenbare Termine ergibt `400`; Konflikte, etwa eine doppelte

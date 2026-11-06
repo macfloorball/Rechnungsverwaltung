@@ -240,6 +240,14 @@ export function initializeSettings() {
   const invoiceEmpty = document.querySelector("#saved-invoices-empty");
   const invoiceError = document.querySelector("#saved-invoices-error");
   const reloadInvoicesButton = document.querySelector("#reload-invoices");
+  const organizationForm = document.querySelector("#organization-settings-form");
+  const organizationError = document.querySelector("#organization-settings-error");
+  const organizationSuccess = document.querySelector("#organization-settings-success");
+  const saveOrganizationButton = document.querySelector("#save-organization-settings");
+  const logoFileInput = document.querySelector("#organization-logo-file");
+  const uploadLogoButton = document.querySelector("#upload-organization-logo");
+  const deleteLogoButton = document.querySelector("#delete-organization-logo");
+  const logoPreview = document.querySelector("#organization-logo-preview");
 
   if (
     !(activityForm instanceof HTMLFormElement)
@@ -256,12 +264,175 @@ export function initializeSettings() {
     || !(invoiceEmpty instanceof HTMLElement)
     || !(invoiceError instanceof HTMLElement)
     || !(reloadInvoicesButton instanceof HTMLButtonElement)
+    || !(organizationForm instanceof HTMLFormElement)
+    || !(organizationError instanceof HTMLElement)
+    || !(organizationSuccess instanceof HTMLElement)
+    || !(saveOrganizationButton instanceof HTMLButtonElement)
+    || !(logoFileInput instanceof HTMLInputElement)
+    || !(uploadLogoButton instanceof HTMLButtonElement)
+    || !(deleteLogoButton instanceof HTMLButtonElement)
+    || !(logoPreview instanceof HTMLImageElement)
   ) {
     throw new Error("Einstellungen oder Rechnungsarchiv fehlen im HTML.");
   }
 
   let activities = [];
   let weeklyPlan = [];
+
+  function applyOrganizationSettings(settings) {
+    for (const control of organizationForm.elements) {
+      if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+        continue;
+      }
+      if (!control.name || control.type === "file") {
+        continue;
+      }
+      if (control.type === "checkbox") {
+        control.checked = settings[control.name] === true || settings[control.name] === 1;
+      } else {
+        control.value = settings[control.name] ?? "";
+      }
+    }
+
+    deleteLogoButton.disabled = !settings.logo_available;
+    logoPreview.hidden = !settings.logo_available;
+    if (settings.logo_available) {
+      logoPreview.src = `/api/organization/logo?updated=${Date.now()}`;
+    } else {
+      logoPreview.removeAttribute("src");
+    }
+  }
+
+  async function loadOrganizationSettings() {
+    organizationError.hidden = true;
+    try {
+      const settings = await requestJson("/api/organization/settings");
+      applyOrganizationSettings(settings);
+    } catch (error) {
+      showMessage(
+        organizationError,
+        error instanceof Error ? error.message : "Rechnungseinstellungen konnten nicht geladen werden.",
+      );
+    }
+  }
+
+  organizationForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    organizationError.hidden = true;
+    organizationSuccess.hidden = true;
+    if (!organizationForm.reportValidity()) {
+      return;
+    }
+
+    const payload = {};
+    for (const control of organizationForm.elements) {
+      if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+        continue;
+      }
+      if (!control.name || control.type === "file") {
+        continue;
+      }
+      if (control.type === "checkbox") {
+        payload[control.name] = control.checked;
+      } else if (control.type === "number") {
+        payload[control.name] = Number(control.value);
+      } else {
+        payload[control.name] = control.value.trim();
+      }
+    }
+
+    saveOrganizationButton.disabled = true;
+    try {
+      const settings = await requestJson("/api/organization/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      applyOrganizationSettings(settings);
+      showMessage(organizationSuccess, "Rechnungseinstellungen wurden gespeichert.");
+    } catch (error) {
+      showMessage(
+        organizationError,
+        error instanceof Error ? error.message : "Rechnungseinstellungen konnten nicht gespeichert werden.",
+      );
+    } finally {
+      saveOrganizationButton.disabled = false;
+    }
+  });
+
+  uploadLogoButton.addEventListener("click", async () => {
+    organizationError.hidden = true;
+    organizationSuccess.hidden = true;
+    const file = logoFileInput.files?.[0];
+    if (!file) {
+      showMessage(organizationError, "Bitte wähle zuerst eine PNG- oder JPEG-Datei aus.");
+      return;
+    }
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      showMessage(organizationError, "Bitte wähle eine PNG- oder JPEG-Datei aus.");
+      return;
+    }
+    if (file.size === 0 || file.size > 2_000_000) {
+      showMessage(organizationError, "Das Logo muss kleiner als 2 MB sein.");
+      return;
+    }
+
+    uploadLogoButton.disabled = true;
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result);
+          } else {
+            reject(new Error("Die Logo-Datei konnte nicht gelesen werden."));
+          }
+        });
+        reader.addEventListener("error", () => {
+          reject(new Error("Die Logo-Datei konnte nicht gelesen werden."));
+        });
+        reader.readAsDataURL(file);
+      });
+      const encodedData = dataUrl.split(",", 2)[1];
+      const settings = await requestJson("/api/organization/logo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          media_type: file.type,
+          data_base64: encodedData,
+        }),
+      });
+      applyOrganizationSettings(settings);
+      logoFileInput.value = "";
+      showMessage(organizationSuccess, "Logo wurde hochgeladen und für neue Rechnungen aktiviert.");
+    } catch (error) {
+      showMessage(
+        organizationError,
+        error instanceof Error ? error.message : "Logo konnte nicht hochgeladen werden.",
+      );
+    } finally {
+      uploadLogoButton.disabled = false;
+    }
+  });
+
+  deleteLogoButton.addEventListener("click", async () => {
+    organizationError.hidden = true;
+    organizationSuccess.hidden = true;
+    deleteLogoButton.disabled = true;
+    try {
+      const settings = await requestJson("/api/organization/logo", {
+        method: "DELETE",
+      });
+      applyOrganizationSettings(settings);
+      showMessage(organizationSuccess, "Logo wurde entfernt. Bereits erstellte Rechnungen bleiben unverändert.");
+    } catch (error) {
+      showMessage(
+        organizationError,
+        error instanceof Error ? error.message : "Logo konnte nicht entfernt werden.",
+      );
+      deleteLogoButton.disabled = false;
+    }
+  });
 
   activityForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -403,6 +574,7 @@ export function initializeSettings() {
   }
 
   reloadInvoicesButton.addEventListener("click", loadInvoices);
+  loadOrganizationSettings();
 
   requestJson("/api/settings")
     .then((result) => {

@@ -9,6 +9,7 @@ from scripts.backup_database import (
     BACKUP_TIMESTAMP_FORMAT,
     create_database_backup,
 )
+from backend.database import initialize_database
 
 
 def test_database_backup_is_valid_and_uses_private_permissions(
@@ -98,3 +99,54 @@ def test_backup_timestamp_format_is_six_digit_precision() -> None:
     ).strftime(BACKUP_TIMESTAMP_FORMAT)
 
     assert timestamp == "20261105T123456123456Z"
+
+
+def test_backup_and_restore_preserve_organization_and_invoice_snapshots(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "source.db"
+    backup_directory = tmp_path / "backups"
+    initialize_database(database_path)
+    logo_data = b"\x89PNG-test-logo"
+    snapshot = '{"name":"TTC Beispiel","iban":"DE89370400440532013000"}'
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            UPDATE organizations
+            SET name = ?, iban = ?, logo_data = ?, logo_media_type = ?
+            WHERE id = 1
+            """,
+            ("TTC Beispiel", "DE89370400440532013000", logo_data, "image/png"),
+        )
+        connection.execute(
+            """
+            INSERT INTO invoices (
+                organization_id, year, month, invoice_date, invoice_number,
+                total_amount_cents, invoice_snapshot_json, logo_snapshot,
+                logo_media_type
+            ) VALUES (1, 2026, 11, '2026-11-06', 'TTC-2026-0001', 3000, ?, ?, ?)
+            """,
+            (snapshot, logo_data, "image/png"),
+        )
+
+    backup_path = create_database_backup(
+        database_path,
+        backup_directory,
+        now=datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc),
+    )
+
+    with sqlite3.connect(backup_path) as connection:
+        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+        assert connection.execute(
+            "SELECT name, iban, logo_data FROM organizations WHERE id = 1"
+        ).fetchone() == (
+            "TTC Beispiel",
+            "DE89370400440532013000",
+            logo_data,
+        )
+        assert connection.execute(
+            """
+            SELECT invoice_snapshot_json, logo_snapshot, logo_media_type
+            FROM invoices WHERE invoice_number = 'TTC-2026-0001'
+            """
+        ).fetchone() == (snapshot, logo_data, "image/png")

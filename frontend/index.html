@@ -87,6 +87,157 @@
           </form>
         </section>
 
+        <section class="organization-section" aria-labelledby="organization-settings-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Verwaltung</p>
+              <h2 id="organization-settings-title">Rechnungseinstellungen</h2>
+            </div>
+          </div>
+          <p class="section-description">
+            Diese Angaben werden für künftig erstellte Rechnungen verwendet.
+            Bereits gespeicherte Rechnungen bleiben unverändert.
+          </p>
+          <form id="organization-settings-form">
+            <fieldset class="organization-settings-group">
+              <legend>Absenderdaten</legend>
+              <div class="organization-fields">
+                <label>Name / Verein
+                  <input name="name" type="text" maxlength="200" autocomplete="organization">
+                </label>
+                <label>Vorname
+                  <input name="issuer_first_name" type="text" maxlength="100" autocomplete="given-name">
+                </label>
+                <label>Nachname
+                  <input name="issuer_last_name" type="text" maxlength="100" autocomplete="family-name">
+                </label>
+                <label>Straße und Hausnummer
+                  <input name="street" type="text" maxlength="200" autocomplete="street-address">
+                </label>
+                <label>Adresszusatz
+                  <input name="address" type="text" maxlength="500">
+                </label>
+                <label>Postleitzahl
+                  <input name="postal_code" type="text" maxlength="20" autocomplete="postal-code">
+                </label>
+                <label>Ort
+                  <input name="city" type="text" maxlength="100" autocomplete="address-level2">
+                </label>
+                <label>E-Mail-Adresse
+                  <input name="email" type="email" maxlength="254" autocomplete="email">
+                </label>
+                <label>Telefon <span class="optional-label">(optional)</span>
+                  <input name="phone" type="tel" maxlength="50" autocomplete="tel">
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="organization-settings-group">
+              <legend>Rechnungsempfänger</legend>
+              <p class="section-description">
+                Empfängerdaten werden ebenfalls in der Rechnung gespeichert.
+              </p>
+              <div class="organization-fields">
+                <label>Name / Verein
+                  <input name="recipient_name" type="text" maxlength="200">
+                </label>
+                <label>Straße und Hausnummer
+                  <input name="recipient_street" type="text" maxlength="200">
+                </label>
+                <label>Postleitzahl
+                  <input name="recipient_postal_code" type="text" maxlength="20">
+                </label>
+                <label>Ort
+                  <input name="recipient_city" type="text" maxlength="100">
+                </label>
+                <label>E-Mail-Adresse <span class="optional-label">(optional)</span>
+                  <input name="recipient_email" type="email" maxlength="254">
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="organization-settings-group">
+              <legend>Bankverbindung</legend>
+              <div class="organization-fields">
+                <label>Kontoinhaber
+                  <input name="account_holder" type="text" maxlength="200" autocomplete="name">
+                </label>
+                <label>IBAN
+                  <input name="iban" type="text" maxlength="34" autocomplete="off" spellcheck="false">
+                </label>
+                <label>BIC <span class="optional-label">(optional)</span>
+                  <input name="bic" type="text" maxlength="11" autocomplete="off" spellcheck="false">
+                </label>
+                <label>Bankname <span class="optional-label">(optional)</span>
+                  <input name="bank_name" type="text" maxlength="200">
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="organization-settings-group">
+              <legend>Steuerliche Angaben</legend>
+              <div class="organization-fields">
+                <label>Steuernummer <span class="optional-label">(optional)</span>
+                  <input name="tax_number" type="text" maxlength="100">
+                </label>
+                <label>Umsatzsteuer-ID <span class="optional-label">(optional)</span>
+                  <input name="vat_id" type="text" maxlength="100">
+                </label>
+                <label class="organization-field-wide">Weitere steuerliche Angaben <span class="optional-label">(optional)</span>
+                  <textarea name="additional_tax_info" rows="3" maxlength="1000"></textarea>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="organization-settings-group">
+              <legend>Rechnungseinstellungen</legend>
+              <div class="organization-fields">
+                <label>Rechnungsnummern-Präfix
+                  <input name="invoice_number_prefix" type="text" maxlength="30" required>
+                </label>
+                <label>Zahlungsziel in Tagen
+                  <input name="payment_due_days" type="number" min="0" max="3650" step="1" required>
+                </label>
+                <label class="organization-field-wide">Individueller Rechnungstext
+                  <textarea name="invoice_text" rows="3" maxlength="2000"></textarea>
+                </label>
+                <label class="organization-field-wide">Zahlungshinweis
+                  <textarea name="payment_notice" rows="3" maxlength="2000"></textarea>
+                </label>
+                <label class="organization-field-wide">Standard-Leistungsbeschreibung
+                  <textarea name="standard_service_description" rows="2" maxlength="500"></textarea>
+                </label>
+                <label class="organization-field-wide">Fußzeile
+                  <textarea name="invoice_footer" rows="2" maxlength="2000"></textarea>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="organization-settings-group">
+              <legend>Rechnungsdesign</legend>
+              <div class="organization-logo-controls">
+                <img id="organization-logo-preview" class="organization-logo-preview" alt="Vorschau des gespeicherten Logos" hidden>
+                <label for="organization-logo-file">Logo (PNG oder JPEG, max. 2 MB)</label>
+                <input id="organization-logo-file" type="file" accept="image/png,image/jpeg">
+                <label class="settings-checkbox-label organization-logo-toggle">
+                  <input name="logo_enabled" type="checkbox">
+                  Logo in neuen Rechnungen anzeigen
+                </label>
+                <div class="organization-logo-actions">
+                  <button id="upload-organization-logo" class="secondary-button" type="button">Logo hochladen</button>
+                  <button id="delete-organization-logo" class="secondary-button" type="button" disabled>Logo entfernen</button>
+                </div>
+              </div>
+            </fieldset>
+
+            <p id="organization-settings-error" class="error-message" role="alert" hidden></p>
+            <p id="organization-settings-success" class="success-message" role="status" hidden></p>
+            <button id="save-organization-settings" class="primary-button" type="submit">
+              Rechnungseinstellungen speichern
+            </button>
+          </form>
+        </section>
+
         <section class="saved-invoices-section" aria-labelledby="saved-invoices-title">
           <div class="section-heading">
             <div>
