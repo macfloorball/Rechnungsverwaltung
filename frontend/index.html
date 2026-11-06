@@ -39,6 +39,84 @@
           <p id="calendar-error" class="error-message" role="alert" hidden></p>
         </section>
 
+        <section class="settings-section" aria-labelledby="settings-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Verwaltung</p>
+              <h2 id="settings-title">Tätigkeiten und Preise</h2>
+            </div>
+          </div>
+          <p class="section-description">
+            Verwalte bis zu vier Tätigkeiten. Deaktiviere verwendete Tätigkeiten,
+            statt sie zu löschen.
+          </p>
+          <form id="activity-settings-form">
+            <div class="settings-table-wrapper">
+              <table class="settings-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Tätigkeit</th>
+                    <th scope="col">Stundenpreis (€)</th>
+                    <th scope="col">Aktiv</th>
+                  </tr>
+                </thead>
+                <tbody id="activity-settings-rows"></tbody>
+              </table>
+            </div>
+            <p id="activity-settings-error" class="error-message" role="alert" hidden></p>
+            <p id="activity-settings-success" class="success-message" role="status" hidden></p>
+            <button id="save-activity-settings" class="primary-button" type="submit">
+              Tätigkeiten speichern
+            </button>
+          </form>
+
+          <div class="section-subheading">
+            <h3>Wöchentlicher Trainingsplan</h3>
+            <p class="section-description">
+              Aktive Plantermine erscheinen im Kalender zunächst als geplant.
+              Gespeicherte Trainingstermine bleiben von Planänderungen unberührt.
+            </p>
+          </div>
+          <form id="weekly-plan-form">
+            <div id="weekly-plan-days" class="weekly-plan-days"></div>
+            <p id="weekly-plan-error" class="error-message" role="alert" hidden></p>
+            <p id="weekly-plan-success" class="success-message" role="status" hidden></p>
+            <button id="save-weekly-plan" class="primary-button" type="submit">
+              Wochenplan speichern
+            </button>
+          </form>
+        </section>
+
+        <section class="saved-invoices-section" aria-labelledby="saved-invoices-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Archiv</p>
+              <h2 id="saved-invoices-title">Gespeicherte Rechnungen</h2>
+            </div>
+            <button id="reload-invoices" class="secondary-button" type="button">
+              Liste aktualisieren
+            </button>
+          </div>
+          <p id="saved-invoices-error" class="error-message" role="alert" hidden></p>
+          <p id="saved-invoices-empty" class="invoice-empty" hidden>
+            Es wurden noch keine Rechnungen gespeichert.
+          </p>
+          <div class="settings-table-wrapper">
+            <table class="settings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Abrechnungsmonat</th>
+                  <th scope="col">Rechnungsdatum</th>
+                  <th scope="col">Rechnungsnummer</th>
+                  <th scope="col">Gesamtbetrag</th>
+                  <th scope="col">Aktion</th>
+                </tr>
+              </thead>
+              <tbody id="saved-invoices-rows"></tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="invoice-section" aria-labelledby="invoice-title">
           <div class="section-heading">
             <div>
