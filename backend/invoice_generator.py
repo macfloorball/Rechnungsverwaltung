@@ -8,6 +8,7 @@ from typing import Protocol, Sequence
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Paragraph, Table, TableStyle
 
@@ -38,6 +39,23 @@ POSITION_COLUMN_WIDTHS = (240, 90, 45, PAGE_WIDTH - 2 * PAGE_MARGIN - 375)
 POSITION_HEADER = ("Trainingseinheit:", "Datum", "Std.:", "Betrag:")
 FOOTER_ROW_GAP = 40
 FOOTER_LINE_GAP = 8
+CONTENT_STYLE = ParagraphStyle(
+    "InvoiceContent",
+    fontName=BODY_FONT,
+    fontSize=BODY_FONT_SIZE,
+    leading=14,
+    textColor=colors.black,
+)
+CONTENT_RIGHT_STYLE = ParagraphStyle(
+    "InvoiceContentRight",
+    parent=CONTENT_STYLE,
+    alignment=2,
+)
+CONTENT_BOLD_STYLE = ParagraphStyle(
+    "InvoiceContentBold",
+    parent=CONTENT_STYLE,
+    fontName=BODY_FONT_BOLD,
+)
 
 
 def build_invoice_filename(year: int, month: int) -> str:
@@ -50,22 +68,36 @@ def build_invoice_filename(year: int, month: int) -> str:
 
 @dataclass(frozen=True)
 class InvoiceContactDetails:
-    recipient_lines: tuple[str, ...] = (
-        "1. TTC Köln e.V.",
-        "Herr Michael Simon",
-        "Raschdorffstraße 28",
-        "50933 Köln",
-    )
-    sender_lines: tuple[str, ...] = (
-        "Danilo Kappen",
-        "Peter-von-Fliesteden Str. 18",
-        "50933 Köln",
-        "Tel.: +49 1573 464 7094",
-    )
-    tax_id_label: str = "Steuer ID:"
+    recipient_lines: tuple[str, ...] = ()
+    sender_lines: tuple[str, ...] = ()
+    tax_lines: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class InvoiceFooterDetails:
+    account_holder: str = ""
+    iban: str = ""
+    bic: str = ""
+    bank_name: str = ""
+    payment_notice: str = ""
+    invoice_footer: str = ""
+    due_date: date | None = None
+
+
+@dataclass(frozen=True)
+class InvoiceDetails:
+    contact: InvoiceContactDetails = InvoiceContactDetails()
+    footer: InvoiceFooterDetails = InvoiceFooterDetails()
+    invoice_number: str = ""
+    city: str = ""
+    invoice_text: str = ""
+    standard_service_description: str = ""
+    logo_data: bytes | None = None
+    logo_media_type: str | None = None
 
 
 CONTACT_DETAILS = InvoiceContactDetails()
+FOOTER_DETAILS = InvoiceFooterDetails()
 
 
 @dataclass(frozen=True)
@@ -89,9 +121,54 @@ class _TextCanvas(Protocol):
     def line(self, x1: float, y1: float, x2: float, y2: float) -> None: ...
 
 
+def _draw_paragraph(
+    pdf: Canvas,
+    text: str,
+    x: float,
+    top_y: float,
+    width: float,
+    style: ParagraphStyle = CONTENT_STYLE,
+) -> float:
+    paragraph = Paragraph(escape(text).replace("\n", "<br/>"), style)
+    _, height = paragraph.wrap(width, PAGE_HEIGHT)
+    paragraph.drawOn(pdf, x, top_y - height)
+    return top_y - height - 4
+
+
+def _draw_image(
+    pdf: Canvas,
+    image_data: bytes,
+    top_y: float,
+) -> float:
+    image = ImageReader(BytesIO(image_data))
+    width, height = image.getSize()
+    if width <= 0 or height <= 0:
+        raise ValueError("Das Logo hat ungültige Abmessungen")
+    box_width = 140
+    box_height = 55
+    scale = min(box_width / width, box_height / height)
+    rendered_width = width * scale
+    rendered_height = height * scale
+    x = PAGE_WIDTH - PAGE_MARGIN - rendered_width
+    y = top_y - rendered_height
+    pdf.drawImage(
+        image,
+        x,
+        y,
+        width=rendered_width,
+        height=rendered_height,
+        preserveAspectRatio=True,
+        mask="auto",
+    )
+    return y
+
+
 def draw_invoice_rate_details(
     pdf: _TextCanvas,
     items: Sequence[InvoiceLine],
+    top_y: float = HEADING_Y - 27,
+    intro_text: str = "",
+    service_description: str = "",
 ) -> float:
     rates = list(
         dict.fromkeys(
@@ -100,28 +177,29 @@ def draw_invoice_rate_details(
             if item.unit_rate_cents is not None
         )
     )
-    if not rates:
-        raise ValueError("Für die Rechnung fehlen die hinterlegten Stundenpreise")
+    y = top_y
+    if rates:
+        pdf.setFont(BODY_FONT_BOLD, BODY_FONT_SIZE)
+        pdf.drawString(PAGE_MARGIN, y, "Honorar:")
+        y -= 18
+        pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
+        for description, rate_cents in rates:
+            line = f"{_format_euros(rate_cents)} / Stunde {description}"
+            pdf.drawString(PAGE_MARGIN, y, line)
+            y -= LINE_HEIGHT
 
-    rate_heading_y = HEADING_Y - 27
-    pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
-    pdf.drawString(PAGE_MARGIN, rate_heading_y, "Honorar:")
-    rate_y = rate_heading_y - 18
-    for description, rate_cents in rates:
-        pdf.drawString(
-            PAGE_MARGIN,
-            rate_y,
-            f"{_format_euros(rate_cents)} / Stunde {description}",
-        )
-        rate_y -= LINE_HEIGHT
-
-    intro_y = rate_y - 20
+    if service_description:
+        y -= 4
+        for line in service_description.splitlines():
+            pdf.drawString(PAGE_MARGIN, y, line)
+            y -= LINE_HEIGHT
     pdf.drawString(
         PAGE_MARGIN,
-        intro_y,
-        "Hiermit stelle ich folgenden Betrag in Rechnung:",
+        y - 4,
+        intro_text or "Hiermit stelle ich folgenden Betrag in Rechnung:",
     )
-    return intro_y
+    y -= 18
+    return y
 
 
 def render_invoice_pdf(
@@ -130,53 +208,98 @@ def render_invoice_pdf(
     invoice_date: date,
     items: Sequence[InvoiceLine],
     total_amount_cents: int,
+    details: InvoiceDetails | None = None,
 ) -> bytes:
     build_invoice_filename(year, month)
+    details = details or InvoiceDetails()
     output = BytesIO()
     pdf = Canvas(output, pagesize=A4)
-    draw_party_blocks(pdf)
-    draw_invoice_heading(pdf, year, month, invoice_date)
-    intro_y = draw_invoice_rate_details(pdf, items)
-    table_bottom_y = draw_position_table(pdf, items, intro_y - 13)
-    draw_invoice_footer(pdf, total_amount_cents, table_bottom_y)
+    contact_bottom_y = draw_party_blocks(
+        pdf,
+        details.contact,
+        details.logo_data,
+        details.logo_media_type,
+    )
+    heading_y = contact_bottom_y - 42
+    draw_invoice_heading(
+        pdf,
+        year,
+        month,
+        invoice_date,
+        city=details.city,
+        invoice_number=details.invoice_number,
+        top_y=heading_y,
+    )
+    intro_y = draw_invoice_rate_details(
+        pdf,
+        items,
+        top_y=heading_y - 30,
+        intro_text=details.invoice_text,
+        service_description=details.standard_service_description,
+    )
+    table_bottom_y = draw_position_table(pdf, items, intro_y - 12)
+    draw_invoice_footer(
+        pdf,
+        total_amount_cents,
+        table_bottom_y,
+        details.footer,
+    )
     pdf.save()
     return output.getvalue()
 
 
-@dataclass(frozen=True)
-class InvoiceFooterDetails:
-    account_holder: str = "Danilo Kappen"
-    iban: str = ""
-    bank_name: str = "Volksbank Köln Bonn eG"
-    greeting: str = "Mit freundlichen Grüßen"
-    sender_name: str = "Danilo Kappen"
-
-
-FOOTER_DETAILS = InvoiceFooterDetails()
-
-
 def draw_party_blocks(
-    pdf: _TextCanvas,
+    pdf: Canvas,
     contact_details: InvoiceContactDetails = CONTACT_DETAILS,
-) -> None:
+    logo_data: bytes | None = None,
+    logo_media_type: str | None = None,
+) -> float:
+    if logo_data is not None and logo_media_type not in {"image/png", "image/jpeg"}:
+        raise ValueError("Der Logo-Dateityp wird nicht unterstützt")
+
+    top_y = PAGE_HEIGHT - BLOCK_TOP
+    image_bottom = (
+        _draw_image(pdf, logo_data, top_y) if logo_data is not None else top_y
+    )
+    sender_x = PAGE_WIDTH / 2 + 10
+    sender_width = PAGE_WIDTH - PAGE_MARGIN - sender_x
+    recipient_width = PAGE_WIDTH / 2 - PAGE_MARGIN - 10
+    left_y = top_y
+    right_y = top_y
     pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
 
-    for index, line in enumerate(contact_details.recipient_lines):
-        y = PAGE_HEIGHT - BLOCK_TOP - index * LINE_HEIGHT
-        pdf.drawString(PAGE_MARGIN, y, line)
+    for line in contact_details.recipient_lines:
+        left_y = _draw_paragraph(
+            pdf,
+            line,
+            PAGE_MARGIN,
+            left_y,
+            recipient_width,
+        )
 
-    for index, line in enumerate(contact_details.sender_lines):
-        y = PAGE_HEIGHT - BLOCK_TOP - index * LINE_HEIGHT
-        pdf.drawRightString(PAGE_WIDTH - PAGE_MARGIN, y, line)
+    for line in contact_details.sender_lines:
+        right_y = _draw_paragraph(
+            pdf,
+            line,
+            sender_x,
+            right_y,
+            sender_width,
+            CONTENT_RIGHT_STYLE,
+        )
 
-    tax_id_y = (
-        PAGE_HEIGHT
-        - BLOCK_TOP
-        - len(contact_details.sender_lines) * LINE_HEIGHT
-        - 12
-    )
-    pdf.setFont(BODY_FONT_BOLD, BODY_FONT_SIZE)
-    pdf.drawRightString(PAGE_WIDTH - PAGE_MARGIN, tax_id_y, contact_details.tax_id_label)
+    for line in contact_details.tax_lines:
+        right_y = _draw_paragraph(
+            pdf,
+            line,
+            sender_x,
+            right_y,
+            sender_width,
+            CONTENT_RIGHT_STYLE,
+        )
+
+    if logo_data is not None:
+        right_y = min(right_y, image_bottom - 4)
+    return min(left_y, right_y)
 
 
 def draw_invoice_heading(
@@ -184,7 +307,9 @@ def draw_invoice_heading(
     year: int,
     month: int,
     invoice_date: date,
-    city: str = "Köln",
+    city: str = "",
+    invoice_number: str = "",
+    top_y: float = HEADING_Y,
 ) -> None:
     if not 1 <= year <= 9999:
         raise ValueError("Das Rechnungsjahr muss zwischen 1 und 9999 liegen")
@@ -192,13 +317,15 @@ def draw_invoice_heading(
         raise ValueError("Der Abrechnungsmonat muss zwischen 1 und 12 liegen")
 
     period = f"{GERMAN_MONTHS[month - 1]} {year}"
-    heading = f"Rechnung für die Übungsleitung im Zeitraum {period}"
-    invoice_date_text = f"{city}, {invoice_date:%d.%m.%Y}"
+    heading = f"Rechnung für Leistungen im Zeitraum {period}"
+    invoice_date_text = f"{city + ', ' if city else ''}{invoice_date:%d.%m.%Y}"
 
     pdf.setFont(BODY_FONT_BOLD, BODY_FONT_SIZE)
-    pdf.drawString(PAGE_MARGIN, HEADING_Y, heading)
+    pdf.drawString(PAGE_MARGIN, top_y, heading)
     pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
-    pdf.drawRightString(PAGE_WIDTH - PAGE_MARGIN, HEADING_Y, invoice_date_text)
+    pdf.drawRightString(PAGE_WIDTH - PAGE_MARGIN, top_y, invoice_date_text)
+    if invoice_number:
+        pdf.drawString(PAGE_MARGIN, top_y - 17, f"Rechnungsnummer: {invoice_number}")
 
 
 def _format_hours(hours: Decimal) -> str:
@@ -226,9 +353,7 @@ def build_position_table(items: Sequence[InvoiceLine]) -> Table:
         parent=description_style,
         fontName=BODY_FONT_BOLD,
     )
-    rows = [
-        [Paragraph(label, header_style) for label in POSITION_HEADER]
-    ]
+    rows = [[Paragraph(label, header_style) for label in POSITION_HEADER]]
     for item in items:
         if item.hours <= 0 or item.amount_cents < 0:
             raise ValueError("Rechnungspositionen müssen gültige Werte enthalten")
@@ -292,20 +417,38 @@ def draw_invoice_footer(
     total_y = table_bottom_y - FOOTER_ROW_GAP
     rule_top_y = total_y + FOOTER_LINE_GAP
     rule_bottom_y = total_y - FOOTER_LINE_GAP
-    bank_top_y = rule_bottom_y - 44
-    bank_lines = [
-        "Bankverbindung:",
-        f"Kontoinhaber: {details.account_holder}",
-    ]
+    lines = []
+    if details.account_holder:
+        lines.append(f"Kontoinhaber: {details.account_holder}")
     if details.iban:
-        bank_lines.append(f"IBAN: {details.iban}")
-    else:
-        bank_lines.append("IBAN:")
-    bank_lines.append(details.bank_name)
-    greeting_y = bank_top_y - len(bank_lines) * LINE_HEIGHT - 48
-    sender_y = greeting_y - 34
+        lines.append(f"IBAN: {details.iban}")
+    if details.bic:
+        lines.append(f"BIC: {details.bic}")
+    if details.bank_name:
+        lines.append(details.bank_name)
+    if details.due_date:
+        lines.append(f"Zahlbar bis: {details.due_date:%d.%m.%Y}")
+    if details.payment_notice:
+        lines.extend(details.payment_notice.splitlines())
+    if details.invoice_footer:
+        lines.extend(details.invoice_footer.splitlines())
 
-    if sender_y < PAGE_MARGIN:
+    content_top_y = rule_bottom_y - 30
+    if lines:
+        lines.insert(0, "Bankverbindung:")
+    rendered = [
+        Paragraph(
+            escape(line),
+            CONTENT_BOLD_STYLE if index == 0 and lines[0] == "Bankverbindung:" else CONTENT_STYLE,
+        )
+        for index, line in enumerate(lines)
+    ]
+    heights = [
+        paragraph.wrap(PAGE_WIDTH - 2 * PAGE_MARGIN, PAGE_HEIGHT)[1]
+        for paragraph in rendered
+    ]
+    final_y = content_top_y - sum(height + 4 for height in heights)
+    if final_y < PAGE_MARGIN:
         raise ValueError("Die Rechnungspositionen passen nicht mit dem Footer auf eine Seite")
 
     pdf.setLineWidth(0.5)
@@ -319,10 +462,8 @@ def draw_invoice_footer(
     )
     pdf.line(PAGE_MARGIN, rule_bottom_y, PAGE_WIDTH - PAGE_MARGIN, rule_bottom_y)
 
-    pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
-    for index, line in enumerate(bank_lines):
-        pdf.drawString(PAGE_MARGIN, bank_top_y - index * LINE_HEIGHT, line)
-
-    pdf.drawString(PAGE_MARGIN, greeting_y, details.greeting)
-    pdf.drawString(PAGE_MARGIN, sender_y, details.sender_name)
-    return sender_y
+    y = content_top_y
+    for paragraph, height in zip(rendered, heights, strict=True):
+        paragraph.drawOn(pdf, PAGE_MARGIN, y - height)
+        y -= height + 4
+    return final_y

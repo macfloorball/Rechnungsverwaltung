@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import struct
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Annotated, Any
@@ -30,6 +30,9 @@ from backend.database import (
     update_record,
 )
 from backend.invoice_generator import (
+    InvoiceContactDetails,
+    InvoiceDetails,
+    InvoiceFooterDetails,
     InvoiceLine,
     build_invoice_filename,
     render_invoice_pdf,
@@ -640,6 +643,83 @@ def post_invoice(
             "items": items,
         }
     )
+    recipient_lines = tuple(
+        line
+        for line in (
+            organization["recipient_name"],
+            organization["recipient_street"],
+            organization["recipient_postal_code"] + (
+                f" {organization['recipient_city']}"
+                if organization["recipient_city"]
+                else ""
+            ),
+            organization["recipient_email"],
+        )
+        if line
+    )
+    sender_lines = tuple(
+        line
+        for line in (
+            organization["name"],
+            " ".join(
+                part
+                for part in (
+                    organization["issuer_first_name"],
+                    organization["issuer_last_name"],
+                )
+                if part
+            ),
+            organization["street"],
+            organization["address"],
+            organization["postal_code"] + (
+                f" {organization['city']}" if organization["city"] else ""
+            ),
+            organization["email"],
+            organization["phone"] or "",
+        )
+        if line
+    )
+    tax_lines = tuple(
+        line
+        for line in (
+            f"Steuernummer: {organization['tax_number']}"
+            if organization["tax_number"]
+            else "",
+            f"USt-IdNr.: {organization['vat_id']}"
+            if organization["vat_id"]
+            else "",
+            organization["additional_tax_info"] or "",
+        )
+        if line
+    )
+    pdf_details = InvoiceDetails(
+        contact=InvoiceContactDetails(
+            recipient_lines=recipient_lines,
+            sender_lines=sender_lines,
+            tax_lines=tax_lines,
+        ),
+        footer=InvoiceFooterDetails(
+            account_holder=organization["account_holder"],
+            iban=organization["iban"],
+            bic=organization["bic"] or "",
+            bank_name=organization["bank_name"] or "",
+            payment_notice=organization["payment_notice"],
+            invoice_footer=organization["invoice_footer"],
+            due_date=invoice_date + timedelta(days=organization["payment_due_days"]),
+        ),
+        invoice_number=invoice_number,
+        city=organization["city"],
+        invoice_text=organization["invoice_text"],
+        standard_service_description=organization[
+            "standard_service_description"
+        ],
+        logo_data=(
+            organization["logo_data"] if organization["logo_enabled"] else None
+        ),
+        logo_media_type=(
+            organization["logo_media_type"] if organization["logo_enabled"] else None
+        ),
+    )
 
     filename = build_invoice_filename(payload.year, payload.month)
     pdf_path = invoice_directory / filename
@@ -659,6 +739,7 @@ def post_invoice(
             for item in items
         ],
         total_amount_cents,
+        pdf_details,
     )
     try:
         with pdf_path.open("xb") as pdf_file:
