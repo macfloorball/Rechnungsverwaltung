@@ -1,3 +1,9 @@
+import base64
+import json
+import sqlite3
+import struct
+import zlib
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -5,6 +11,24 @@ from fastapi.testclient import TestClient
 
 from backend.database import get_invoice, initialize_database
 from backend.main import app, get_database_path, get_invoice_directory
+
+
+def _png_image() -> bytes:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        checksum = zlib.crc32(kind + data) & 0xFFFFFFFF
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", checksum)
+        )
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00\xff"))
+        + chunk(b"IEND", b"")
+    )
 
 
 @pytest.fixture
@@ -82,6 +106,179 @@ def test_activity_prices_are_centralized_in_settings(client: TestClient) -> None
     )
     assert response.status_code == 200
     assert response.json()["activities"][0]["hourly_rate_cents"] == 1750
+
+
+def test_organization_settings_are_validated_and_persist_after_restart(
+    client: TestClient,
+) -> None:
+    payload = {
+        "name": "TTC Beispiel",
+        "issuer_first_name": "Max",
+        "issuer_last_name": "Muster",
+        "street": "Musterstraße 1",
+        "postal_code": "12345",
+        "city": "Köln",
+        "email": "max@example.org",
+        "phone": None,
+        "iban": "DE89 3704 0044 0532 0130 00",
+        "bic": None,
+        "bank_name": None,
+        "account_holder": "TTC Beispiel",
+        "tax_number": None,
+        "vat_id": None,
+        "additional_tax_info": None,
+        "invoice_number_prefix": "TTC",
+        "payment_due_days": 21,
+        "invoice_text": "Vielen Dank.",
+        "payment_notice": "Bitte überweisen.",
+        "standard_service_description": "Übungsleitung",
+        "invoice_footer": "Vereinsregister Beispiel",
+    }
+    response = client.put("/api/organization/settings", json=payload)
+    assert response.status_code == 200
+    assert response.json()["iban"] == "DE89370400440532013000"
+    assert response.json()["phone"] is None
+
+    initialize_database(client.app.state.test_database_path)
+    loaded = client.get("/api/organization/settings")
+    assert loaded.status_code == 200
+    assert loaded.json()["name"] == "TTC Beispiel"
+    assert loaded.json()["payment_due_days"] == 21
+    assert loaded.json()["iban"] == "DE89370400440532013000"
+
+    invalid = client.put(
+        "/api/organization/settings",
+        json={"email": "not-an-email"},
+    )
+    assert invalid.status_code == 422
+    invalid_iban = client.put(
+        "/api/organization/settings",
+        json={"iban": "DE00000000000000000000"},
+    )
+    assert invalid_iban.status_code == 422
+
+
+def test_logo_upload_is_validated_and_available_through_api(
+    client: TestClient,
+) -> None:
+    logo = _png_image()
+    response = client.post(
+        "/api/organization/logo",
+        json={
+            "media_type": "image/png",
+            "data_base64": base64.b64encode(logo).decode("ascii"),
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["logo_available"] is True
+    assert "logo_data" not in response.json()
+    assert client.get("/api/organization/logo").content == logo
+
+    invalid = client.post(
+        "/api/organization/logo",
+        json={"media_type": "image/png", "data_base64": "bm90IGFuIGltYWdl"},
+    )
+    assert invalid.status_code == 422
+
+    removed = client.delete("/api/organization/logo")
+    assert removed.status_code == 200
+    assert removed.json()["logo_available"] is False
+    assert client.get("/api/organization/logo").status_code == 404
+
+
+def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
+    client: TestClient,
+) -> None:
+    logo = _png_image()
+    settings_response = client.put(
+        "/api/organization/settings",
+        json={
+            "name": "Alter Absender",
+            "city": "Köln",
+            "iban": "DE89370400440532013000",
+            "account_holder": "Alter Kontoinhaber",
+            "invoice_number_prefix": "TTC",
+            "payment_due_days": 14,
+        },
+    )
+    assert settings_response.status_code == 200
+    uploaded = client.post(
+        "/api/organization/logo",
+        json={
+            "media_type": "image/png",
+            "data_base64": base64.b64encode(logo).decode("ascii"),
+        },
+    )
+    assert uploaded.status_code == 200
+
+    activity = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Training", "hourly_rate_cents": 1500},
+            ]
+        },
+    ).json()["activities"][0]
+    for training_date in ("2026-11-05", "2026-12-03"):
+        created = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity["id"],
+                "hours": 2,
+                "status": "completed",
+            },
+        )
+        assert created.status_code == 201
+
+    first_response = client.post("/api/invoices", json={"year": 2026, "month": 11})
+    assert first_response.status_code == 201
+    first_invoice = first_response.json()
+    assert first_invoice["invoice_number"] == "TTC-2026-0001"
+    first_pdf = client.get(f"/api/invoices/{first_invoice['id']}/pdf").content
+    assert b"/Subtype /Image" in first_pdf
+
+    changed = client.put(
+        "/api/organization/settings",
+        json={
+            "name": "Neuer Absender",
+            "iban": "DE12500105170648489890",
+            "account_holder": "Neuer Kontoinhaber",
+            "payment_due_days": 30,
+        },
+    )
+    assert changed.status_code == 200
+    client.delete("/api/organization/logo")
+
+    second_response = client.post("/api/invoices", json={"year": 2026, "month": 12})
+    assert second_response.status_code == 201
+    second_invoice = second_response.json()
+    assert second_invoice["invoice_number"] == "TTC-2026-0002"
+    second_pdf = client.get(f"/api/invoices/{second_invoice['id']}/pdf").content
+    assert b"/Subtype /Image" not in second_pdf
+
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        snapshots = {
+            invoice_id: json.loads(snapshot)
+            for invoice_id, snapshot in connection.execute(
+                "SELECT id, invoice_snapshot_json FROM invoices"
+            )
+        }
+        logo_snapshot = connection.execute(
+            "SELECT logo_snapshot FROM invoices WHERE id = ?",
+            (first_invoice["id"],),
+        ).fetchone()[0]
+    assert snapshots[first_invoice["id"]]["name"] == "Alter Absender"
+    assert snapshots[first_invoice["id"]]["iban"] == "DE89370400440532013000"
+    assert snapshots[first_invoice["id"]]["items"][0]["unit_rate_cents"] == 1500
+    assert snapshots[second_invoice["id"]]["name"] == "Neuer Absender"
+    assert snapshots[second_invoice["id"]]["iban"] == "DE12500105170648489890"
+    assert logo_snapshot == logo
+    assert client.get(f"/api/invoices/{first_invoice['id']}/pdf").content == first_pdf
+
+    invoice_list = client.get("/api/invoices").json()
+    assert all("invoice_snapshot_json" not in invoice for invoice in invoice_list)
+    assert all("logo_snapshot" not in invoice for invoice in invoice_list)
 
 
 def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
@@ -230,6 +427,8 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     assert response.status_code == 201
     invoice = response.json()
     assert invoice["total_amount_cents"] == 3000
+    assert invoice["invoice_date"] == date.today().isoformat()
+    assert invoice["invoice_number"] == "RE-2026-0001"
     assert invoice["items"][0]["unit_rate_cents"] == 1500
     assert invoice["pdf_path"] == "Rechnung_TTC_2026-11.pdf"
     saved_pdf_path = client.app.state.test_invoice_directory / invoice["pdf_path"]
