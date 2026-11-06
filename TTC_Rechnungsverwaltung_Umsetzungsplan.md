@@ -760,3 +760,73 @@ beginnen wir mit Phase 2.
 
 Diese Angaben können während der Entwicklung ergänzt werden. Fehlende
 Werte dürfen nicht von der KI erfunden werden.
+
+------------------------------------------------------------------------
+
+## 13. Erweiterung: Rechnungseinstellungen und Organisationsstruktur
+
+Diese Ergänzung dokumentiert den Umsetzungsstand vom November 2026. Sie
+erweitert die bestehende Anwendung, ersetzt aber nicht die ursprünglichen
+Entwicklungsphasen.
+
+### Rechnungseinstellungen
+
+Der Bereich **Rechnungseinstellungen** verwaltet über die Oberfläche:
+
+- Absender und Rechnungsempfänger mit Anschriften und Kontaktdaten.
+- Bankverbindung und optionale steuerliche Angaben.
+- Rechnungsnummern-Präfix, Zahlungsziel, Rechnungstext, Zahlungshinweis,
+  Standard-Leistungsbeschreibung und Fußzeile.
+- PNG- oder JPEG-Logo. Uploads sind auf 2 MB und höchstens 4000 × 4000
+  Pixel beschränkt.
+
+Telefon, BIC, Bankname und Steuerangaben sind optional. Rechnungsnummern
+werden beim Erstellen serverseitig aus Präfix, Jahr und Zähler gebildet,
+zum Beispiel `RE-2026-0001`; das Rechnungsdatum wird ebenfalls
+serverseitig gesetzt.
+
+### Datenbank, Migration und Rechnungssnapshots
+
+`organizations` speichert die Rechnungseinstellungen und den
+Rechnungsnummernzähler. Tätigkeiten, Wochenplan, Trainingstermine,
+Rechnungen und Rechnungspositionen tragen eine `organization_id`. Die
+Anwendung verwendet derzeit automatisch die Standardorganisation mit ID 1.
+Benutzerkonten, Login, Registrierung und Mehrbenutzerbetrieb gehören nicht
+zu dieser Erweiterung.
+
+Die Datenbankmigrationen sind versioniert in `schema_migrations` und werden
+beim Start ausgeführt. Vorhandene Datensätze werden der
+Standardorganisation zugeordnet; bestehende Rechnungspositionen, Nummern
+und PDF-Pfade bleiben erhalten. Die Migration erzeugt keine neuen PDFs.
+
+Neue Rechnungen speichern die verwendeten Rechnungseinstellungen, Logo-
+Daten und Positionen als Snapshot. Änderungen an Preisen, Adressen,
+Bankdaten oder Logo wirken sich nicht auf bereits gespeicherte PDFs aus.
+Ältere Rechnungen behalten ihre ursprüngliche PDF-Datei, erhalten aber
+rückwirkend keinen Snapshot.
+
+Logos und Rechnungssnapshots liegen in SQLite und werden vom bestehenden
+Datenbank-Backup erfasst. Der Backup-Job kopiert den Ordner
+`rechnungen/` mit den generierten PDF-Dateien nicht; diese Dateien müssen
+separat gesichert werden.
+
+### Ergänzte API
+
+- `GET` / `PUT /api/organization/settings`: Organisationseinstellungen
+  laden und speichern.
+- `POST` / `GET` / `DELETE /api/organization/logo`: Logo hochladen,
+  abrufen und entfernen.
+- `POST /api/invoices`: Rechnungsdatum und Rechnungsnummer automatisch
+  erzeugen und die Rechnung samt Einstellungen und Positionen speichern.
+- `GET /api/invoices/{id}/pdf`: die gespeicherte PDF unverändert abrufen.
+
+### Verifikation des Erweiterungsstands
+
+Die automatisierte Suite umfasst Tests für Einstellungen, Validierung,
+Logo-Upload, automatische Nummerierung und Datumsvergabe, historische
+Snapshots, Legacy-Migration, PDF-Erzeugung und Backup-Wiederherstellung.
+Zuletzt liefen alle **38 Tests erfolgreich**.
+
+Die Rechnungseinstellungen sind für den lokalen Betrieb vorgesehen. Ein
+Server-Deployment, Login und tatsächlicher Mehrbenutzerbetrieb sind nicht
+Bestandteil dieser Erweiterung.

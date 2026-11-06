@@ -80,6 +80,7 @@ button {
 }
 
 .settings-section,
+.organization-section,
 .saved-invoices-section {
   margin-top: 24px;
   padding: 24px;
@@ -92,6 +93,106 @@ button {
 .section-description {
   margin: 0 0 16px;
   color: #526579;
+}
+
+.organization-settings-group {
+  min-width: 0;
+  margin: 20px 0 0;
+  padding: 18px;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+}
+
+.organization-settings-group legend {
+  padding: 0 8px;
+  color: #153c61;
+  font-weight: 700;
+}
+
+.organization-settings-group .section-description {
+  margin-top: 0;
+}
+
+.organization-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.organization-fields label,
+.organization-logo-controls > label:not(.settings-checkbox-label) {
+  display: grid;
+  gap: 6px;
+  color: #40566d;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.organization-fields input,
+.organization-fields textarea,
+.organization-logo-controls input[type="file"] {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  color: inherit;
+  font: inherit;
+  background: #fff;
+  border: 1px solid #cbd6e0;
+  border-radius: 8px;
+}
+
+.organization-fields textarea {
+  resize: vertical;
+}
+
+.organization-fields input:focus,
+.organization-fields textarea:focus,
+.organization-logo-controls input:focus {
+  border-color: #3b82b7;
+  outline: 3px solid rgb(59 130 183 / 18%);
+}
+
+.organization-field-wide {
+  grid-column: 1 / -1;
+}
+
+.organization-logo-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.organization-logo-preview {
+  grid-column: 1 / -1;
+  max-width: min(100%, 280px);
+  max-height: 160px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.organization-logo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #40566d;
+}
+
+.organization-logo-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #153c61;
+}
+
+.organization-logo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.organization-logo-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .section-subheading {
@@ -689,6 +790,7 @@ dialog textarea {
   }
 
   .settings-section,
+  .organization-section,
   .saved-invoices-section {
     margin-top: 16px;
     padding: 16px 10px;
@@ -697,6 +799,20 @@ dialog textarea {
 
   .weekly-plan-days {
     grid-template-columns: 1fr;
+  }
+
+  .organization-settings-group {
+    padding: 14px 10px;
+  }
+
+  .organization-fields,
+  .organization-logo-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .organization-field-wide,
+  .organization-logo-preview {
+    grid-column: auto;
   }
 
   .weekly-plan-row {

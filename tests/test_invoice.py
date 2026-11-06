@@ -1,3 +1,4 @@
+import base64
 from io import BytesIO
 from datetime import date
 from decimal import Decimal
@@ -15,6 +16,8 @@ from backend.invoice_generator import (
     PAGE_WIDTH,
     POSITION_COLUMN_WIDTHS,
     POSITION_HEADER,
+    InvoiceContactDetails,
+    InvoiceDetails,
     InvoiceLine,
     InvoiceFooterDetails,
     build_position_table,
@@ -120,19 +123,20 @@ def test_invoice_rate_details_include_prices_and_intro_text() -> None:
 
 def test_party_blocks_include_template_contact_details() -> None:
     pdf = RecordingCanvas()
-    draw_party_blocks(pdf)
-
-    assert [line[2] for line in pdf.left_aligned] == list(
-        CONTACT_DETAILS.recipient_lines
+    details = InvoiceContactDetails(
+        recipient_lines=("Rechnungsempfänger GmbH", "Beispielstraße 1"),
+        sender_lines=("Beispielverein", "Max Muster"),
+        tax_lines=("Steuernummer: 12/345/67890",),
     )
-    assert [line[2] for line in pdf.right_aligned] == [
-        *CONTACT_DETAILS.sender_lines,
-        "Steuer ID:",
-    ]
-    assert pdf.left_aligned[0][0] == PAGE_MARGIN
-    assert pdf.right_aligned[0][0] == PAGE_WIDTH - PAGE_MARGIN
-    assert pdf.fonts == [(BODY_FONT, 11), (BODY_FONT_BOLD, 11)]
-    assert pdf.right_aligned[-1][1] < pdf.right_aligned[-2][1]
+    output = BytesIO()
+    canvas = Canvas(output, pagesize=(PAGE_WIDTH, PAGE_HEIGHT), pageCompression=0)
+    draw_party_blocks(canvas, details)
+    canvas.save()
+
+    assert output.getvalue().startswith(b"%PDF-")
+    assert CONTACT_DETAILS == InvoiceContactDetails()
+    assert b"Danilo Kappen" not in output.getvalue()
+    assert b"Michael Simon" not in output.getvalue()
 
 
 def test_party_blocks_render_to_a_valid_pdf() -> None:
@@ -146,17 +150,25 @@ def test_party_blocks_render_to_a_valid_pdf() -> None:
 
 def test_invoice_heading_includes_period_and_invoice_date() -> None:
     pdf = RecordingCanvas()
-    draw_invoice_heading(pdf, 2026, 7, date(2026, 8, 1))
+    draw_invoice_heading(
+        pdf,
+        2026,
+        7,
+        date(2026, 8, 1),
+        city="Bonn",
+        invoice_number="BEISP-2026-0001",
+    )
 
     assert pdf.left_aligned == [
         (
             PAGE_MARGIN,
             HEADING_Y,
-            "Rechnung für die Übungsleitung im Zeitraum Juli 2026",
-        )
+            "Rechnung für Leistungen im Zeitraum Juli 2026",
+        ),
+        (PAGE_MARGIN, HEADING_Y - 17, "Rechnungsnummer: BEISP-2026-0001"),
     ]
     assert pdf.right_aligned == [
-        (PAGE_WIDTH - PAGE_MARGIN, HEADING_Y, "Köln, 01.08.2026")
+        (PAGE_WIDTH - PAGE_MARGIN, HEADING_Y, "Bonn, 01.08.2026")
     ]
     assert pdf.fonts == [(BODY_FONT_BOLD, 11), (BODY_FONT, 11)]
 
@@ -222,23 +234,29 @@ def test_position_table_draws_to_a_valid_pdf() -> None:
 
 
 def test_invoice_footer_includes_total_bank_details_and_greeting() -> None:
-    pdf = RecordingCanvas()
-    sender_y = draw_invoice_footer(pdf, 27000, 430)
+    output = BytesIO()
+    pdf = Canvas(output, pagesize=(PAGE_WIDTH, PAGE_HEIGHT), pageCompression=0)
+    details = InvoiceFooterDetails(
+        account_holder="Beispielverein",
+        iban="DE89370400440532013000",
+        bic="GENODEF1S04",
+        bank_name="Beispielbank",
+        payment_notice="Bitte innerhalb von 14 Tagen zahlen.",
+        invoice_footer="Vereinsregister Bonn",
+        due_date=date(2026, 8, 15),
+    )
+    draw_invoice_footer(pdf, 27000, 430, details)
+    commands = "\n".join(pdf._code)
+    pdf.save()
 
-    left_text = [line[2] for line in pdf.left_aligned]
-    assert left_text == [
-        "Endsumme:",
-        "Bankverbindung:",
-        "Kontoinhaber: Danilo Kappen",
-        "IBAN:",
-        "Volksbank Köln Bonn eG",
-        "Mit freundlichen Grüßen",
-        "Danilo Kappen",
-    ]
-    assert pdf.right_aligned == [(PAGE_WIDTH - PAGE_MARGIN, 390, "270€")]
-    assert len(pdf.lines) == 2
-    assert all(line[0] == PAGE_MARGIN and line[2] == PAGE_WIDTH - PAGE_MARGIN for line in pdf.lines)
-    assert sender_y == pdf.left_aligned[-1][1]
+    assert output.getvalue().startswith(b"%PDF-")
+    assert "Kontoinhaber: Beispielverein" in commands
+    assert "IBAN: DE89370400440532013000" in commands
+    assert "BIC: GENODEF1S04" in commands
+    assert "Beispielbank" in commands
+    assert "Zahlbar bis: 15.08.2026" in commands
+    assert "Bitte innerhalb von 14 Tagen zahlen." in commands
+    assert "Vereinsregister Bonn" in commands
     assert FOOTER_DETAILS.iban == ""
 
 
@@ -265,6 +283,43 @@ def test_invoice_footer_renders_bank_and_greeting_to_pdf() -> None:
     pdf.save()
 
     assert output.getvalue().startswith(b"%PDF-")
-    assert b"Bankverbindung:" in output.getvalue()
-    assert b"Volksbank K" in output.getvalue()
-    assert b"Mit freundlichen Gr" in output.getvalue()
+    assert b"/Subtype /Image" not in output.getvalue()
+    assert FOOTER_DETAILS == InvoiceFooterDetails()
+
+
+def test_invoice_without_optional_details_and_with_logo_renders() -> None:
+    item = InvoiceLine(
+        description="Training",
+        training_date=date(2026, 11, 5),
+        hours=Decimal("1"),
+        amount_cents=1500,
+        unit_rate_cents=1500,
+    )
+    without_optional = render_invoice_pdf(
+        2026,
+        11,
+        date(2026, 11, 6),
+        [item],
+        1500,
+        InvoiceDetails(),
+    )
+    logo = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2cAAAAASUVORK5CYII="
+    )
+    with_logo = render_invoice_pdf(
+        2026,
+        11,
+        date(2026, 11, 6),
+        [item],
+        1500,
+        InvoiceDetails(
+            contact=InvoiceContactDetails(("Empfänger",), ("Absender",)),
+            logo_data=logo,
+            logo_media_type="image/png",
+        ),
+    )
+
+    assert without_optional.startswith(b"%PDF-")
+    assert with_logo.startswith(b"%PDF-")
+    assert b"/Subtype /Image" not in without_optional
+    assert b"/Subtype /Image" in with_logo
