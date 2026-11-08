@@ -9,14 +9,43 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
 
 # Local configuration and secrets
 .env
 .env.*
 !.env.example
+*.local
+*.local.*
+config.local.*
+settings.local.*
 
 # Local application data and generated invoices
 data/*.db
 data/*.db-*
+data/*.sqlite
+data/*.sqlite-*
+data/*.sqlite3
+data/*.sqlite3-*
+data/*.bak
+data/*.backup
 rechnungen/*
 !rechnungen/.gitkeep
+
+# Temporary files and logs
+*.log
+*.log.*
+*.tmp
+*.temp
+*.swp
+*~
+
+# IDE and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
