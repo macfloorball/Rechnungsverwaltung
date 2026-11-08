@@ -219,6 +219,9 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
             "SELECT id, organization_id FROM trainings"
         ).fetchall() == [(9, 1)]
         assert connection.execute(
+            "SELECT weekly_plan_id, weekly_plan_date FROM trainings WHERE id = 9"
+        ).fetchone() == (None, None)
+        assert connection.execute(
             """
             SELECT id, organization_id, invoice_number, pdf_path
             FROM invoices
@@ -237,5 +240,5 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone() == (2,)
+        ).fetchone() == (3,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []

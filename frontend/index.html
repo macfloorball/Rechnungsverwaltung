@@ -220,9 +220,12 @@
                 <label for="organization-logo-file">Logo (PNG oder JPEG, max. 2 MB)</label>
                 <input id="organization-logo-file" type="file" accept="image/png,image/jpeg">
                 <label class="settings-checkbox-label organization-logo-toggle">
-                  <input name="logo_enabled" type="checkbox">
+                  <input name="logo_enabled" type="checkbox" disabled>
                   Logo in neuen Rechnungen anzeigen
                 </label>
+                <p id="organization-logo-hint" class="section-description">
+                  Lade zuerst ein Logo hoch, um es in Rechnungen anzeigen zu können.
+                </p>
                 <div class="organization-logo-actions">
                   <button id="upload-organization-logo" class="secondary-button" type="button">Logo hochladen</button>
                   <button id="delete-organization-logo" class="secondary-button" type="button" disabled>Logo entfernen</button>
@@ -284,6 +287,9 @@
             </button>
           </form>
 
+          <p id="invoice-preview-status" class="section-description" role="status" hidden>
+            Rechnungsvorschau wird geladen …
+          </p>
           <p id="invoice-preview-error" class="error-message" role="alert" hidden></p>
           <div id="invoice-preview" class="invoice-preview" aria-live="polite" hidden>
             <h3 id="invoice-period-title"></h3>

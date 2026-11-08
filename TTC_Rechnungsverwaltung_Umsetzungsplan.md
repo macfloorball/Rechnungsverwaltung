@@ -830,3 +830,44 @@ Zuletzt liefen alle **38 Tests erfolgreich**.
 Die Rechnungseinstellungen sind für den lokalen Betrieb vorgesehen. Ein
 Server-Deployment, Login und tatsächlicher Mehrbenutzerbetrieb sind nicht
 Bestandteil dieser Erweiterung.
+
+------------------------------------------------------------------------
+
+## 14. Korrekturrunde: Wochenplan, Einstellungen und Rechnungsvorschau
+
+Diese Ergänzung dokumentiert die Korrekturen vom 8. November 2026.
+
+### Wochenplan und Trainingstermine
+
+Beim Speichern des Wochenplans werden fehlende Termine für den aktuellen
+und den Folgemonat als Datensätze mit Status `planned` angelegt. Beim
+erstmaligen Abruf weiterer zukünftiger Monate werden die dort passenden
+Termine ebenfalls erzeugt. Eine Zuordnung aus Wochenplan-ID und Datum
+verhindert wiederholte Einfügungen. Vorhandene passende Termine werden
+wiederverwendet, nicht mit Planstunden überschrieben; manuelle Änderungen,
+abgeschlossene und ausgefallene Termine bleiben erhalten.
+
+Die Migration Version 3 ergänzt `trainings.weekly_plan_id` und
+`trainings.weekly_plan_date` sowie einen eindeutigen Index für
+Planvorkommen. Sie verändert oder entfernt keine bestehenden Trainings.
+Nach erfolgreichem Speichern wird der aktuell sichtbare Kalender neu
+geladen.
+
+### Rechnungseinstellungen und Vorschau
+
+Die Oberfläche formatiert FastAPI-Feldvalidierungsfehler als lesbare
+Meldungen statt einer allgemeinen HTTP-422-Nachricht. Die Logo-Anzeige
+bleibt deaktiviert, solange kein Logo gespeichert ist; die serverseitige
+Validierung bleibt bestehen.
+
+Die Rechnungsvorschau zeigt Lade-, Leer-, API- und Netzwerkzustände
+sichtbar an. Sie berücksichtigt ausschließlich gespeicherte
+Trainingstermine mit Status `completed` und verwendet den am Termin
+gespeicherten Preis-Snapshot. Die Vorschau speichert keine Rechnung.
+
+### Prüfung
+
+Die vollständige automatisierte Testsuite lief nach dieser Korrekturrunde
+mit **41 erfolgreichen Tests**. Die manuelle Prüfung von Kalender-
+Aktualisierung, Einstellungsformular und Vorschau im Browser bleibt
+erforderlich.

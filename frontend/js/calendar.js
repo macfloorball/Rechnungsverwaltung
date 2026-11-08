@@ -148,6 +148,9 @@ export function initializeCalendar() {
   nextButton.addEventListener("click", () => {
     loadMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1));
   });
+  document.addEventListener("weekly-plan-updated", () => {
+    loadMonth(visibleMonth);
+  });
 
   loadMonth(visibleMonth);
 }

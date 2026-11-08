@@ -23,6 +23,15 @@ const currencyFormatter = new Intl.NumberFormat("de-DE", {
   style: "currency",
   currency: "EUR",
 });
+const organizationFieldLabels = {
+  email: "E-Mail-Adresse",
+  recipient_email: "E-Mail-Adresse des Empfängers",
+  iban: "IBAN",
+  bic: "BIC",
+  invoice_number_prefix: "Rechnungsnummern-Präfix",
+  payment_due_days: "Zahlungsziel",
+  logo_enabled: "Logo-Anzeige",
+};
 
 function element(tagName, text) {
   const node = document.createElement(tagName);
@@ -32,15 +41,36 @@ function element(tagName, text) {
   return node;
 }
 
+function formatRequestErrorDetail(detail) {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (!Array.isArray(detail)) {
+    return null;
+  }
+
+  const messages = detail.flatMap((error) => {
+    if (!error || typeof error.msg !== "string") {
+      return [];
+    }
+    const location = Array.isArray(error.loc) ? error.loc.at(-1) : null;
+    const label = typeof location === "string"
+      ? organizationFieldLabels[location] || location
+      : "";
+    return [`${label ? `${label}: ` : ""}${error.msg}`];
+  });
+  return messages.length > 0
+    ? `Bitte prüfe deine Eingaben: ${messages.join("; ")}`
+    : null;
+}
+
 async function requestJson(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) {
     let detail = `Anfrage fehlgeschlagen (HTTP ${response.status}).`;
     try {
       const body = await response.json();
-      if (typeof body.detail === "string") {
-        detail = body.detail;
-      }
+      detail = formatRequestErrorDetail(body.detail) || detail;
     } catch {
       // Keep the HTTP error when the server response is not JSON.
     }
@@ -132,6 +162,9 @@ function activityOptions(activities, selectedId) {
 function buildPlanRow(activities, entry = {}) {
   const row = element("div");
   row.className = "weekly-plan-row";
+  if (entry.id !== undefined) {
+    row.dataset.planId = String(entry.id);
+  }
 
   const activitySelect = element("select");
   activitySelect.setAttribute("aria-label", "Tätigkeit");
@@ -247,6 +280,8 @@ export function initializeSettings() {
   const logoFileInput = document.querySelector("#organization-logo-file");
   const uploadLogoButton = document.querySelector("#upload-organization-logo");
   const deleteLogoButton = document.querySelector("#delete-organization-logo");
+  const logoEnabledInput = organizationForm.querySelector('input[name="logo_enabled"]');
+  const logoHint = document.querySelector("#organization-logo-hint");
   const logoPreview = document.querySelector("#organization-logo-preview");
 
   if (
@@ -271,6 +306,8 @@ export function initializeSettings() {
     || !(logoFileInput instanceof HTMLInputElement)
     || !(uploadLogoButton instanceof HTMLButtonElement)
     || !(deleteLogoButton instanceof HTMLButtonElement)
+    || !(logoEnabledInput instanceof HTMLInputElement)
+    || !(logoHint instanceof HTMLElement)
     || !(logoPreview instanceof HTMLImageElement)
   ) {
     throw new Error("Einstellungen oder Rechnungsarchiv fehlen im HTML.");
@@ -294,9 +331,15 @@ export function initializeSettings() {
       }
     }
 
-    deleteLogoButton.disabled = !settings.logo_available;
-    logoPreview.hidden = !settings.logo_available;
-    if (settings.logo_available) {
+    const logoAvailable = settings.logo_available === true;
+    deleteLogoButton.disabled = !logoAvailable;
+    logoEnabledInput.disabled = !logoAvailable;
+    logoHint.hidden = logoAvailable;
+    if (!logoAvailable) {
+      logoEnabledInput.checked = false;
+    }
+    logoPreview.hidden = !logoAvailable;
+    if (logoAvailable) {
       logoPreview.src = `/api/organization/logo?updated=${Date.now()}`;
     } else {
       logoPreview.removeAttribute("src");
@@ -530,12 +573,16 @@ export function initializeSettings() {
           showMessage(weeklyPlanError, `Bitte prüfe Tätigkeit und Stunden im Eintrag für ${weekdays[weekday]}.`);
           return;
         }
-        entries.push({
+        const entry = {
           weekday,
           activity_type_id: Number(activitySelect.value),
           hours,
           is_active: activeInput.checked,
-        });
+        };
+        if (row.dataset.planId) {
+          entry.id = Number(row.dataset.planId);
+        }
+        entries.push(entry);
       }
     }
 
@@ -546,6 +593,8 @@ export function initializeSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entries),
       });
+      renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
+      document.dispatchEvent(new Event("weekly-plan-updated"));
       showMessage(weeklyPlanSuccess, "Der wöchentliche Trainingsplan wurde gespeichert.");
     } catch (error) {
       showMessage(

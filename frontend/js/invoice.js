@@ -22,6 +22,24 @@ function createCell(tagName, text) {
   return cell;
 }
 
+function formatRequestError(detail) {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (!Array.isArray(detail)) {
+    return null;
+  }
+
+  const messages = detail.flatMap((error) => {
+    if (!error || typeof error.msg !== "string") {
+      return [];
+    }
+    return [error.msg];
+  });
+  return messages.length > 0
+    ? `Die Vorschau-Anfrage konnte nicht verarbeitet werden: ${messages.join("; ")}`
+    : null;
+}
 
 function renderPreview(data, elements) {
   const period = new Date(Date.UTC(data.year, data.month - 1, 1));
@@ -58,6 +76,7 @@ export function initializeInvoicePreview() {
   const submitButton = document.querySelector("#load-invoice-preview");
   const preview = document.querySelector("#invoice-preview");
   const errorMessage = document.querySelector("#invoice-preview-error");
+  const loadingMessage = document.querySelector("#invoice-preview-status");
   const periodTitle = document.querySelector("#invoice-period-title");
   const items = document.querySelector("#invoice-items");
   const total = document.querySelector("#invoice-total");
@@ -73,6 +92,7 @@ export function initializeInvoicePreview() {
     || !(submitButton instanceof HTMLButtonElement)
     || !(preview instanceof HTMLElement)
     || !(errorMessage instanceof HTMLElement)
+    || !(loadingMessage instanceof HTMLElement)
     || !(periodTitle instanceof HTMLElement)
     || !(items instanceof HTMLTableSectionElement)
     || !(total instanceof HTMLTableCellElement)
@@ -91,6 +111,7 @@ export function initializeInvoicePreview() {
 
   monthInput.addEventListener("input", () => {
     previewPeriod = null;
+    errorMessage.hidden = true;
     preview.hidden = true;
     createButton.disabled = true;
     createError.hidden = true;
@@ -113,10 +134,15 @@ export function initializeInvoicePreview() {
 
     errorMessage.hidden = true;
     createError.hidden = true;
+    loadingMessage.hidden = false;
+    preview.hidden = true;
     openPdfLink.hidden = true;
     downloadPdfLink.hidden = true;
     previewPeriod = null;
     submitButton.disabled = true;
+    monthInput.disabled = true;
+    createButton.disabled = true;
+    form.setAttribute("aria-busy", "true");
     try {
       const response = await fetch("/api/invoices/preview", {
         method: "POST",
@@ -130,9 +156,7 @@ export function initializeInvoicePreview() {
         let detail = `Vorschau konnte nicht geladen werden (HTTP ${response.status}).`;
         try {
           const body = await response.json();
-          if (typeof body.detail === "string") {
-            detail = body.detail;
-          }
+          detail = formatRequestError(body.detail) || detail;
         } catch {
           // Keep the HTTP error when the server response is not JSON.
         }
@@ -152,13 +176,17 @@ export function initializeInvoicePreview() {
         month: Number(match[2]),
       };
       createButton.disabled = data.items.length === 0;
+      loadingMessage.hidden = true;
     } catch (error) {
+      loadingMessage.hidden = true;
       errorMessage.textContent = error instanceof Error
         ? error.message
         : "Rechnungsvorschau konnte nicht geladen werden.";
       errorMessage.hidden = false;
     } finally {
       submitButton.disabled = false;
+      monthInput.disabled = false;
+      form.setAttribute("aria-busy", "false");
     }
   });
 
