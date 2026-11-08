@@ -104,10 +104,14 @@ python -m pytest
   `activities`-Liste. Verwendete Tätigkeiten bleiben erhalten und können
   deaktiviert werden.
 - `GET` und `PUT /api/weekly-plan`: Wochenplan laden bzw. vollständig
-  ersetzen. Änderungen am Plan ändern keine bereits gespeicherten
-  Trainingstermine.
+  ersetzen. Beim Speichern werden fehlende Termine für den aktuellen und
+  den folgenden Monat dauerhaft angelegt. Beim ersten Laden weiterer
+  zukünftiger Monate werden die passenden Termine ebenfalls erzeugt.
+  Änderungen am Plan überschreiben keine bereits gespeicherten Termine.
 - `GET /api/calendar/{year}/{month}`: Monatskalender mit geplanten und
-  gespeicherten Terminen laden.
+  gespeicherten Terminen laden. Termine aus dem Wochenplan haben eine
+  Datenbank-ID und sind anschließend wie manuell angelegte Termine
+  bearbeitbar.
 - `POST`, `PUT /api/trainings/{id}` und `DELETE /api/trainings/{id}`:
   Trainingstermine verwalten.
 - `POST /api/invoices/preview`: Abgeschlossene Termine eines Monats
@@ -150,12 +154,21 @@ Standardorganisation mit ID `1` verwendet.
 
 Beim Anwendungsstart führt `initialize_database()` die versionierten
 Migrationen aus der Tabelle `schema_migrations` aus. Die Migrationen
-ergänzen Organisations- und Snapshot-Spalten und ordnen vorhandene
-Datensätze der Standardorganisation zu. Tätigkeiten, Wochenplan,
+ergänzen Organisations- und Snapshot-Spalten, ordnen vorhandene Datensätze
+der Standardorganisation zu und ergänzen die Zuordnung zwischen
+Wochenplaneintrag und erzeugtem Trainingstermin. Tätigkeiten, Wochenplan,
 Trainingseinträge, Rechnungen und Rechnungspositionen werden nicht gelöscht.
 Bestehende Rechnungsnummern, PDF-Pfade und Dateien bleiben erhalten.
 Migrationen können bei einem Neustart erneut aufgerufen werden, ohne sie
 doppelt anzuwenden.
+
+Wochenplan-Termine werden mit dem Status „Geplant“ angelegt. Ihre Zuordnung
+zum konkreten Datum ist eindeutig und die Erzeugung wiederholungssicher.
+Bereits vorhandene manuelle Termine werden nicht verdoppelt oder mit
+Planstunden überschrieben. Änderungen an einem einzelnen Termin sowie
+Status „Durchgeführt“ oder „Ausgefallen“ bleiben beim erneuten Speichern
+des Wochenplans erhalten. Geänderte Planwerte gelten für künftig erzeugte,
+noch nicht vorhandene Termine.
 
 Neue Rechnungen speichern die verwendeten Tätigkeitspositionen,
 Rechnungseinstellungen und – wenn aktiviert – die Logodaten als Snapshot.
@@ -173,6 +186,12 @@ bleiben sollen.
 Die Option **Logo in neuen Rechnungen anzeigen** ist erst verfügbar, wenn ein
 Logo hochgeladen wurde. Ein Upload aktiviert die Logo-Anzeige; das Entfernen
 des Logos deaktiviert sie.
+
+Die Wochenplan-Migration verwendet `schema_migrations` Version 3. Sie
+ergänzt `trainings.weekly_plan_id` und `trainings.weekly_plan_date` sowie
+einen eindeutigen Index für Planvorkommen. Vorhandene Trainingstermine
+werden dadurch nicht geändert; passende Termine werden beim Erzeugen
+wiederverwendet.
 
 Ungültige Eingaben werden mit `422` zurückgegeben. Eine Rechnung ohne
 abrechenbare Termine ergibt `400`; Konflikte, etwa eine doppelte
