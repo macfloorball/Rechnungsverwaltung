@@ -1,243 +1,237 @@
 # TTC-Rechnungsverwaltung
 
-Private Webanwendung zur Erfassung von Trainingstagen und automatischen Erstellung der monatlichen TTC-Rechnung.
+Eine lokale Webanwendung zur Verwaltung von Trainingsterminen und zur
+Erstellung monatlicher Rechnungen für einen Tischtennisverein. Das Projekt
+verbindet eine FastAPI-Schnittstelle mit einer browserbasierten Oberfläche,
+SQLite und PDF-Rechnungserstellung.
 
-## Projektstruktur
+> **Portfolio-Hinweis:** Die Anwendung enthält keine Benutzerkonten oder
+> Authentifizierung. Sie ist für den lokalen Betrieb gedacht und sollte nicht
+> ungeschützt über ein Netzwerk oder das Internet erreichbar gemacht werden.
 
-```text
-ttc-rechnungen/
-├── backend/
-│   └── main.py
-├── frontend/
-│   ├── css/
-│   └── js/
-├── templates/
-├── data/
-├── rechnungen/
-├── tests/
-├── .gitignore
-├── .venv/
-├── requirements.txt
-├── README.md
-└── TTC_Rechnungsverwaltung_Umsetzungsplan.md
-```
+## Funktionen
+
+- Tätigkeiten und Stundenpreise verwalten.
+- Wöchentlichen Trainingsplan pflegen und Trainingstermine im Monatskalender
+  planen, bearbeiten und abschließen.
+- Abrechenbare Termine für einen Monat prüfen und Rechnungen als PDF erstellen.
+- Rechnungseinstellungen einschließlich Absender, Empfänger, Zahlungsangaben
+  und optionalem Logo verwalten.
+- Gespeicherte Rechnungen und deren unveränderliche Positions- und
+  Einstellungssnapshots anzeigen.
+- SQLite-Datenbank migrieren und mit dem optionalen systemd-Timer sichern.
+
+## Technologien und Architektur
+
+- **Backend:** Python, FastAPI und Pydantic für REST-Endpunkte und
+  Eingabevalidierung.
+- **Persistenz:** SQLite mit versionierten Datenbankmigrationen.
+- **Frontend:** HTML, CSS und natives JavaScript mit ES-Modulen.
+- **PDF:** ReportLab zur Erzeugung von Rechnungen.
+- **Tests:** pytest für API, Datenbank, Rechnungen/PDFs und Backups;
+  Kalender- und Abrechnungsabläufe werden teilweise über API-Tests geprüft.
+
+Das Frontend wird vom FastAPI-Backend ausgeliefert und kommuniziert mit ihm
+über die API. Es gibt keine separate Frontend-Build-Pipeline.
 
 ## Voraussetzungen
 
-- Linux-Rechner
-- Git
-- Python 3.15 oder kompatibel
+- Python 3.10 oder neuer
+- `pip`
 
-## Einrichtung
+Die folgenden Schritte sind für Linux/macOS geschrieben. Unter Windows kann
+die virtuelle Umgebung mit `.venv\Scripts\activate` aktiviert werden.
 
-1. Repository klonen oder in das Projektverzeichnis wechseln.
-2. Virtuelle Umgebung erstellen:
+## Installation und Start
 
 ```bash
+git clone https://github.com/macfloorball/Rechnungsverwaltung.git
+cd Rechnungsverwaltung
 python3 -m venv .venv
-```
-
-3. Umgebung aktivieren:
-
-```bash
 source .venv/bin/activate
-```
-
-4. Abhängigkeiten installieren:
-
-```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m uvicorn backend.main:app --reload --host 127.0.0.1
 ```
 
-## Starten der Anwendung
-
-Im aktivierten Terminal:
-
-```bash
-uvicorn backend.main:app --reload
-```
-
-Danach ist die Anwendung unter:
-
-```text
-http://127.0.0.1:8000
-```
-
-erreichbar.
-
-## Testen
-
-Mit einem zweiten Terminal oder einem HTTP-Client:
+Die Oberfläche ist anschließend unter <http://127.0.0.1:8000> erreichbar.
+Der Entwicklungsserver bindet hier ausdrücklich an die Loopback-Adresse.
+Ein einfacher Health-Check ist:
 
 ```bash
 curl http://127.0.0.1:8000/api/health
 ```
 
-Erwartete Rückgabe:
+Die Anwendung legt die lokale Datenbank unter `data/ttc.db` an. Erstellte
+Rechnungs-PDFs werden unter `rechnungen/` gespeichert.
 
-```json
-{"status":"ok"}
-```
+## Tests
 
-Die automatisierten Tests startest du mit:
+Mit aktivierter virtueller Umgebung:
 
 ```bash
 python -m pytest
 ```
 
-## Aktuelle API
+Die Tests verwenden temporäre Datenbanken und Dateien; die lokale
+Produktivdatenbank wird dafür nicht benötigt.
 
-- `GET` und `PUT /api/organization/settings`: Absender, Empfänger,
-  Bankverbindung, Steuerdaten, Rechnungstexte, Zahlungsziel und
-  Nummernkreis der Standardorganisation laden bzw. ändern. Feldvalidierungs-
-  fehler werden im Einstellungsbereich mit Feld und Ursache angezeigt.
-- `POST /api/organization/logo`: Logo als JSON mit `media_type`
-  (`image/png` oder `image/jpeg`) und Base64-kodiertem `data_base64`
-  hochladen. Es gelten 2 MB und höchstens 4000 × 4000 Pixel. Die
-  Bildsignatur wird geprüft; SVG und beliebige Pfade werden nicht
-  akzeptiert.
-- `GET` und `DELETE /api/organization/logo`: gespeichertes Logo anzeigen
-  beziehungsweise entfernen.
-- `GET` und `PUT /api/settings`: Tätigkeitsarten und Preise laden bzw. ändern.
-  `PUT` erwartet ein Objekt mit bis zu vier Einträgen in einer
-  `activities`-Liste. Verwendete Tätigkeiten bleiben erhalten und können
-  deaktiviert werden.
-- `GET` und `PUT /api/weekly-plan`: Wochenplan laden bzw. vollständig
-  ersetzen. Beim Speichern werden fehlende Termine für den aktuellen und
-  den folgenden Monat dauerhaft angelegt. Beim ersten Laden weiterer
-  zukünftiger Monate werden die passenden Termine ebenfalls erzeugt.
-  Änderungen am Plan überschreiben keine bereits gespeicherten Termine.
-- `GET /api/calendar/{year}/{month}`: Monatskalender mit geplanten und
-  gespeicherten Terminen laden. Termine aus dem Wochenplan haben eine
-  Datenbank-ID und sind anschließend wie manuell angelegte Termine
-  bearbeitbar.
-- `POST`, `PUT /api/trainings/{id}` und `DELETE /api/trainings/{id}`:
-  Trainingstermine verwalten.
-- `POST /api/invoices/preview`: Abgeschlossene Termine eines Monats
-  abrechnen und Positionen mit Trainingseinheit, Datum, Stunden und Betrag
-  für die Rechnungsvorschau liefern. Verwendet werden die beim jeweiligen
-  Training gespeicherten Stundenpreise; geplante und ausgefallene Termine
-  bleiben ausgeschlossen. Die Vorschau speichert keine Rechnung. Die
-  Weboberfläche stellt Positionen und Summe dar, zeigt einen Ladezustand und
-  meldet leere Monate sowie API- und Netzwerkfehler.
-- `POST /api/invoices`: Rechnung samt unveränderlichen Positionen,
-  Preis- und Rechnungseinstellungs-Snapshots sowie PDF speichern. Das
-  Rechnungsdatum wird serverseitig gesetzt. Die Nummer wird aus dem
-  konfigurierten Präfix, Jahr und Zähler gebildet, zum Beispiel
-  `RE-2026-0001`. Der Dateiname lautet `Rechnung_TTC_YYYY-MM.pdf`; pro
-  Monat wird höchstens eine Rechnung erstellt.
-- `GET /api/invoices`: gespeicherte Rechnungen chronologisch, neueste zuerst,
-  als Übersicht laden. Rechnungspositionen und PDF werden beim Öffnen nicht
-  aus aktuellen Terminen neu berechnet. Interne Snapshot- und Logo-Daten
-  werden nicht in die Übersicht ausgegeben.
-- `GET /api/invoices/{id}/pdf`: gespeicherte PDF im Browser anzeigen oder
-  herunterladen. Die Weboberfläche öffnet die PDF zum Drucken im
-  Browser-PDF-Viewer; dort kann der Druckdialog des Browsers verwendet
-  werden, außerdem steht ein separater Download bereit.
+## Optionale Datenbanksicherung
 
-## Rechnungseinstellungen und Datenbankmigration
-
-Der Bereich **Rechnungseinstellungen** auf der Startseite verwaltet
-Absender- und Empfängerdaten, Bankverbindung, Steuerangaben, Texte,
-Zahlungsziel, Rechnungsnummern-Präfix und Logo. Optionale Angaben wie
-Telefonnummer, BIC und Steuerdaten müssen nicht ausgefüllt werden.
-Eine Organisation wird automatisch verwendet; Organisationen auswählen,
-Benutzerkonten, Login und Mehrbenutzeroberfläche sind nicht implementiert.
-
-Die Tabelle `organizations` hält diese Angaben und einen Nummernzähler.
-Tätigkeiten, Wochenplan, Trainingstermine, Rechnungen und
-Rechnungspositionen besitzen eine `organization_id`. Rechnungspositionen
-bleiben außerdem über `invoice_id` ihrer Rechnung zugeordnet. Damit ist die
-Datenstruktur für spätere Organisationen vorbereitet; derzeit wird nur die
-Standardorganisation mit ID `1` verwendet.
-
-Beim Anwendungsstart führt `initialize_database()` die versionierten
-Migrationen aus der Tabelle `schema_migrations` aus. Die Migrationen
-ergänzen Organisations- und Snapshot-Spalten, ordnen vorhandene Datensätze
-der Standardorganisation zu und ergänzen die Zuordnung zwischen
-Wochenplaneintrag und erzeugtem Trainingstermin. Tätigkeiten, Wochenplan,
-Trainingseinträge, Rechnungen und Rechnungspositionen werden nicht gelöscht.
-Bestehende Rechnungsnummern, PDF-Pfade und Dateien bleiben erhalten.
-Migrationen können bei einem Neustart erneut aufgerufen werden, ohne sie
-doppelt anzuwenden.
-
-Wochenplan-Termine werden mit dem Status „Geplant“ angelegt. Ihre Zuordnung
-zum konkreten Datum ist eindeutig und die Erzeugung wiederholungssicher.
-Bereits vorhandene manuelle Termine werden nicht verdoppelt oder mit
-Planstunden überschrieben. Änderungen an einem einzelnen Termin sowie
-Status „Durchgeführt“ oder „Ausgefallen“ bleiben beim erneuten Speichern
-des Wochenplans erhalten. Geänderte Planwerte gelten für künftig erzeugte,
-noch nicht vorhandene Termine.
-
-Neue Rechnungen speichern die verwendeten Tätigkeitspositionen,
-Rechnungseinstellungen und – wenn aktiviert – die Logodaten als Snapshot.
-Spätere Änderungen an Organisation, Logo oder Preisen verändern weder diese
-Snapshots noch das bereits generierte PDF. Ältere Rechnungen behalten ihr
-ursprünglich gespeichertes PDF; für sie wird nachträglich kein
-Rechnungseinstellungs-Snapshot erzeugt.
-
-Logos liegen als Bilddaten in SQLite. Sie sind daher Teil des SQLite-
-Datenbankbackups. Der bestehende Backup-Job sichert jedoch nicht den
-separaten Ordner `rechnungen/`; PDF-Dateien müssen zusätzlich gesichert
-werden, wenn sie über einen Verlust des Anwendungsordners hinaus erhalten
-bleiben sollen.
-
-Die Option **Logo in neuen Rechnungen anzeigen** ist erst verfügbar, wenn ein
-Logo hochgeladen wurde. Ein Upload aktiviert die Logo-Anzeige; das Entfernen
-des Logos deaktiviert sie.
-
-Die Wochenplan-Migration verwendet `schema_migrations` Version 3. Sie
-ergänzt `trainings.weekly_plan_id` und `trainings.weekly_plan_date` sowie
-einen eindeutigen Index für Planvorkommen. Vorhandene Trainingstermine
-werden dadurch nicht geändert; passende Termine werden beim Erzeugen
-wiederverwendet.
-
-Ungültige Eingaben werden mit `422` zurückgegeben. Eine Rechnung ohne
-abrechenbare Termine ergibt `400`; Konflikte, etwa eine doppelte
-Tätigkeitsbezeichnung oder eine Rechnung für einen bereits abgerechneten
-Monat, ergeben `409`.
-
-## Wichtige Hinweise
-
-- Die virtuelle Umgebung (`.venv`) wird nicht in Git verwaltet.
-- Lokale Datenbanken und generierte Rechnungen sind in `.gitignore` ausgeschlossen.
-- PDF-Rechnungen werden im Ordner `rechnungen/` gespeichert.
-- Tätigkeiten, Wochenplan und Rechnungsarchiv werden direkt auf der
-  Startseite verwaltet.
-- Datenbanksicherungen werden wöchentlich sonntags um 03:00 Uhr unter
-  `~/ttc-rechnungsverwaltung-backups` angelegt; 30 Tage alte Sicherungen
-  werden entfernt. Der Backup-Ordner ist nicht Teil des Git-Repositories.
-
-## Datenbank-Backups
-
-Nach dem Einrichten der virtuellen Umgebung den wöchentlichen systemd-Timer
-einmalig installieren und aktivieren:
+Auf einem Linux-System mit systemd kann der wöchentliche Benutzer-Timer einmalig
+eingerichtet werden:
 
 ```bash
 ./.venv/bin/python scripts/install_backup_timer.py
 ```
 
-Eine Sicherung kann jederzeit manuell erstellt werden:
+Eine Sicherung lässt sich auch manuell erstellen:
 
 ```bash
 ./.venv/bin/python scripts/backup_database.py
 ```
 
-Der Backup-Prozess verwendet SQLite Online Backup, prüft die Sicherung auf
-Konsistenz und vergibt private Dateirechte (`0700` für den Ordner, `0600`
-für Sicherungsdateien). Der Timer läuft sonntags um 03:00 Uhr; falls der
-Rechner zu diesem Zeitpunkt ausgeschaltet war, holt systemd die Sicherung
-nach, sobald der Benutzerdienst wieder startet.
+Der Backup-Prozess prüft die Sicherung auf SQLite-Konsistenz und setzt für
+Backup-Ordner und -Dateien restriktive Rechte. Die PDF-Dateien im Ordner
+`rechnungen/` werden von diesem Backup-Skript nicht mitgesichert.
 
-Timerstatus und Ausführungsprotokoll:
+## Projektstruktur
 
-```bash
-systemctl --user status ttc-rechnungsverwaltung-backup.timer
-journalctl --user -u ttc-rechnungsverwaltung-backup.service
+```text
+backend/       FastAPI-Anwendung, Datenbank, Modelle und Rechnungslogik
+frontend/      HTML-Oberfläche, Stylesheets und JavaScript-Module
+scripts/       Datenbank-Backup und systemd-Timer
+tests/         Automatisierte Tests
+data/          Lokale Laufzeitdatenbank (nicht versioniert)
+rechnungen/    Generierte Rechnungs-PDFs (nicht versioniert)
+requirements.txt
+TTC_Rechnungsverwaltung_Umsetzungsplan.md
 ```
 
-Für den späteren Serverbetrieb muss der systemd-Benutzerdienst auch ohne
-interaktive Anmeldung laufen dürfen (Linger). Datenbank-Backups enthalten
-persönliche Daten und dürfen nicht in Git oder einen ungeschützten
-Cloudspeicher kopiert werden.
+## Datenschutz und Sicherheit
+
+Die Datenbank und Rechnungen können personenbezogene, steuerliche und
+Bankinformationen enthalten. Sie sind Laufzeitdaten und gehören nicht in Git,
+Screenshots oder öffentliche Beispiele. Die Regeln in `.gitignore` schützen
+nicht vor bereits versionierten Dateien; vor einer Veröffentlichung ist daher
+zusätzlich der Git-Index zu prüfen.
+
+Die Anwendung stellt derzeit keine Anmeldung oder Rollen-/Rechteverwaltung
+bereit. Den Server nur lokal betreiben und nicht ungeschützt an eine
+Netzwerkschnittstelle oder einen öffentlich erreichbaren Proxy binden. Die
+Anwendung erzwingt momentan keine restriktiven Dateirechte für die Laufzeit-
+Datenbank und die erzeugten PDFs; diese Dateien sollten auf gemeinsam
+genutzten Systemen zusätzlich auf Betriebssystemebene geschützt werden.
+
+Die Abhängigkeiten sind in `requirements.txt` aufgeführt; derzeit gibt es
+keine Lockdatei mit festgeschriebenen Paketversionen.
+
+---
+
+# TTC Invoice Management
+
+A local web application for managing training sessions and creating monthly
+invoices for a table-tennis club. It combines a FastAPI backend, a browser-based
+interface, SQLite persistence, and PDF invoice generation.
+
+> **Portfolio note:** The application does not currently provide user accounts
+> or authentication. It is intended for local use and must not be exposed to a
+> network or the Internet without additional access controls.
+
+## Features
+
+- Manage activity types and hourly rates.
+- Maintain a weekly training plan and plan, edit, and complete sessions in a
+  monthly calendar.
+- Review billable sessions for a month and generate PDF invoices.
+- Manage invoice settings, including issuer, recipient, payment details, and
+  an optional logo.
+- Browse saved invoices with immutable line-item and settings snapshots.
+- Apply versioned SQLite migrations and create optional systemd backups.
+
+## Technology and architecture
+
+- **Backend:** Python, FastAPI, and Pydantic for REST endpoints and validation.
+- **Persistence:** SQLite with versioned database migrations.
+- **Frontend:** HTML, CSS, and native JavaScript ES modules.
+- **PDF:** ReportLab.
+- **Tests:** pytest for the API, database, invoices/PDFs, and backups; some
+  calendar and billing flows are covered by API tests.
+
+The FastAPI backend serves the frontend, which communicates with it through the
+API. There is no separate frontend build pipeline.
+
+## Requirements
+
+- Python 3.10 or newer
+- `pip`
+
+The commands below are for Linux/macOS. On Windows, activate the virtual
+environment with `.venv\Scripts\activate`.
+
+## Install and run
+
+```bash
+git clone https://github.com/macfloorball/Rechnungsverwaltung.git
+cd Rechnungsverwaltung
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m uvicorn backend.main:app --reload --host 127.0.0.1
+```
+
+Open <http://127.0.0.1:8000>. The development server is explicitly bound to
+the loopback interface. A health check is available at:
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+The application creates its local database at `data/ttc.db` and stores
+generated invoice PDFs in `rechnungen/`.
+
+## Tests
+
+With the virtual environment activated, run:
+
+```bash
+python -m pytest
+```
+
+Tests use temporary databases and files; they do not require the local
+application database.
+
+## Optional database backups
+
+On Linux with systemd, install the weekly user timer once:
+
+```bash
+./.venv/bin/python scripts/install_backup_timer.py
+```
+
+Create a backup manually with:
+
+```bash
+./.venv/bin/python scripts/backup_database.py
+```
+
+The backup process checks SQLite integrity and applies restrictive permissions
+to the backup directory and files. It does not include PDF files from
+`rechnungen/`.
+
+## Privacy and security
+
+The database and invoices may contain personal, tax, and banking information.
+They are runtime data and must not be committed to Git or included in
+screenshots or public examples. `.gitignore` does not untrack files that are
+already committed, so check the Git index separately before publishing.
+
+The application currently has no login or role-based access control. Keep the
+server local and do not expose it unprotected through a network interface or
+public proxy. The application does not currently enforce restrictive
+permissions on its runtime database or generated PDFs; protect these files at
+the operating-system level, especially on shared machines.
+
+Dependencies are listed in `requirements.txt`; package versions are not
+currently pinned in a lockfile.
