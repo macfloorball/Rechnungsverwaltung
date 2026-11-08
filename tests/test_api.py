@@ -320,6 +320,103 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
     assert all("logo_snapshot" not in invoice for invoice in invoice_list)
 
 
+def test_invoice_archive_is_chronological_and_pdfs_remain_unchanged(
+    client: TestClient,
+) -> None:
+    activity = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Training alt", "hourly_rate_cents": 2000}]},
+    ).json()["activities"][0]
+
+    invoices_by_month = {}
+    first_month_pdf = None
+    for year, month, training_date in (
+        (2026, 11, "2026-11-12"),
+        (2026, 12, "2026-12-10"),
+        (2027, 1, "2027-01-14"),
+    ):
+        if month == 12:
+            changed_activity = client.put(
+                "/api/settings",
+                json={
+                    "activities": [
+                        {
+                            "id": activity["id"],
+                            "name": "Training neu",
+                            "hourly_rate_cents": 3500,
+                            "is_active": True,
+                        }
+                    ]
+                },
+            )
+            assert changed_activity.status_code == 200
+
+        training = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity["id"],
+                "hours": 2,
+                "status": "completed",
+            },
+        )
+        assert training.status_code == 201
+
+        invoice = client.post(
+            "/api/invoices",
+            json={"year": year, "month": month},
+        )
+        assert invoice.status_code == 201
+        invoices_by_month[(year, month)] = invoice.json()
+
+        pdf_response = client.get(f"/api/invoices/{invoice.json()['id']}/pdf")
+        assert pdf_response.status_code == 200
+        assert pdf_response.headers["content-type"] == "application/pdf"
+        assert "inline" in pdf_response.headers["content-disposition"]
+        assert pdf_response.content.startswith(b"%PDF-")
+        if month == 11:
+            first_month_pdf = pdf_response.content
+            assert invoice.json()["total_amount_cents"] == 4000
+        elif month == 12:
+            assert invoice.json()["total_amount_cents"] == 7000
+        else:
+            assert invoice.json()["total_amount_cents"] == 7000
+
+    invoice_list = client.get("/api/invoices")
+    assert invoice_list.status_code == 200
+    archived = invoice_list.json()
+    assert [
+        (invoice["year"], invoice["month"])
+        for invoice in archived
+    ] == [(2027, 1), (2026, 12), (2026, 11)]
+    assert [
+        invoice["invoice_number"]
+        for invoice in archived
+    ] == ["RE-2027-0003", "RE-2026-0002", "RE-2026-0001"]
+
+    november_invoice = invoices_by_month[(2026, 11)]
+    archived_november = next(
+        invoice
+        for invoice in archived
+        if invoice["id"] == november_invoice["id"]
+    )
+    assert archived_november["total_amount_cents"] == 4000
+    assert archived_november["invoice_number"] == "RE-2026-0001"
+    reopened = client.get(f"/api/invoices/{november_invoice['id']}/pdf")
+    assert reopened.status_code == 200
+    assert reopened.content == first_month_pdf
+    assert "Rechnung_TTC_2026-11.pdf" in reopened.headers["content-disposition"]
+
+    persisted = get_invoice(
+        november_invoice["id"],
+        client.app.state.test_database_path,
+    )
+    assert persisted is not None
+    assert persisted["items"][0]["description"] == "Training alt"
+    assert persisted["items"][0]["unit_rate_cents"] == 2000
+    assert persisted["items"][0]["amount_cents"] == 4000
+
+
 def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
     response = client.put(
         "/api/settings",
