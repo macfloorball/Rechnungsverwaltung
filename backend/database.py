@@ -56,6 +56,8 @@ TABLE_COLUMNS = {
     "trainings": {
         "organization_id",
         "training_date",
+        "weekly_plan_id",
+        "weekly_plan_date",
         "activity_type_id",
         "hours",
         "status",
@@ -228,6 +230,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
         connection.commit()
         _migrate_organization_support(connection)
         _migrate_organization_invoice_fields(connection)
+        _migrate_weekly_plan_occurrences(connection)
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:
@@ -371,6 +374,47 @@ def _migrate_organization_invoice_fields(
             UPDATE organizations
             SET invoice_number_prefix = 'RE'
             WHERE TRIM(invoice_number_prefix) = ''
+            """
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (migration_version,),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def _migrate_weekly_plan_occurrences(connection: sqlite3.Connection) -> None:
+    migration_version = 3
+    current_version = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()[0]
+    if current_version >= migration_version:
+        return
+
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(trainings)")
+        }
+        added_columns = {
+            "weekly_plan_id": (
+                "INTEGER REFERENCES weekly_plan (id) ON DELETE SET NULL"
+            ),
+            "weekly_plan_date": "TEXT",
+        }
+        for column, definition in added_columns.items():
+            if column not in existing_columns:
+                connection.execute(
+                    f"ALTER TABLE trainings ADD COLUMN {column} {definition}"
+                )
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_trainings_plan_occurrence
+            ON trainings (weekly_plan_id, weekly_plan_date)
+            WHERE weekly_plan_id IS NOT NULL AND weekly_plan_date IS NOT NULL
             """
         )
         connection.execute(

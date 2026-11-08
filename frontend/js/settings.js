@@ -132,6 +132,9 @@ function activityOptions(activities, selectedId) {
 function buildPlanRow(activities, entry = {}) {
   const row = element("div");
   row.className = "weekly-plan-row";
+  if (entry.id !== undefined) {
+    row.dataset.planId = String(entry.id);
+  }
 
   const activitySelect = element("select");
   activitySelect.setAttribute("aria-label", "Tätigkeit");
@@ -530,12 +533,16 @@ export function initializeSettings() {
           showMessage(weeklyPlanError, `Bitte prüfe Tätigkeit und Stunden im Eintrag für ${weekdays[weekday]}.`);
           return;
         }
-        entries.push({
+        const entry = {
           weekday,
           activity_type_id: Number(activitySelect.value),
           hours,
           is_active: activeInput.checked,
-        });
+        };
+        if (row.dataset.planId) {
+          entry.id = Number(row.dataset.planId);
+        }
+        entries.push(entry);
       }
     }
 
@@ -546,6 +553,8 @@ export function initializeSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entries),
       });
+      renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
+      document.dispatchEvent(new Event("weekly-plan-updated"));
       showMessage(weeklyPlanSuccess, "Der wöchentliche Trainingsplan wurde gespeichert.");
     } catch (error) {
       showMessage(

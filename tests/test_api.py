@@ -360,6 +360,154 @@ def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
     assert all(training["status"] == "completed" for training in sunday["trainings"])
 
 
+def test_weekly_plan_persists_current_and_following_month_without_overwrites(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FrozenDate(date):
+        @classmethod
+        def today(cls) -> date:
+            return cls(2026, 11, 8)
+
+    monkeypatch.setattr("backend.main.date", FrozenDate)
+    settings = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Training", "hourly_rate_cents": 2000}]},
+    )
+    activity_id = settings.json()["activities"][0]["id"]
+
+    manual = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-12",
+            "activity_type_id": activity_id,
+            "hours": 2,
+            "note": "Manuell angepasst",
+        },
+    )
+    assert manual.status_code == 201
+
+    payload = [
+        {
+            "weekday": 3,
+            "activity_type_id": activity_id,
+            "hours": 1.5,
+            "is_active": True,
+        }
+    ]
+    first_save = client.put("/api/weekly-plan", json=payload)
+    assert first_save.status_code == 200
+    plan_entry = first_save.json()[0]
+
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        occurrences = connection.execute(
+            """
+            SELECT training_date, hours, status, unit_rate_cents
+            FROM trainings
+            WHERE weekly_plan_id = ?
+            ORDER BY training_date
+            """,
+            (plan_entry["id"],),
+        ).fetchall()
+    assert occurrences == [
+        ("2026-11-05", 1.5, "planned", 2000),
+        ("2026-11-12", 2.0, "planned", 2000),
+        ("2026-11-19", 1.5, "planned", 2000),
+        ("2026-11-26", 1.5, "planned", 2000),
+        ("2026-12-03", 1.5, "planned", 2000),
+        ("2026-12-10", 1.5, "planned", 2000),
+        ("2026-12-17", 1.5, "planned", 2000),
+        ("2026-12-24", 1.5, "planned", 2000),
+        ("2026-12-31", 1.5, "planned", 2000),
+    ]
+    assert next(item for item in occurrences if item[0] == "2026-11-12")[1] == 2
+
+    calendar = client.get("/api/calendar/2026/11").json()
+    november_dates = [
+        day["date"]
+        for day in calendar["days"]
+        if any(training["activity_type_id"] == activity_id for training in day["trainings"])
+    ]
+    assert november_dates == [
+        "2026-11-05",
+        "2026-11-12",
+        "2026-11-19",
+        "2026-11-26",
+    ]
+    assert all(
+        training["id"] is not None
+        for day in calendar["days"]
+        for training in day["trainings"]
+        if training["activity_type_id"] == activity_id
+    )
+
+    thursday = next(
+        training
+        for day in calendar["days"]
+        for training in day["trainings"]
+        if training["training_date"] == "2026-11-19"
+    )
+    edited = client.put(
+        f"/api/trainings/{thursday['id']}",
+        json={"hours": 3, "note": "Manuell geändert"},
+    )
+    assert edited.status_code == 200
+    completed = client.put(
+        f"/api/trainings/{next(training['id'] for day in calendar['days'] for training in day['trainings'] if training['training_date'] == '2026-11-26')}",
+        json={"status": "completed"},
+    )
+    assert completed.status_code == 200
+    december_calendar = client.get("/api/calendar/2026/12").json()
+    cancelled_id = next(
+        training["id"]
+        for day in december_calendar["days"]
+        for training in day["trainings"]
+        if training["training_date"] == "2026-12-03"
+    )
+    cancelled = client.put(
+        f"/api/trainings/{cancelled_id}",
+        json={"status": "cancelled"},
+    )
+    assert cancelled.status_code == 200
+
+    repeat_save = client.put(
+        "/api/weekly-plan",
+        json=[
+            {
+                **payload[0],
+                "id": plan_entry["id"],
+                "hours": 2.5,
+            }
+        ],
+    )
+    assert repeat_save.status_code == 200
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        persisted = connection.execute(
+            """
+            SELECT training_date, hours, status, note
+            FROM trainings
+            WHERE weekly_plan_id = ? OR training_date = '2026-11-12'
+            ORDER BY training_date
+            """,
+            (plan_entry["id"],),
+        ).fetchall()
+    assert len(persisted) == 9
+    assert ("2026-11-19", 3.0, "planned", "Manuell geändert") in persisted
+    assert ("2026-11-26", 1.5, "completed", None) in persisted
+    assert ("2026-11-12", 2.0, "planned", "Manuell angepasst") in persisted
+    assert ("2026-12-03", 1.5, "cancelled", None) in persisted
+
+    january_calendar = client.get("/api/calendar/2027/1").json()
+    january_training = next(
+        training
+        for day in january_calendar["days"]
+        for training in day["trainings"]
+        if training["activity_type_id"] == activity_id
+    )
+    assert january_training["hours"] == 2.5
+    assert january_training["status"] == "planned"
+
+
 def test_training_and_invoice_endpoints(client: TestClient) -> None:
     client.put(
         "/api/settings",
