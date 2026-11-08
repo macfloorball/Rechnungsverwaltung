@@ -90,7 +90,8 @@ python -m pytest
 
 - `GET` und `PUT /api/organization/settings`: Absender, Empfänger,
   Bankverbindung, Steuerdaten, Rechnungstexte, Zahlungsziel und
-  Nummernkreis der Standardorganisation laden bzw. ändern.
+  Nummernkreis der Standardorganisation laden bzw. ändern. Feldvalidierungs-
+  fehler werden im Einstellungsbereich mit Feld und Ursache angezeigt.
 - `POST /api/organization/logo`: Logo als JSON mit `media_type`
   (`image/png` oder `image/jpeg`) und Base64-kodiertem `data_base64`
   hochladen. Es gelten 2 MB und höchstens 4000 × 4000 Pixel. Die
@@ -165,6 +166,10 @@ Datenbankbackups. Der bestehende Backup-Job sichert jedoch nicht den
 separaten Ordner `rechnungen/`; PDF-Dateien müssen zusätzlich gesichert
 werden, wenn sie über einen Verlust des Anwendungsordners hinaus erhalten
 bleiben sollen.
+
+Die Option **Logo in neuen Rechnungen anzeigen** ist erst verfügbar, wenn ein
+Logo hochgeladen wurde. Ein Upload aktiviert die Logo-Anzeige; das Entfernen
+des Logos deaktiviert sie.
 
 Ungültige Eingaben werden mit `422` zurückgegeben. Eine Rechnung ohne
 abrechenbare Termine ergibt `400`; Konflikte, etwa eine doppelte

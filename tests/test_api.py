@@ -151,11 +151,50 @@ def test_organization_settings_are_validated_and_persist_after_restart(
         json={"email": "not-an-email"},
     )
     assert invalid.status_code == 422
+    assert isinstance(invalid.json()["detail"], list)
+    assert invalid.json()["detail"][0]["loc"][-1] == "email"
     invalid_iban = client.put(
         "/api/organization/settings",
         json={"iban": "DE00000000000000000000"},
     )
     assert invalid_iban.status_code == 422
+    assert invalid_iban.json()["detail"][0]["loc"][-1] == "iban"
+    invalid_bic = client.put(
+        "/api/organization/settings",
+        json={"bic": "invalid"},
+    )
+    assert invalid_bic.status_code == 422
+    assert invalid_bic.json()["detail"][0]["loc"][-1] == "bic"
+    invalid_prefix = client.put(
+        "/api/organization/settings",
+        json={"invoice_number_prefix": "TTC#"},
+    )
+    assert invalid_prefix.status_code == 422
+    assert invalid_prefix.json()["detail"][0]["loc"][-1] == "invoice_number_prefix"
+
+    logo_enabled_without_upload = client.put(
+        "/api/organization/settings",
+        json={"logo_enabled": True},
+    )
+    assert logo_enabled_without_upload.status_code == 422
+    assert "Lade zuerst ein Logo hoch" in logo_enabled_without_upload.json()["detail"]
+
+    logo = _png_image()
+    uploaded = client.post(
+        "/api/organization/logo",
+        json={
+            "media_type": "image/png",
+            "data_base64": base64.b64encode(logo).decode("ascii"),
+        },
+    )
+    assert uploaded.status_code == 200
+    logo_enabled = client.put(
+        "/api/organization/settings",
+        json={"logo_enabled": True},
+    )
+    assert logo_enabled.status_code == 200
+    assert logo_enabled.json()["logo_enabled"] == 1
+    assert logo_enabled.json()["logo_available"] is True
 
 
 def test_logo_upload_is_validated_and_available_through_api(
