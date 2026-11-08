@@ -112,8 +112,11 @@ python -m pytest
   Trainingstermine verwalten.
 - `POST /api/invoices/preview`: Abgeschlossene Termine eines Monats
   abrechnen und Positionen mit Trainingseinheit, Datum, Stunden und Betrag
-  für die Rechnungsvorschau liefern. Die Weboberfläche stellt diese im
-  Tabellenlayout der bereitgestellten Rechnung dar.
+  für die Rechnungsvorschau liefern. Verwendet werden die beim jeweiligen
+  Training gespeicherten Stundenpreise; geplante und ausgefallene Termine
+  bleiben ausgeschlossen. Die Vorschau speichert keine Rechnung. Die
+  Weboberfläche stellt Positionen und Summe dar, zeigt einen Ladezustand und
+  meldet leere Monate sowie API- und Netzwerkfehler.
 - `POST /api/invoices`: Rechnung samt unveränderlichen Positionen,
   Preis- und Rechnungseinstellungs-Snapshots sowie PDF speichern. Das
   Rechnungsdatum wird serverseitig gesetzt. Die Nummer wird aus dem

@@ -727,6 +727,88 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
     assert preview.json()["total_amount_cents"] == 500
 
 
+def test_invoice_preview_matches_example_uses_training_rate_snapshots_and_is_read_only(
+    client: TestClient,
+) -> None:
+    settings = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Tätigkeit A", "hourly_rate_cents": 2000},
+                {"name": "Tätigkeit B", "hourly_rate_cents": 3000},
+                {"name": "Tätigkeit C", "hourly_rate_cents": 1500},
+            ]
+        },
+    )
+    activities = settings.json()["activities"]
+    training_payloads = [
+        (activities[0]["id"], "2026-11-02", 2, "completed"),
+        (activities[1]["id"], "2026-11-03", 1.5, "completed"),
+        (activities[2]["id"], "2026-11-04", 2, "completed"),
+        (activities[0]["id"], "2026-11-05", 4, "planned"),
+        (activities[1]["id"], "2026-11-06", 4, "cancelled"),
+    ]
+    for activity_id, training_date, hours, training_status in training_payloads:
+        response = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity_id,
+                "hours": hours,
+                "status": training_status,
+            },
+        )
+        assert response.status_code == 201
+
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    result = preview.json()
+    assert [
+        (item["description"], item["hours"], item["unit_rate_cents"], item["amount_cents"])
+        for item in result["items"]
+    ] == [
+        ("Tätigkeit A", 2, 2000, 4000),
+        ("Tätigkeit B", 1.5, 3000, 4500),
+        ("Tätigkeit C", 2, 1500, 3000),
+    ]
+    assert result["total_amount_cents"] == 11500
+
+    changed_settings = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {
+                    "id": activity["id"],
+                    "name": activity["name"],
+                    "hourly_rate_cents": 9999,
+                    "is_active": True,
+                }
+                for activity in activities
+            ]
+        },
+    )
+    assert changed_settings.status_code == 200
+    repeated_preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert repeated_preview.status_code == 200
+    assert repeated_preview.json() == result
+
+    empty_preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 12},
+    )
+    assert empty_preview.status_code == 200
+    assert empty_preview.json()["items"] == []
+    assert empty_preview.json()["total_amount_cents"] == 0
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM invoices").fetchone() == (0,)
+
+
 def test_additional_training_is_saved_to_calendar_and_invoice_preview(
     client: TestClient,
 ) -> None:
