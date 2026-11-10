@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -170,7 +171,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                 training_date TEXT NOT NULL,
                 activity_type_id INTEGER NOT NULL
                     REFERENCES activity_types (id) ON DELETE RESTRICT,
-                hours REAL NOT NULL CHECK (hours > 0),
+                hours REAL CHECK (hours IS NULL OR hours > 0),
                 status TEXT NOT NULL DEFAULT 'planned'
                     CHECK (status IN ('planned', 'completed', 'cancelled')),
                 note TEXT,
@@ -204,7 +205,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                     REFERENCES trainings (id) ON DELETE SET NULL,
                 description TEXT NOT NULL,
                 training_date TEXT NOT NULL,
-                hours REAL NOT NULL CHECK (hours > 0),
+                hours REAL CHECK (hours IS NULL OR hours > 0),
                 unit_rate_cents INTEGER NOT NULL CHECK (unit_rate_cents >= 0),
                 amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0)
             );
@@ -231,6 +232,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
         _migrate_organization_support(connection)
         _migrate_organization_invoice_fields(connection)
         _migrate_weekly_plan_occurrences(connection)
+        _migrate_optional_training_hours(connection)
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:
@@ -425,6 +427,84 @@ def _migrate_weekly_plan_occurrences(connection: sqlite3.Connection) -> None:
     except Exception:
         connection.rollback()
         raise
+
+
+def _migrate_optional_training_hours(connection: sqlite3.Connection) -> None:
+    migration_version = 4
+    current_version = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()[0]
+    if current_version >= migration_version:
+        return
+
+    connection.execute("PRAGMA foreign_keys = OFF")
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        for table in ("trainings", "invoice_items"):
+            columns = connection.execute(
+                f"PRAGMA table_info({table})"
+            ).fetchall()
+            hours_column = next(row for row in columns if row[1] == "hours")
+            if not hours_column[3]:
+                continue
+
+            create_sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table,),
+            ).fetchone()[0]
+            create_sql = create_sql.replace(
+                f"CREATE TABLE {table}",
+                f"CREATE TABLE {table}_new",
+                1,
+            )
+            create_sql, replacements = re.subn(
+                r"\bhours\s+([A-Z]+)\s+NOT\s+NULL"
+                r"(?:\s+CHECK\s*\(\s*hours\s*>\s*0\s*\))?",
+                r"hours \1 CHECK (hours IS NULL OR hours > 0)",
+                create_sql,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if replacements != 1:
+                raise RuntimeError(
+                    f"Stundenspalte in {table} konnte nicht migriert werden"
+                )
+
+            schema_objects = connection.execute(
+                """
+                SELECT sql
+                FROM sqlite_master
+                WHERE tbl_name = ? AND type IN ('index', 'trigger')
+                  AND sql IS NOT NULL
+                """,
+                (table,),
+            ).fetchall()
+            connection.execute(create_sql)
+            column_names = ", ".join(f'"{row[1]}"' for row in columns)
+            connection.execute(
+                f"INSERT INTO {table}_new ({column_names}) "
+                f"SELECT {column_names} FROM {table}"
+            )
+            connection.execute(f"DROP TABLE {table}")
+            connection.execute(f"ALTER TABLE {table}_new RENAME TO {table}")
+            for (schema_sql,) in schema_objects:
+                connection.execute(schema_sql)
+
+        connection.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (migration_version,),
+        )
+        violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError(
+                "Fremdschlüsselprüfung nach Stundenmigration fehlgeschlagen"
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON")
 
 
 def get_organization(

@@ -591,7 +591,7 @@ def put_training(
         )
 
     values = payload.model_dump(exclude_unset=True)
-    for field in ("training_date", "activity_type_id", "hours", "status"):
+    for field in ("training_date", "activity_type_id", "status"):
         if field in values and values[field] is None:
             raise HTTPException(
                 status_code=422,
@@ -649,12 +649,18 @@ def _build_invoice_items(
         activity = activities.get(training["activity_type_id"])
         if activity is None:
             continue
-        amount_cents = int(
-            (Decimal(str(training["hours"])) * training["unit_rate_cents"]).quantize(
-                Decimal("1"),
-                rounding=ROUND_HALF_UP,
+        if training["hours"] is None:
+            amount_cents = training["unit_rate_cents"]
+        else:
+            amount_cents = int(
+                (
+                    Decimal(str(training["hours"]))
+                    * training["unit_rate_cents"]
+                ).quantize(
+                    Decimal("1"),
+                    rounding=ROUND_HALF_UP,
+                )
             )
-        )
         items.append(
             {
                 "training_id": training["id"],
@@ -864,7 +870,11 @@ def post_invoice(
             InvoiceLine(
                 description=item["description"],
                 training_date=date.fromisoformat(item["training_date"]),
-                hours=Decimal(str(item["hours"])),
+                hours=(
+                    Decimal(str(item["hours"]))
+                    if item["hours"] is not None
+                    else None
+                ),
                 amount_cents=item["amount_cents"],
                 unit_rate_cents=item["unit_rate_cents"],
             )

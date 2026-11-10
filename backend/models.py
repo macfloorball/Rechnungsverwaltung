@@ -149,7 +149,7 @@ class WeeklyPlanEntry(APIModel):
 class TrainingCreate(APIModel):
     training_date: date
     activity_type_id: int = Field(gt=0)
-    hours: int = Field(gt=0, strict=True)
+    hours: int | None = Field(default=None, gt=0, strict=True)
     status: Literal["planned", "completed", "cancelled"] = "planned"
     note: str | None = Field(default=None, max_length=1000)
 

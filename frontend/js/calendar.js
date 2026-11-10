@@ -43,7 +43,11 @@ function createTraining(training) {
   };
   button.append(
     createElement("span", "training__name", name),
-    createElement("span", "training__details", `${training.hours} Std. · ${statusLabels[training.status] || training.status}`),
+    createElement(
+      "span",
+      "training__details",
+      `${training.hours === null ? "Pauschale" : `${training.hours} Std.`} · ${statusLabels[training.status] || training.status}`,
+    ),
   );
   const completionLabel = createElement("label", "training__completion");
   const completionCheckbox = createElement("input");

@@ -57,7 +57,9 @@ function renderPreview(data, elements) {
       ),
       createCell(
         "td",
-        new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(item.hours),
+        item.hours === null
+          ? "–"
+          : new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(item.hours),
       ),
       createCell("td", currencyFormatter.format(item.amount_cents / 100)),
     );

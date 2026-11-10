@@ -168,7 +168,7 @@ export function bindTrainingEditor(calendar, onSaved) {
 
     const payload = {
       activity_type_id: Number(activitySelect.value),
-      hours: Number(hoursInput.value),
+      hours: hoursInput.value.trim() ? Number(hoursInput.value) : null,
       note: noteInput.value.trim() || null,
     };
     if (statusChanged) {

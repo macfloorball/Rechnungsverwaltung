@@ -99,6 +99,59 @@ def test_hour_inputs_reject_fractional_and_comma_values(client: TestClient) -> N
         ).status_code == 422
 
 
+def test_training_without_hours_is_billed_once_as_flat_rate(
+    client: TestClient,
+) -> None:
+    settings = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Pauschale", "hourly_rate_cents": 1800}]},
+    )
+    activity_id = settings.json()["activities"][0]["id"]
+    training = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-05",
+            "activity_type_id": activity_id,
+            "status": "completed",
+        },
+    )
+    assert training.status_code == 201
+    assert training.json()["hours"] is None
+
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["items"][0]["hours"] is None
+    assert preview.json()["items"][0]["amount_cents"] == 1800
+    assert preview.json()["total_amount_cents"] == 1800
+
+    invoice = client.post(
+        "/api/invoices",
+        json={
+            "year": 2026,
+            "month": 11,
+            "invoice_date": "2026-12-01",
+        },
+    )
+    assert invoice.status_code == 201
+    assert invoice.json()["items"][0]["hours"] is None
+    assert invoice.json()["items"][0]["amount_cents"] == 1800
+
+    updated = client.put(
+        f"/api/trainings/{training.json()['id']}",
+        json={"hours": 2},
+    )
+    assert updated.status_code == 200
+    cleared = client.put(
+        f"/api/trainings/{training.json()['id']}",
+        json={"hours": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["hours"] is None
+
+
 def test_settings_conflict_rolls_back_all_changes(client: TestClient) -> None:
     response = client.put(
         "/api/settings",

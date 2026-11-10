@@ -219,6 +219,33 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
             "SELECT id, organization_id FROM trainings"
         ).fetchall() == [(9, 1)]
         assert connection.execute(
+            "SELECT id, training_id, hours, amount_cents FROM invoice_items"
+        ).fetchall() == [(11, 9, 2.0, 3000)]
+        assert connection.execute(
+            "SELECT id, hours FROM trainings WHERE id = 9"
+        ).fetchall() == [(9, 2.0)]
+        assert next(
+            column
+            for column in connection.execute("PRAGMA table_info(trainings)")
+            if column[1] == "hours"
+        )[3] == 0
+        assert next(
+            column
+            for column in connection.execute("PRAGMA table_info(invoice_items)")
+            if column[1] == "hours"
+        )[3] == 0
+        connection.execute(
+            """
+            INSERT INTO trainings (
+                organization_id, training_date, activity_type_id, hours,
+                status, unit_rate_cents
+            ) VALUES (1, '2026-11-06', 7, NULL, 'completed', 1500)
+            """
+        )
+        assert connection.execute(
+            "SELECT hours FROM trainings WHERE training_date = '2026-11-06'"
+        ).fetchone() == (None,)
+        assert connection.execute(
             "SELECT weekly_plan_id, weekly_plan_date FROM trainings WHERE id = 9"
         ).fetchone() == (None, None)
         assert connection.execute(
@@ -235,10 +262,21 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
             FROM invoice_items
             """
         ).fetchall() == [(11, 1, "Alte Tätigkeit", 1500, 3000)]
+        connection.execute(
+            """
+            INSERT INTO invoice_items (
+                organization_id, invoice_id, training_id, description,
+                training_date, hours, unit_rate_cents, amount_cents
+            ) VALUES (1, 10, 9, 'Pauschale', '2026-11-05', NULL, 1500, 1500)
+            """
+        )
+        assert connection.execute(
+            "SELECT hours, amount_cents FROM invoice_items WHERE description = 'Pauschale'"
+        ).fetchone() == (None, 1500)
         assert connection.execute(
             "SELECT COUNT(*) FROM organizations"
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone() == (3,)
+        ).fetchone() == (4,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
