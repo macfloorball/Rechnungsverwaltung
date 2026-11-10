@@ -1351,6 +1351,96 @@ def test_invoice_preview_only_includes_completed_trainings(
     assert preview.json()["total_amount_cents"] == 6000
 
 
+def test_invoice_creation_only_persists_completed_manual_and_generated_trainings(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FrozenDate(date):
+        @classmethod
+        def today(cls) -> date:
+            return cls(2026, 11, 1)
+
+    monkeypatch.setattr("backend.main.date", FrozenDate)
+    activity = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Training", "hourly_rate_cents": 1500}]},
+    ).json()["activities"][0]
+    plan = client.put(
+        "/api/weekly-plan",
+        json=[{
+            "weekday": 2,
+            "activity_type_id": activity["id"],
+            "hours": 1,
+        }],
+    )
+    assert plan.status_code == 200
+
+    calendar = client.get("/api/calendar/2026/11").json()
+    generated_trainings = {
+        training["training_date"]: training
+        for day in calendar["days"]
+        for training in day["trainings"]
+        if training["weekly_plan_generated"] == 1
+    }
+    assert "2026-11-04" in generated_trainings
+    assert "2026-11-11" in generated_trainings
+    assert "2026-11-18" in generated_trainings
+
+    completed_auto_id = generated_trainings["2026-11-04"]["id"]
+    cancelled_auto_id = generated_trainings["2026-11-11"]["id"]
+    response = client.put(
+        f"/api/trainings/{completed_auto_id}",
+        json={"status": "completed"},
+    )
+    assert response.status_code == 200
+    response = client.put(
+        f"/api/trainings/{cancelled_auto_id}",
+        json={"status": "cancelled"},
+    )
+    assert response.status_code == 200
+
+    manual_ids = {}
+    for training_date, training_status in (
+        ("2026-11-12", "completed"),
+        ("2026-11-13", "planned"),
+        ("2026-11-14", "cancelled"),
+    ):
+        response = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity["id"],
+                "hours": 2,
+                "status": training_status,
+            },
+        )
+        assert response.status_code == 201
+        manual_ids[training_date] = response.json()["id"]
+
+    payload = {"year": 2026, "month": 11}
+    preview = client.post("/api/invoices/preview", json=payload)
+    assert preview.status_code == 200
+    expected_training_ids = [completed_auto_id, manual_ids["2026-11-12"]]
+    assert [item["training_id"] for item in preview.json()["items"]] == (
+        expected_training_ids
+    )
+    assert preview.json()["total_amount_cents"] == 4500
+
+    invoice_response = client.post("/api/invoices", json=payload)
+    assert invoice_response.status_code == 201
+    invoice = invoice_response.json()
+    assert [item["training_id"] for item in invoice["items"]] == expected_training_ids
+    assert invoice["total_amount_cents"] == 4500
+    persisted_invoice = get_invoice(
+        invoice["id"],
+        client.app.state.test_database_path,
+    )
+    assert persisted_invoice is not None
+    assert [item["training_id"] for item in persisted_invoice["items"]] == (
+        expected_training_ids
+    )
+
+
 def test_invoice_preview_keeps_multiple_activities_on_same_day(
     client: TestClient,
 ) -> None:

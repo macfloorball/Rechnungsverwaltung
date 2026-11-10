@@ -673,12 +673,13 @@ def _build_invoice_items(
     }
     items = []
     total_amount_cents = 0
-    for training in list_records("trainings", database_path=database_path):
+    for training in list_records(
+        "trainings",
+        {"status": "completed"},
+        database_path,
+    ):
         training_date = date.fromisoformat(training["training_date"])
-        if not (
-            month_start <= training_date <= month_end
-            and training["status"] == "completed"
-        ):
+        if not month_start <= training_date <= month_end:
             continue
         activity = activities.get(training["activity_type_id"])
         if activity is None:
