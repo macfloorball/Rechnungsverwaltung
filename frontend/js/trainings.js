@@ -32,6 +32,7 @@ export function bindTrainingEditor(calendar, onSaved) {
   const statusSelect = document.querySelector("#training-status");
   const noteInput = document.querySelector("#training-note");
   const errorMessage = document.querySelector("#training-error");
+  const calendarErrorMessage = document.querySelector("#calendar-error");
   const saveButton = document.querySelector("#save-training-edit");
   const closeButton = document.querySelector("#close-training-dialog");
   const cancelButton = document.querySelector("#cancel-training-edit");
@@ -46,6 +47,7 @@ export function bindTrainingEditor(calendar, onSaved) {
     || !(statusSelect instanceof HTMLSelectElement)
     || !(noteInput instanceof HTMLTextAreaElement)
     || !(errorMessage instanceof HTMLElement)
+    || !(calendarErrorMessage instanceof HTMLElement)
     || !(saveButton instanceof HTMLButtonElement)
     || !(closeButton instanceof HTMLButtonElement)
     || !(cancelButton instanceof HTMLButtonElement)
@@ -54,9 +56,11 @@ export function bindTrainingEditor(calendar, onSaved) {
   }
 
   let selectedTraining = null;
+  let statusChanged = false;
 
   async function openEditor(training) {
     selectedTraining = training;
+    statusChanged = false;
     const isNewTraining = training.id === null;
     dialogTitle.textContent = isNewTraining ? "Termin hinzufügen" : "Termin bearbeiten";
     errorMessage.hidden = true;
@@ -122,6 +126,38 @@ export function bindTrainingEditor(calendar, onSaved) {
     }
   });
 
+  calendar.addEventListener("change", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.matches("[data-training-completion]")) {
+      return;
+    }
+
+    const training = JSON.parse(target.dataset.trainingCompletion || "null");
+    if (!training) {
+      return;
+    }
+
+    target.disabled = true;
+    calendarErrorMessage.hidden = true;
+    try {
+      await requestJson(`/api/trainings/${training.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: target.checked ? "completed" : "planned" }),
+      });
+      await onSaved();
+    } catch (error) {
+      target.checked = training.status === "completed";
+      showError(calendarErrorMessage, error);
+    } finally {
+      target.disabled = false;
+    }
+  });
+
+  statusSelect.addEventListener("change", () => {
+    statusChanged = true;
+  });
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!selectedTraining || !form.reportValidity()) {
@@ -133,9 +169,11 @@ export function bindTrainingEditor(calendar, onSaved) {
     const payload = {
       activity_type_id: Number(activitySelect.value),
       hours: Number(hoursInput.value),
-      status: statusSelect.value,
       note: noteInput.value.trim() || null,
     };
+    if (statusChanged) {
+      payload.status = statusSelect.value;
+    }
     const isNewTraining = selectedTraining.id === null;
     const url = isNewTraining
       ? "/api/trainings"

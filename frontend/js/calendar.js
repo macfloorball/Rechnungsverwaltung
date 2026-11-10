@@ -45,7 +45,17 @@ function createTraining(training) {
     createElement("span", "training__name", name),
     createElement("span", "training__details", `${training.hours} Std. · ${statusLabels[training.status] || training.status}`),
   );
-  item.append(button);
+  const completionLabel = createElement("label", "training__completion");
+  const completionCheckbox = createElement("input");
+  completionCheckbox.type = "checkbox";
+  completionCheckbox.checked = training.status === "completed";
+  completionCheckbox.dataset.trainingCompletion = JSON.stringify(training);
+  completionCheckbox.setAttribute(
+    "aria-label",
+    `${name} am ${training.training_date} als durchgeführt markieren`,
+  );
+  completionLabel.append(completionCheckbox, document.createTextNode("Durchgeführt"));
+  item.append(button, completionLabel);
   return item;
 }
 
