@@ -61,6 +61,44 @@ def test_health_and_request_validation(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_hour_inputs_reject_fractional_and_comma_values(client: TestClient) -> None:
+    settings = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Training", "hourly_rate_cents": 1500}]},
+    )
+    activity_id = settings.json()["activities"][0]["id"]
+    training = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-05",
+            "activity_type_id": activity_id,
+            "hours": 1,
+        },
+    ).json()
+
+    for hours in (1.5, 1.0, "1,5"):
+        assert client.put(
+            "/api/weekly-plan",
+            json=[{
+                "weekday": 3,
+                "activity_type_id": activity_id,
+                "hours": hours,
+            }],
+        ).status_code == 422
+        assert client.post(
+            "/api/trainings",
+            json={
+                "training_date": "2026-11-06",
+                "activity_type_id": activity_id,
+                "hours": hours,
+            },
+        ).status_code == 422
+        assert client.put(
+            f"/api/trainings/{training['id']}",
+            json={"hours": hours},
+        ).status_code == 422
+
+
 def test_settings_conflict_rolls_back_all_changes(client: TestClient) -> None:
     response = client.put(
         "/api/settings",
@@ -437,7 +475,7 @@ def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
             {
                 "weekday": 3,
                 "activity_type_id": activity["id"],
-                "hours": 1.5,
+                "hours": 1,
             }
         ],
     )
@@ -482,7 +520,7 @@ def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
         json={
             "training_date": "2026-11-08",
             "activity_type_id": activities[0]["id"],
-            "hours": 1.5,
+            "hours": 2,
             "status": "completed",
         },
     )
@@ -527,7 +565,7 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
         {
             "weekday": 3,
             "activity_type_id": activity_id,
-            "hours": 1.5,
+            "hours": 2,
             "is_active": True,
         }
     ]
@@ -546,15 +584,15 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
             (plan_entry["id"],),
         ).fetchall()
     assert occurrences == [
-        ("2026-11-05", 1.5, "planned", 2000),
+        ("2026-11-05", 2.0, "planned", 2000),
         ("2026-11-12", 2.0, "planned", 2000),
-        ("2026-11-19", 1.5, "planned", 2000),
-        ("2026-11-26", 1.5, "planned", 2000),
-        ("2026-12-03", 1.5, "planned", 2000),
-        ("2026-12-10", 1.5, "planned", 2000),
-        ("2026-12-17", 1.5, "planned", 2000),
-        ("2026-12-24", 1.5, "planned", 2000),
-        ("2026-12-31", 1.5, "planned", 2000),
+        ("2026-11-19", 2.0, "planned", 2000),
+        ("2026-11-26", 2.0, "planned", 2000),
+        ("2026-12-03", 2.0, "planned", 2000),
+        ("2026-12-10", 2.0, "planned", 2000),
+        ("2026-12-17", 2.0, "planned", 2000),
+        ("2026-12-24", 2.0, "planned", 2000),
+        ("2026-12-31", 2.0, "planned", 2000),
     ]
     assert next(item for item in occurrences if item[0] == "2026-11-12")[1] == 2
 
@@ -612,7 +650,7 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
             {
                 **payload[0],
                 "id": plan_entry["id"],
-                "hours": 2.5,
+                "hours": 3,
             }
         ],
     )
@@ -629,9 +667,9 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
         ).fetchall()
     assert len(persisted) == 9
     assert ("2026-11-19", 3.0, "planned", "Manuell geändert") in persisted
-    assert ("2026-11-26", 1.5, "completed", None) in persisted
+    assert ("2026-11-26", 2.0, "completed", None) in persisted
     assert ("2026-11-12", 2.0, "planned", "Manuell angepasst") in persisted
-    assert ("2026-12-03", 1.5, "cancelled", None) in persisted
+    assert ("2026-12-03", 2.0, "cancelled", None) in persisted
 
     january_calendar = client.get("/api/calendar/2027/1").json()
     january_training = next(
@@ -640,7 +678,7 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
         for training in day["trainings"]
         if training["activity_type_id"] == activity_id
     )
-    assert january_training["hours"] == 2.5
+    assert january_training["hours"] == 3.0
     assert january_training["status"] == "planned"
 
 
@@ -801,16 +839,16 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
         },
     )
     activity_id = client.get("/api/settings").json()["activities"][0]["id"]
-    response = client.post(
-        "/api/trainings",
-        json={
-            "training_date": "2026-11-05",
-            "activity_type_id": activity_id,
-            "hours": 0.333,
-            "status": "completed",
-        },
-    )
-    assert response.status_code == 201
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO trainings (
+                organization_id, training_date, activity_type_id, hours,
+                status, unit_rate_cents
+            ) VALUES (1, '2026-11-05', ?, 0.333, 'completed', 1500)
+            """,
+            (activity_id,),
+        )
 
     preview = client.post(
         "/api/invoices/preview",
@@ -840,7 +878,7 @@ def test_invoice_preview_matches_example_uses_training_rate_snapshots_and_is_rea
     activities = settings.json()["activities"]
     training_payloads = [
         (activities[0]["id"], "2026-11-02", 2, "completed"),
-        (activities[1]["id"], "2026-11-03", 1.5, "completed"),
+        (activities[1]["id"], "2026-11-03", 1, "completed"),
         (activities[2]["id"], "2026-11-04", 2, "completed"),
         (activities[0]["id"], "2026-11-05", 4, "planned"),
         (activities[1]["id"], "2026-11-06", 4, "cancelled"),
@@ -868,10 +906,10 @@ def test_invoice_preview_matches_example_uses_training_rate_snapshots_and_is_rea
         for item in result["items"]
     ] == [
         ("Tätigkeit A", 2, 2000, 4000),
-        ("Tätigkeit B", 1.5, 3000, 4500),
+        ("Tätigkeit B", 1, 3000, 3000),
         ("Tätigkeit C", 2, 1500, 3000),
     ]
-    assert result["total_amount_cents"] == 11500
+    assert result["total_amount_cents"] == 10000
 
     changed_settings = client.put(
         "/api/settings",
@@ -935,7 +973,7 @@ def test_additional_training_is_saved_to_calendar_and_invoice_preview(
         json={
             "training_date": "2026-11-06",
             "activity_type_id": activity_id,
-            "hours": 2.5,
+            "hours": 2,
             "status": "completed",
             "note": "Zusätzlicher Freitagseinsatz",
         },
@@ -964,12 +1002,12 @@ def test_additional_training_is_saved_to_calendar_and_invoice_preview(
             "training_id": additional_training["id"],
             "description": "Zusatztraining",
             "training_date": "2026-11-06",
-            "hours": 2.5,
+            "hours": 2,
             "unit_rate_cents": 1800,
-            "amount_cents": 4500,
+            "amount_cents": 3600,
         }
     ]
-    assert preview.json()["total_amount_cents"] == 4500
+    assert preview.json()["total_amount_cents"] == 3600
 
 
 def test_calendar_and_invoice_preview_handle_month_and_year_boundaries(
@@ -1062,7 +1100,7 @@ def test_invoice_preview_only_includes_completed_trainings(
             {
                 "weekday": 3,
                 "activity_type_id": activity_id,
-                "hours": 1.5,
+                "hours": 1,
             }
         ],
     )
@@ -1125,7 +1163,7 @@ def test_invoice_preview_keeps_multiple_activities_on_same_day(
     )
     activities = response.json()["activities"]
     training_ids = []
-    for activity, hours in zip(activities, (1.5, 2), strict=True):
+    for activity, hours in zip(activities, (1, 2), strict=True):
         response = client.post(
             "/api/trainings",
             json={
@@ -1146,8 +1184,8 @@ def test_invoice_preview_keeps_multiple_activities_on_same_day(
     items = preview.json()["items"]
     assert [item["training_id"] for item in items] == training_ids
     assert {item["description"] for item in items} == {"Training", "Assistenz"}
-    assert [item["amount_cents"] for item in items] == [2250, 4000]
-    assert preview.json()["total_amount_cents"] == 6250
+    assert [item["amount_cents"] for item in items] == [1500, 4000]
+    assert preview.json()["total_amount_cents"] == 5500
     assert preview.json()["total_amount_cents"] == sum(
         item["amount_cents"] for item in items
     )
@@ -1161,7 +1199,7 @@ def test_invoice_preview_keeps_multiple_activities_on_same_day(
         },
     )
     assert invoice.status_code == 201
-    assert invoice.json()["total_amount_cents"] == 6250
+    assert invoice.json()["total_amount_cents"] == 5500
     assert invoice.json()["total_amount_cents"] == sum(
         item["amount_cents"] for item in invoice.json()["items"]
     )

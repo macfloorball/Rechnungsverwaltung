@@ -175,9 +175,9 @@ function buildPlanRow(activities, entry = {}) {
 
   const hoursInput = element("input");
   hoursInput.type = "number";
-  hoursInput.min = "0.01";
+  hoursInput.min = "1";
   hoursInput.max = "24";
-  hoursInput.step = "0.01";
+  hoursInput.step = "1";
   hoursInput.value = entry.id === undefined ? "1" : String(entry.hours);
   hoursInput.setAttribute("aria-label", "Stunden");
   hoursInput.dataset.planHours = "";
@@ -569,7 +569,11 @@ export function initializeSettings() {
         const hoursInput = row.querySelector("[data-plan-hours]");
         const activeInput = row.querySelector("[data-plan-active]");
         const hours = Number(hoursInput.value);
-        if (!activitySelect.value || !hoursInput.validity.valid || !Number.isFinite(hours)) {
+        if (
+          !activitySelect.value
+          || !hoursInput.validity.valid
+          || !Number.isInteger(hours)
+        ) {
           showMessage(weeklyPlanError, `Bitte prüfe Tätigkeit und Stunden im Eintrag für ${weekdays[weekday]}.`);
           return;
         }
