@@ -1064,7 +1064,7 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
     assert preview.json()["total_amount_cents"] == 500
 
 
-def test_invoice_preview_matches_example_uses_training_rate_snapshots_and_is_read_only(
+def test_invoice_preview_matches_example_and_refreshes_saved_preview(
     client: TestClient,
 ) -> None:
     settings = client.put(
@@ -1143,7 +1143,110 @@ def test_invoice_preview_matches_example_uses_training_rate_snapshots_and_is_rea
     assert empty_preview.json()["items"] == []
     assert empty_preview.json()["total_amount_cents"] == 0
     with sqlite3.connect(client.app.state.test_database_path) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM invoices").fetchone() == (0,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM invoices WHERE is_preview = 1"
+        ).fetchone() == (2,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM invoices WHERE is_preview = 0"
+        ).fetchone() == (0,)
+
+
+def test_invoice_preview_replaces_existing_draft_and_never_changes_final_invoice(
+    client: TestClient,
+) -> None:
+    activity = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Training", "hourly_rate_cents": 1500}]},
+    ).json()["activities"][0]
+    training = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-12",
+            "activity_type_id": activity["id"],
+            "hours": 1,
+            "status": "completed",
+        },
+    ).json()
+    payload = {"year": 2026, "month": 11}
+    database_path = client.app.state.test_database_path
+
+    first_preview = client.post("/api/invoices/preview", json=payload)
+    assert first_preview.status_code == 200
+    with sqlite3.connect(database_path) as connection:
+        first_invoice_id = connection.execute(
+            """
+            SELECT id FROM invoices
+            WHERE year = 2026 AND month = 11 AND is_preview = 1
+            """
+        ).fetchone()[0]
+        assert connection.execute(
+            "SELECT COUNT(*) FROM invoice_items WHERE invoice_id = ?",
+            (first_invoice_id,),
+        ).fetchone() == (1,)
+
+    updated_training = client.put(
+        f"/api/trainings/{training['id']}",
+        json={"hours": 2},
+    )
+    assert updated_training.status_code == 200
+    second_training = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-19",
+            "activity_type_id": activity["id"],
+            "hours": 1,
+            "status": "completed",
+        },
+    )
+    assert second_training.status_code == 201
+
+    refreshed_preview = client.post("/api/invoices/preview", json=payload)
+    assert refreshed_preview.status_code == 200
+    assert refreshed_preview.json()["total_amount_cents"] == 4500
+    with sqlite3.connect(database_path) as connection:
+        previews = connection.execute(
+            """
+            SELECT id FROM invoices
+            WHERE year = 2026 AND month = 11 AND is_preview = 1
+            """
+        ).fetchall()
+        assert previews == [(first_invoice_id,)]
+        replaced_items = connection.execute(
+            """
+            SELECT training_id, amount_cents FROM invoice_items
+            WHERE invoice_id = ? ORDER BY training_id
+            """,
+            (first_invoice_id,),
+        ).fetchall()
+        assert replaced_items == [
+            (training["id"], 3000),
+            (second_training.json()["id"], 1500),
+        ]
+
+    finalized = client.post(
+        "/api/invoices",
+        json={**payload, "invoice_date": "2026-12-01"},
+    )
+    assert finalized.status_code == 201
+    assert finalized.json()["id"] == first_invoice_id
+    original_pdf = client.get(
+        f"/api/invoices/{first_invoice_id}/pdf"
+    ).content
+    original_items = get_invoice(first_invoice_id, database_path)["items"]
+
+    assert client.put(
+        f"/api/trainings/{training['id']}",
+        json={"hours": 3},
+    ).status_code == 200
+    rejected_refresh = client.post("/api/invoices/preview", json=payload)
+    assert rejected_refresh.status_code == 409
+    assert client.get(
+        f"/api/invoices/{first_invoice_id}/pdf"
+    ).content == original_pdf
+    persisted_invoice = get_invoice(first_invoice_id, database_path)
+    assert persisted_invoice["is_preview"] == 0
+    assert persisted_invoice["items"] == original_items
+    assert len(client.get("/api/invoices").json()) == 1
 
 
 def test_additional_training_is_saved_to_calendar_and_invoice_preview(

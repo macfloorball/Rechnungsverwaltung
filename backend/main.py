@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.database import (
     DATABASE_PATH,
     PROJECT_ROOT,
+    InvoiceAlreadyExistsError,
     create_invoice_with_items,
     create_record,
     delete_record,
@@ -26,6 +27,7 @@ from backend.database import (
     get_record,
     initialize_database,
     list_records,
+    save_invoice_preview,
     update_organization,
     update_record,
 )
@@ -720,6 +722,20 @@ def preview_invoice(
         payload.month,
         database_path,
     )
+    try:
+        save_invoice_preview(
+            payload.year,
+            payload.month,
+            date.today().isoformat(),
+            total_amount_cents,
+            items,
+            database_path,
+        )
+    except InvoiceAlreadyExistsError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Für diesen Monat wurde bereits eine endgültige Rechnung erstellt",
+        ) from error
     return {
         "year": payload.year,
         "month": payload.month,
@@ -730,7 +746,11 @@ def preview_invoice(
 
 @app.get("/api/invoices")
 def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
-    invoices = list_records("invoices", database_path=database_path)
+    invoices = [
+        invoice
+        for invoice in list_records("invoices", database_path=database_path)
+        if not invoice["is_preview"]
+    ]
     sorted_invoices = sorted(
         invoices,
         key=lambda invoice: (
@@ -741,7 +761,12 @@ def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
         ),
         reverse=True,
     )
-    private_fields = {"invoice_snapshot_json", "logo_snapshot", "logo_media_type"}
+    private_fields = {
+        "invoice_snapshot_json",
+        "logo_snapshot",
+        "logo_media_type",
+        "is_preview",
+    }
     return [
         {key: value for key, value in invoice.items() if key not in private_fields}
         for invoice in sorted_invoices
@@ -770,7 +795,7 @@ def post_invoice(
         {"year": payload.year, "month": payload.month},
         database_path,
     )
-    if existing_invoices:
+    if any(not invoice["is_preview"] for invoice in existing_invoices):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
@@ -935,6 +960,7 @@ def post_invoice(
             {
                 "year": payload.year,
                 "month": payload.month,
+                "is_preview": 0,
                 "organization_id": organization["id"],
                 "invoice_date": invoice_date.isoformat(),
                 "invoice_number": invoice_number,
@@ -964,6 +990,12 @@ def post_invoice(
             expected_next_invoice_number=organization["next_invoice_number"],
             updated_next_invoice_number=sequence + 1,
         )
+    except InvoiceAlreadyExistsError as error:
+        pdf_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
+        ) from error
     except ValueError as error:
         pdf_path.unlink(missing_ok=True)
         if "rechnungsnummernkreis" in str(error):

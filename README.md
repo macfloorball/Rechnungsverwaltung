@@ -15,9 +15,9 @@ SQLite und PDF-Rechnungserstellung.
 - Wöchentlichen Trainingsplan pflegen und Trainingstermine im Monatskalender
   planen, bearbeiten, als ausgefallen markieren und einzeln oder gesammelt
   abschließen.
-- Abrechenbare, durchgeführte Termine für einen Monat prüfen und neue
-  Rechnungen als PDF erstellen. Bereits gespeicherte Rechnungen bleiben
-  unverändert.
+- Abrechenbare, durchgeführte Termine für einen Monat prüfen und die
+  gespeicherte Vorschau für diesen Monat aktualisieren. Endgültige Rechnungen
+  werden als PDF erstellt und bleiben unverändert.
 - Rechnungseinstellungen einschließlich Absender, Empfänger, Zahlungsangaben
   und optionalem Logo verwalten.
 - Gespeicherte Rechnungen und deren unveränderliche Positions- und
@@ -146,8 +146,8 @@ interface, SQLite persistence, and PDF invoice generation.
 - Manage activity types and hourly rates.
 - Maintain a weekly training plan and plan, edit, cancel, and complete
   sessions individually or in bulk in a monthly calendar.
-- Review completed billable sessions for a month and generate new PDF
-  invoices. Previously saved invoices remain unchanged.
+- Review completed billable sessions for a month and refresh its saved
+  preview. Final invoices are generated as PDFs and remain unchanged.
 - Manage invoice settings, including issuer, recipient, payment details, and
   an optional logo.
 - Browse saved invoices with immutable line-item and settings snapshots.
