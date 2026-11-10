@@ -508,6 +508,114 @@ def test_invoice_archive_is_chronological_and_pdfs_remain_unchanged(
     assert persisted["items"][0]["amount_cents"] == 4000
 
 
+def test_final_invoice_can_be_deleted_before_finalizing_current_preview(
+    client: TestClient,
+) -> None:
+    activity = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Training", "hourly_rate_cents": 1500}]},
+    ).json()["activities"][0]
+
+    def create_completed_training(training_date: str, hours: int) -> dict:
+        response = client.post(
+            "/api/trainings",
+            json={
+                "training_date": training_date,
+                "activity_type_id": activity["id"],
+                "hours": hours,
+                "status": "completed",
+            },
+        )
+        assert response.status_code == 201
+        return response.json()
+
+    first_training = create_completed_training("2026-11-05", 1)
+    original_response = client.post(
+        "/api/invoices",
+        json={"year": 2026, "month": 11},
+    )
+    assert original_response.status_code == 201
+    old_invoice = original_response.json()
+    old_pdf = client.app.state.test_invoice_directory / old_invoice["pdf_path"]
+    assert old_pdf.is_file()
+
+    second_training = create_completed_training("2026-11-12", 2)
+    preview = client.post(
+        "/api/invoices/preview",
+        json={"year": 2026, "month": 11},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["total_amount_cents"] == 4500
+    database_path = client.app.state.test_database_path
+    with sqlite3.connect(database_path) as connection:
+        preview_id = connection.execute(
+            """
+            SELECT id FROM invoices
+            WHERE year = 2026 AND month = 11 AND is_preview = 1
+            """
+        ).fetchone()[0]
+
+    other_training = create_completed_training("2026-12-03", 1)
+    other_response = client.post(
+        "/api/invoices",
+        json={"year": 2026, "month": 12},
+    )
+    assert other_response.status_code == 201
+    other_invoice = other_response.json()
+    other_pdf = (
+        client.app.state.test_invoice_directory / other_invoice["pdf_path"]
+    )
+    other_pdf_content = other_pdf.read_bytes()
+
+    assert client.delete(f"/api/invoices/{preview_id}").status_code == 409
+    assert client.delete(f"/api/invoices/{old_invoice['id']}").status_code == 204
+    assert not old_pdf.exists()
+    assert client.get(f"/api/invoices/{old_invoice['id']}/pdf").status_code == 404
+    assert client.delete(f"/api/invoices/{old_invoice['id']}").status_code == 404
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT id, is_preview FROM invoices WHERE id = ?",
+            (preview_id,),
+        ).fetchone() == (preview_id, 1)
+        assert connection.execute(
+            "SELECT id FROM invoices WHERE id = ?",
+            (other_invoice["id"],),
+        ).fetchone() == (other_invoice["id"],)
+        training_ids = {
+            row[0] for row in connection.execute("SELECT id FROM trainings")
+        }
+    assert training_ids == {
+        first_training["id"],
+        second_training["id"],
+        other_training["id"],
+    }
+
+    finalized = client.post(
+        "/api/invoices",
+        json={"year": 2026, "month": 11},
+    )
+    assert finalized.status_code == 201
+    new_invoice = finalized.json()
+    assert new_invoice["id"] == preview_id
+    assert new_invoice["id"] != old_invoice["id"]
+    assert new_invoice["total_amount_cents"] == 4500
+    assert [item["training_id"] for item in new_invoice["items"]] == [
+        first_training["id"],
+        second_training["id"],
+    ]
+    assert other_pdf.read_bytes() == other_pdf_content
+    assert client.get(f"/api/invoices/{other_invoice['id']}/pdf").status_code == 200
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT id, status FROM trainings ORDER BY id"
+        ).fetchall() == [
+            (first_training["id"], "completed"),
+            (second_training["id"], "completed"),
+            (other_training["id"], "completed"),
+        ]
+
+
 def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
     response = client.put(
         "/api/settings",

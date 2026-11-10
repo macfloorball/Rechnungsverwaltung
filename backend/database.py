@@ -835,6 +835,37 @@ class InvoiceAlreadyExistsError(ValueError):
     """Raised when a finalized invoice already exists for the period."""
 
 
+class InvoicePreviewDeletionError(ValueError):
+    """Raised when attempting to delete a preview as a finalized invoice."""
+
+
+def delete_final_invoice(
+    invoice_id: int,
+    database_path: Path = DATABASE_PATH,
+) -> dict[str, Any] | None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("BEGIN IMMEDIATE")
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT * FROM invoices WHERE id = ?",
+            (invoice_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        invoice = dict(row)
+        if invoice["is_preview"]:
+            raise InvoicePreviewDeletionError
+
+        cursor = connection.execute(
+            "DELETE FROM invoices WHERE id = ? AND is_preview = 0",
+            (invoice_id,),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return invoice
+
+
 def save_invoice_preview(
     year: int,
     month: int,
