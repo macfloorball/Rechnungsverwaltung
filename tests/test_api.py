@@ -735,6 +735,155 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
     assert january_training["status"] == "planned"
 
 
+def test_complete_month_only_updates_planned_weekly_plan_occurrences(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FrozenDate(date):
+        @classmethod
+        def today(cls) -> date:
+            return cls(2026, 11, 8)
+
+    monkeypatch.setattr("backend.main.date", FrozenDate)
+    activities = client.put(
+        "/api/settings",
+        json={
+            "activities": [
+                {"name": "Wochenplan", "hourly_rate_cents": 1500},
+                {"name": "Manuell", "hourly_rate_cents": 2000},
+            ]
+        },
+    ).json()["activities"]
+    plan_activity_id = activities[0]["id"]
+    manual_activity_id = activities[1]["id"]
+    matching_manual = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-05",
+            "activity_type_id": plan_activity_id,
+            "hours": 1,
+        },
+    )
+    assert matching_manual.status_code == 201
+
+    plan = client.put(
+        "/api/weekly-plan",
+        json=[{
+            "weekday": 3,
+            "activity_type_id": plan_activity_id,
+            "hours": 1,
+        }],
+    )
+    assert plan.status_code == 200
+
+    manual = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-13",
+            "activity_type_id": manual_activity_id,
+            "hours": 2,
+        },
+    )
+    assert manual.status_code == 201
+    assert matching_manual.json()["weekly_plan_generated"] == 0
+
+    november = client.get("/api/calendar/2026/11").json()
+    plan_trainings = {
+        training["training_date"]: training
+        for day in november["days"]
+        for training in day["trainings"]
+        if training["activity_type_id"] == plan_activity_id
+    }
+    assert set(plan_trainings) == {
+        "2026-11-05",
+        "2026-11-12",
+        "2026-11-19",
+        "2026-11-26",
+    }
+    assert plan_trainings["2026-11-05"]["weekly_plan_generated"] == 0
+    assert all(
+        plan_trainings[training_date]["weekly_plan_generated"] == 1
+        for training_date in ("2026-11-12", "2026-11-19", "2026-11-26")
+    )
+    for training_date, status_value in (
+        ("2026-11-19", "completed"),
+        ("2026-11-26", "cancelled"),
+    ):
+        response = client.put(
+            f"/api/trainings/{plan_trainings[training_date]['id']}",
+            json={"status": status_value},
+        )
+        assert response.status_code == 200
+
+    response = client.post("/api/calendar/2026/11/complete")
+    assert response.status_code == 200
+    assert response.json() == {"updated_count": 1}
+
+    refreshed_november = client.get("/api/calendar/2026/11").json()
+    persisted_statuses = {
+        training["training_date"]: training["status"]
+        for day in refreshed_november["days"]
+        for training in day["trainings"]
+        if training["activity_type_id"] == plan_activity_id
+    }
+    assert persisted_statuses == {
+        "2026-11-05": "planned",
+        "2026-11-12": "completed",
+        "2026-11-19": "completed",
+        "2026-11-26": "cancelled",
+    }
+    manual_after_reload = next(
+        training
+        for day in refreshed_november["days"]
+        for training in day["trainings"]
+        if training["id"] == manual.json()["id"]
+    )
+    assert manual_after_reload["status"] == "planned"
+
+    december = client.get("/api/calendar/2026/12").json()
+    december_training = next(
+        training
+        for day in december["days"]
+        for training in day["trainings"]
+        if training["activity_type_id"] == plan_activity_id
+    )
+    assert december_training["status"] == "planned"
+    assert client.post("/api/calendar/2026/13/complete").status_code == 422
+
+
+def test_cancelled_training_status_persists_after_calendar_reload(
+    client: TestClient,
+) -> None:
+    activity = client.put(
+        "/api/settings",
+        json={"activities": [{"name": "Training", "hourly_rate_cents": 1500}]},
+    ).json()["activities"][0]
+    training = client.post(
+        "/api/trainings",
+        json={
+            "training_date": "2026-11-05",
+            "activity_type_id": activity["id"],
+            "hours": 1,
+        },
+    ).json()
+
+    response = client.put(
+        f"/api/trainings/{training['id']}",
+        json={"status": "cancelled"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+
+    calendar = client.get("/api/calendar/2026/11").json()
+    persisted_training = next(
+        item
+        for day in calendar["days"]
+        for item in day["trainings"]
+        if item["id"] == training["id"]
+    )
+    assert persisted_training["status"] == "cancelled"
+
+
 def test_training_and_invoice_endpoints(client: TestClient) -> None:
     client.put(
         "/api/settings",

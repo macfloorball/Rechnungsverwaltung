@@ -405,8 +405,8 @@ def _ensure_weekly_plan_occurrences(
                     INSERT INTO trainings (
                         organization_id, training_date, weekly_plan_id,
                         weekly_plan_date, activity_type_id, hours, status,
-                        note, unit_rate_cents
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?)
+                        note, unit_rate_cents, weekly_plan_generated
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?, 1)
                     """,
                     (
                         organization_id,
@@ -544,6 +544,40 @@ def get_calendar(
         days.append({"date": day_string, "trainings": day_trainings})
 
     return {"year": year, "month": month, "days": days}
+
+
+@app.post("/api/calendar/{year}/{month}/complete")
+def complete_calendar_month(
+    year: int,
+    month: int,
+    database_path: DatabasePath,
+) -> dict[str, int]:
+    if not 1 <= year <= 9999 or not 1 <= month <= 12:
+        raise HTTPException(
+            status_code=422,
+            detail="Jahr oder Monat liegt außerhalb des gültigen Bereichs",
+        )
+
+    month_start = date(year, month, 1).isoformat()
+    month_end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        result = connection.execute(
+            """
+            UPDATE trainings
+            SET status = 'completed'
+            WHERE organization_id = 1
+              AND training_date BETWEEN ? AND ?
+              AND status = 'planned'
+              AND weekly_plan_id IS NOT NULL
+              AND weekly_plan_generated = 1
+              AND weekly_plan_date = training_date
+            """,
+            (month_start, month_end),
+        )
+        updated_count = result.rowcount
+
+    return {"updated_count": updated_count}
 
 
 @app.post("/api/trainings", status_code=status.HTTP_201_CREATED)

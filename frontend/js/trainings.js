@@ -104,6 +104,27 @@ export function bindTrainingEditor(calendar, onSaved) {
     if (!(target instanceof Element)) {
       return;
     }
+    const notDoneButton = target.closest("[data-training-cancelled]");
+    if (notDoneButton instanceof HTMLButtonElement) {
+      const training = JSON.parse(notDoneButton.dataset.trainingCancelled || "null");
+      if (!training || training.status === "cancelled") {
+        return;
+      }
+      notDoneButton.disabled = true;
+      calendarErrorMessage.hidden = true;
+      requestJson(`/api/trainings/${training.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      })
+        .then(onSaved)
+        .catch((error) => showError(calendarErrorMessage, error))
+        .finally(() => {
+          notDoneButton.disabled = false;
+        });
+      return;
+    }
+
     const addButton = target.closest("[data-new-date]");
     if (addButton instanceof HTMLButtonElement) {
       openEditor({

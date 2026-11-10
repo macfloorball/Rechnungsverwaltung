@@ -59,7 +59,18 @@ function createTraining(training) {
     `${name} am ${training.training_date} als durchgeführt markieren`,
   );
   completionLabel.append(completionCheckbox, document.createTextNode("Durchgeführt"));
-  item.append(button, completionLabel);
+
+  const notDoneButton = createElement("button", "training__not-done", "Nicht gemacht");
+  notDoneButton.type = "button";
+  notDoneButton.dataset.trainingCancelled = JSON.stringify(training);
+  notDoneButton.disabled = training.status === "cancelled";
+  notDoneButton.setAttribute(
+    "aria-label",
+    `${name} am ${training.training_date} als nicht durchgeführt markieren`,
+  );
+  const actions = createElement("div", "training__actions");
+  actions.append(completionLabel, notDoneButton);
+  item.append(button, actions);
   return item;
 }
 
@@ -110,10 +121,20 @@ export function initializeCalendar() {
   const monthLabel = document.querySelector("#calendar-month");
   const calendar = document.querySelector("#calendar");
   const errorMessage = document.querySelector("#calendar-error");
+  const successMessage = document.querySelector("#calendar-success");
   const previousButton = document.querySelector("#previous-month");
   const nextButton = document.querySelector("#next-month");
+  const completeMonthButton = document.querySelector("#complete-month");
 
-  if (!monthLabel || !calendar || !errorMessage || !previousButton || !nextButton) {
+  if (
+    !monthLabel
+    || !calendar
+    || !errorMessage
+    || !successMessage
+    || !previousButton
+    || !nextButton
+    || !completeMonthButton
+  ) {
     throw new Error("Kalender-Elemente fehlen im HTML-Grundgerüst.");
   }
 
@@ -129,6 +150,7 @@ export function initializeCalendar() {
     calendar.setAttribute("aria-busy", "true");
     previousButton.disabled = true;
     nextButton.disabled = true;
+    completeMonthButton.disabled = true;
     errorMessage.hidden = true;
 
     const year = month.getFullYear();
@@ -151,19 +173,72 @@ export function initializeCalendar() {
       calendar.setAttribute("aria-busy", "false");
       previousButton.disabled = false;
       nextButton.disabled = false;
+      completeMonthButton.disabled = false;
     }
   }
 
   bindTrainingEditor(calendar, () => loadMonth(visibleMonth));
 
   previousButton.addEventListener("click", () => {
+    successMessage.hidden = true;
     loadMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1));
   });
   nextButton.addEventListener("click", () => {
+    successMessage.hidden = true;
     loadMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1));
   });
   document.addEventListener("weekly-plan-updated", () => {
     loadMonth(visibleMonth);
+  });
+
+  completeMonthButton.addEventListener("click", async () => {
+    if (
+      loading
+      || !window.confirm(
+        "Sollen alle geplanten Wochenplan-Termine dieses Monats als durchgeführt markiert werden?",
+      )
+    ) {
+      return;
+    }
+
+    const month = visibleMonth;
+    const year = month.getFullYear();
+    const monthNumber = month.getMonth() + 1;
+    completeMonthButton.disabled = true;
+    previousButton.disabled = true;
+    nextButton.disabled = true;
+    errorMessage.hidden = true;
+    successMessage.hidden = true;
+
+    try {
+      const response = await fetch(
+        `/api/calendar/${year}/${monthNumber}/complete`,
+        { method: "POST" },
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Termine konnten nicht aktualisiert werden (HTTP ${response.status}).`,
+        );
+      }
+      const result = await response.json();
+      if (!Number.isInteger(result.updated_count) || result.updated_count < 0) {
+        throw new Error("Die Rückmeldung zur Monatsaktion ist ungültig.");
+      }
+      successMessage.textContent = result.updated_count === 1
+        ? "1 Termin wurde als durchgeführt markiert."
+        : `${result.updated_count} Termine wurden als durchgeführt markiert.`;
+      successMessage.hidden = false;
+      await loadMonth(month);
+    } catch (error) {
+      errorMessage.textContent = error instanceof Error
+        ? error.message
+        : "Termine konnten nicht aktualisiert werden.";
+      errorMessage.hidden = false;
+    } finally {
+      completeMonthButton.disabled = false;
+      previousButton.disabled = false;
+      nextButton.disabled = false;
+    }
   });
 
   loadMonth(visibleMonth);

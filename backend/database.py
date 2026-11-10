@@ -59,6 +59,7 @@ TABLE_COLUMNS = {
         "training_date",
         "weekly_plan_id",
         "weekly_plan_date",
+        "weekly_plan_generated",
         "activity_type_id",
         "hours",
         "status",
@@ -175,7 +176,9 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                 status TEXT NOT NULL DEFAULT 'planned'
                     CHECK (status IN ('planned', 'completed', 'cancelled')),
                 note TEXT,
-                unit_rate_cents INTEGER NOT NULL CHECK (unit_rate_cents >= 0)
+                unit_rate_cents INTEGER NOT NULL CHECK (unit_rate_cents >= 0),
+                weekly_plan_generated INTEGER NOT NULL DEFAULT 0
+                    CHECK (weekly_plan_generated IN (0, 1))
             );
 
             CREATE TABLE IF NOT EXISTS invoices (
@@ -233,6 +236,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
         _migrate_organization_invoice_fields(connection)
         _migrate_weekly_plan_occurrences(connection)
         _migrate_optional_training_hours(connection)
+        _migrate_weekly_plan_generated(connection)
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:
@@ -505,6 +509,45 @@ def _migrate_optional_training_hours(connection: sqlite3.Connection) -> None:
         raise
     finally:
         connection.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_weekly_plan_generated(connection: sqlite3.Connection) -> None:
+    migration_version = 5
+    current_version = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()[0]
+    if current_version >= migration_version:
+        return
+
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(trainings)")
+        }
+        if "weekly_plan_generated" not in existing_columns:
+            connection.execute(
+                """
+                ALTER TABLE trainings
+                ADD COLUMN weekly_plan_generated INTEGER NOT NULL DEFAULT 0
+                    CHECK (weekly_plan_generated IN (0, 1))
+                """
+            )
+        connection.execute(
+            """
+            UPDATE trainings
+            SET weekly_plan_generated = 1
+            WHERE weekly_plan_id IS NOT NULL
+              AND weekly_plan_date = training_date
+            """
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (migration_version,),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
 
 
 def get_organization(

@@ -448,6 +448,12 @@ button {
   margin-bottom: 20px;
 }
 
+.calendar-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 16px;
+}
+
 .section-heading .eyebrow {
   color: #55718b;
 }
@@ -607,6 +613,38 @@ button {
 .training__completion input {
   margin: 0;
   accent-color: #2a8b61;
+}
+
+.training__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.training__not-done {
+  padding: 2px 4px;
+  color: #8e2525;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: #fff;
+  border: 1px solid #e4bcbc;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.training__not-done:hover:not(:disabled) {
+  background: #fcf0f0;
+}
+
+.training__not-done:focus-visible {
+  outline: 2px solid #8e2525;
+  outline-offset: 2px;
+}
+
+.training__not-done:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .add-training-button {

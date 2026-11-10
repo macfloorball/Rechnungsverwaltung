@@ -278,5 +278,5 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone() == (4,)
+        ).fetchone() == (5,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
