@@ -53,6 +53,7 @@ function createTraining(training) {
   const completionCheckbox = createElement("input");
   completionCheckbox.type = "checkbox";
   completionCheckbox.checked = training.status === "completed";
+  completionCheckbox.disabled = training.status === "cancelled";
   completionCheckbox.dataset.trainingCompletion = JSON.stringify(training);
   completionCheckbox.setAttribute(
     "aria-label",
@@ -141,9 +142,11 @@ export function initializeCalendar() {
   let visibleMonth = new Date();
   visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
   let loading = false;
+  let reloadPending = false;
 
   async function loadMonth(month) {
     if (loading) {
+      reloadPending = true;
       return;
     }
     loading = true;
@@ -174,6 +177,10 @@ export function initializeCalendar() {
       previousButton.disabled = false;
       nextButton.disabled = false;
       completeMonthButton.disabled = false;
+      if (reloadPending) {
+        reloadPending = false;
+        await loadMonth(visibleMonth);
+      }
     }
   }
 

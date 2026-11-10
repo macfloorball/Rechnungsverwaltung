@@ -855,16 +855,13 @@ def save_invoice_preview(
         connection.execute("BEGIN IMMEDIATE")
         existing = connection.execute(
             """
-            SELECT id, is_preview
+            SELECT id
             FROM invoices
-            WHERE year = ? AND month = ?
+            WHERE year = ? AND month = ? AND is_preview = 1
             ORDER BY id
             """,
             (year, month),
         ).fetchall()
-        if any(not row[1] for row in existing):
-            raise InvoiceAlreadyExistsError
-
         preview_ids = [int(row[0]) for row in existing]
         if preview_ids:
             invoice_id = preview_ids[0]

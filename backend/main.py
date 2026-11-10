@@ -722,20 +722,14 @@ def preview_invoice(
         payload.month,
         database_path,
     )
-    try:
-        save_invoice_preview(
-            payload.year,
-            payload.month,
-            date.today().isoformat(),
-            total_amount_cents,
-            items,
-            database_path,
-        )
-    except InvoiceAlreadyExistsError as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Für diesen Monat wurde bereits eine endgültige Rechnung erstellt",
-        ) from error
+    save_invoice_preview(
+        payload.year,
+        payload.month,
+        date.today().isoformat(),
+        total_amount_cents,
+        items,
+        database_path,
+    )
     return {
         "year": payload.year,
         "month": payload.month,
