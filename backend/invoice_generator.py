@@ -104,7 +104,7 @@ FOOTER_DETAILS = InvoiceFooterDetails()
 class InvoiceLine:
     description: str
     training_date: date
-    hours: Decimal
+    hours: Decimal | None
     amount_cents: int
     unit_rate_cents: int | None = None
 
@@ -355,13 +355,13 @@ def build_position_table(items: Sequence[InvoiceLine]) -> Table:
     )
     rows = [[Paragraph(label, header_style) for label in POSITION_HEADER]]
     for item in items:
-        if item.hours <= 0 or item.amount_cents < 0:
+        if (item.hours is not None and item.hours <= 0) or item.amount_cents < 0:
             raise ValueError("Rechnungspositionen müssen gültige Werte enthalten")
         rows.append(
             [
                 Paragraph(escape(item.description), description_style),
                 item.training_date.strftime("%d.%m.%Y"),
-                _format_hours(item.hours),
+                _format_hours(item.hours) if item.hours is not None else "–",
                 _format_euros(item.amount_cents),
             ]
         )

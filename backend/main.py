@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.database import (
     DATABASE_PATH,
     PROJECT_ROOT,
+    InvoiceAlreadyExistsError,
     create_invoice_with_items,
     create_record,
     delete_record,
@@ -26,6 +27,7 @@ from backend.database import (
     get_record,
     initialize_database,
     list_records,
+    save_invoice_preview,
     update_organization,
     update_record,
 )
@@ -405,8 +407,8 @@ def _ensure_weekly_plan_occurrences(
                     INSERT INTO trainings (
                         organization_id, training_date, weekly_plan_id,
                         weekly_plan_date, activity_type_id, hours, status,
-                        note, unit_rate_cents
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?)
+                        note, unit_rate_cents, weekly_plan_generated
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?, 1)
                     """,
                     (
                         organization_id,
@@ -546,6 +548,40 @@ def get_calendar(
     return {"year": year, "month": month, "days": days}
 
 
+@app.post("/api/calendar/{year}/{month}/complete")
+def complete_calendar_month(
+    year: int,
+    month: int,
+    database_path: DatabasePath,
+) -> dict[str, int]:
+    if not 1 <= year <= 9999 or not 1 <= month <= 12:
+        raise HTTPException(
+            status_code=422,
+            detail="Jahr oder Monat liegt außerhalb des gültigen Bereichs",
+        )
+
+    month_start = date(year, month, 1).isoformat()
+    month_end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        result = connection.execute(
+            """
+            UPDATE trainings
+            SET status = 'completed'
+            WHERE organization_id = 1
+              AND training_date BETWEEN ? AND ?
+              AND status = 'planned'
+              AND weekly_plan_id IS NOT NULL
+              AND weekly_plan_generated = 1
+              AND weekly_plan_date = training_date
+            """,
+            (month_start, month_end),
+        )
+        updated_count = result.rowcount
+
+    return {"updated_count": updated_count}
+
+
 @app.post("/api/trainings", status_code=status.HTTP_201_CREATED)
 def post_training(
     payload: TrainingCreate,
@@ -591,7 +627,7 @@ def put_training(
         )
 
     values = payload.model_dump(exclude_unset=True)
-    for field in ("training_date", "activity_type_id", "hours", "status"):
+    for field in ("training_date", "activity_type_id", "status"):
         if field in values and values[field] is None:
             raise HTTPException(
                 status_code=422,
@@ -639,22 +675,29 @@ def _build_invoice_items(
     }
     items = []
     total_amount_cents = 0
-    for training in list_records("trainings", database_path=database_path):
+    for training in list_records(
+        "trainings",
+        {"status": "completed"},
+        database_path,
+    ):
         training_date = date.fromisoformat(training["training_date"])
-        if not (
-            month_start <= training_date <= month_end
-            and training["status"] == "completed"
-        ):
+        if not month_start <= training_date <= month_end:
             continue
         activity = activities.get(training["activity_type_id"])
         if activity is None:
             continue
-        amount_cents = int(
-            (Decimal(str(training["hours"])) * training["unit_rate_cents"]).quantize(
-                Decimal("1"),
-                rounding=ROUND_HALF_UP,
+        if training["hours"] is None:
+            amount_cents = training["unit_rate_cents"]
+        else:
+            amount_cents = int(
+                (
+                    Decimal(str(training["hours"]))
+                    * training["unit_rate_cents"]
+                ).quantize(
+                    Decimal("1"),
+                    rounding=ROUND_HALF_UP,
+                )
             )
-        )
         items.append(
             {
                 "training_id": training["id"],
@@ -679,6 +722,20 @@ def preview_invoice(
         payload.month,
         database_path,
     )
+    try:
+        save_invoice_preview(
+            payload.year,
+            payload.month,
+            date.today().isoformat(),
+            total_amount_cents,
+            items,
+            database_path,
+        )
+    except InvoiceAlreadyExistsError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Für diesen Monat wurde bereits eine endgültige Rechnung erstellt",
+        ) from error
     return {
         "year": payload.year,
         "month": payload.month,
@@ -689,7 +746,11 @@ def preview_invoice(
 
 @app.get("/api/invoices")
 def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
-    invoices = list_records("invoices", database_path=database_path)
+    invoices = [
+        invoice
+        for invoice in list_records("invoices", database_path=database_path)
+        if not invoice["is_preview"]
+    ]
     sorted_invoices = sorted(
         invoices,
         key=lambda invoice: (
@@ -700,7 +761,12 @@ def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
         ),
         reverse=True,
     )
-    private_fields = {"invoice_snapshot_json", "logo_snapshot", "logo_media_type"}
+    private_fields = {
+        "invoice_snapshot_json",
+        "logo_snapshot",
+        "logo_media_type",
+        "is_preview",
+    }
     return [
         {key: value for key, value in invoice.items() if key not in private_fields}
         for invoice in sorted_invoices
@@ -729,7 +795,7 @@ def post_invoice(
         {"year": payload.year, "month": payload.month},
         database_path,
     )
-    if existing_invoices:
+    if any(not invoice["is_preview"] for invoice in existing_invoices):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
@@ -864,7 +930,11 @@ def post_invoice(
             InvoiceLine(
                 description=item["description"],
                 training_date=date.fromisoformat(item["training_date"]),
-                hours=Decimal(str(item["hours"])),
+                hours=(
+                    Decimal(str(item["hours"]))
+                    if item["hours"] is not None
+                    else None
+                ),
                 amount_cents=item["amount_cents"],
                 unit_rate_cents=item["unit_rate_cents"],
             )
@@ -890,6 +960,7 @@ def post_invoice(
             {
                 "year": payload.year,
                 "month": payload.month,
+                "is_preview": 0,
                 "organization_id": organization["id"],
                 "invoice_date": invoice_date.isoformat(),
                 "invoice_number": invoice_number,
@@ -919,6 +990,12 @@ def post_invoice(
             expected_next_invoice_number=organization["next_invoice_number"],
             updated_next_invoice_number=sequence + 1,
         )
+    except InvoiceAlreadyExistsError as error:
+        pdf_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
+        ) from error
     except ValueError as error:
         pdf_path.unlink(missing_ok=True)
         if "rechnungsnummernkreis" in str(error):

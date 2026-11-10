@@ -33,10 +33,16 @@
             </div>
           </div>
 
+          <div class="calendar-toolbar">
+            <button id="complete-month" class="primary-button" type="button">
+              Alle durchgeführt
+            </button>
+          </div>
           <div id="calendar" class="calendar" aria-busy="true">
             <p class="calendar-placeholder" role="status">Kalender wird geladen …</p>
           </div>
           <p id="calendar-error" class="error-message" role="alert" hidden></p>
+          <p id="calendar-success" class="success-message" role="status" hidden></p>
         </section>
 
         <section class="settings-section" aria-labelledby="settings-title">
@@ -283,7 +289,7 @@
             <label for="invoice-month">Abrechnungsmonat</label>
             <input id="invoice-month" name="month" type="month" required>
             <button id="load-invoice-preview" class="primary-button" type="submit">
-              Vorschau anzeigen
+              Vorschau erstellen/aktualisieren
             </button>
           </form>
 
@@ -348,12 +354,12 @@
         <select id="training-activity" name="activity_type_id" required></select>
 
         <label for="training-hours">Stunden</label>
-        <input id="training-hours" name="hours" type="number" min="0.01" step="0.01" required>
+        <input id="training-hours" name="hours" type="number" min="1" step="1">
 
         <label for="training-status">Status</label>
         <select id="training-status" name="status" required>
           <option value="planned">Geplant</option>
-          <option value="completed">Durchgeführt</option>
+          <option value="completed" disabled>Durchgeführt</option>
           <option value="cancelled">Ausgefallen</option>
         </select>
 

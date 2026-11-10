@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,7 @@ TABLE_COLUMNS = {
         "training_date",
         "weekly_plan_id",
         "weekly_plan_date",
+        "weekly_plan_generated",
         "activity_type_id",
         "hours",
         "status",
@@ -68,6 +70,7 @@ TABLE_COLUMNS = {
         "organization_id",
         "year",
         "month",
+        "is_preview",
         "invoice_date",
         "invoice_number",
         "total_amount_cents",
@@ -170,11 +173,13 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                 training_date TEXT NOT NULL,
                 activity_type_id INTEGER NOT NULL
                     REFERENCES activity_types (id) ON DELETE RESTRICT,
-                hours REAL NOT NULL CHECK (hours > 0),
+                hours REAL CHECK (hours IS NULL OR hours > 0),
                 status TEXT NOT NULL DEFAULT 'planned'
                     CHECK (status IN ('planned', 'completed', 'cancelled')),
                 note TEXT,
-                unit_rate_cents INTEGER NOT NULL CHECK (unit_rate_cents >= 0)
+                unit_rate_cents INTEGER NOT NULL CHECK (unit_rate_cents >= 0),
+                weekly_plan_generated INTEGER NOT NULL DEFAULT 0
+                    CHECK (weekly_plan_generated IN (0, 1))
             );
 
             CREATE TABLE IF NOT EXISTS invoices (
@@ -183,6 +188,8 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                     REFERENCES organizations (id),
                 year INTEGER NOT NULL CHECK (year BETWEEN 1 AND 9999),
                 month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+                is_preview INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_preview IN (0, 1)),
                 invoice_date TEXT NOT NULL,
                 invoice_number TEXT,
                 total_amount_cents INTEGER NOT NULL
@@ -204,7 +211,7 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
                     REFERENCES trainings (id) ON DELETE SET NULL,
                 description TEXT NOT NULL,
                 training_date TEXT NOT NULL,
-                hours REAL NOT NULL CHECK (hours > 0),
+                hours REAL CHECK (hours IS NULL OR hours > 0),
                 unit_rate_cents INTEGER NOT NULL CHECK (unit_rate_cents >= 0),
                 amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0)
             );
@@ -231,6 +238,9 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
         _migrate_organization_support(connection)
         _migrate_organization_invoice_fields(connection)
         _migrate_weekly_plan_occurrences(connection)
+        _migrate_optional_training_hours(connection)
+        _migrate_weekly_plan_generated(connection)
+        _migrate_invoice_previews(connection)
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:
@@ -427,6 +437,123 @@ def _migrate_weekly_plan_occurrences(connection: sqlite3.Connection) -> None:
         raise
 
 
+def _migrate_optional_training_hours(connection: sqlite3.Connection) -> None:
+    migration_version = 4
+    current_version = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()[0]
+    if current_version >= migration_version:
+        return
+
+    connection.execute("PRAGMA foreign_keys = OFF")
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        for table in ("trainings", "invoice_items"):
+            columns = connection.execute(
+                f"PRAGMA table_info({table})"
+            ).fetchall()
+            hours_column = next(row for row in columns if row[1] == "hours")
+            if not hours_column[3]:
+                continue
+
+            create_sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table,),
+            ).fetchone()[0]
+            create_sql = create_sql.replace(
+                f"CREATE TABLE {table}",
+                f"CREATE TABLE {table}_new",
+                1,
+            )
+            create_sql, replacements = re.subn(
+                r"\bhours\s+([A-Z]+)\s+NOT\s+NULL"
+                r"(?:\s+CHECK\s*\(\s*hours\s*>\s*0\s*\))?",
+                r"hours \1 CHECK (hours IS NULL OR hours > 0)",
+                create_sql,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if replacements != 1:
+                raise RuntimeError(
+                    f"Stundenspalte in {table} konnte nicht migriert werden"
+                )
+
+            schema_objects = connection.execute(
+                """
+                SELECT sql
+                FROM sqlite_master
+                WHERE tbl_name = ? AND type IN ('index', 'trigger')
+                  AND sql IS NOT NULL
+                """,
+                (table,),
+            ).fetchall()
+            connection.execute(create_sql)
+            column_names = ", ".join(f'"{row[1]}"' for row in columns)
+            connection.execute(
+                f"INSERT INTO {table}_new ({column_names}) "
+                f"SELECT {column_names} FROM {table}"
+            )
+            connection.execute(f"DROP TABLE {table}")
+            connection.execute(f"ALTER TABLE {table}_new RENAME TO {table}")
+            for (schema_sql,) in schema_objects:
+                connection.execute(schema_sql)
+
+        connection.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (migration_version,),
+        )
+        violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError(
+                "Fremdschlüsselprüfung nach Stundenmigration fehlgeschlagen"
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_weekly_plan_generated(connection: sqlite3.Connection) -> None:
+    migration_version = 5
+    current_version = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()[0]
+    if current_version >= migration_version:
+        return
+
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(trainings)")
+        }
+        if "weekly_plan_generated" not in existing_columns:
+            connection.execute(
+                """
+                ALTER TABLE trainings
+                ADD COLUMN weekly_plan_generated INTEGER NOT NULL DEFAULT 0
+                    CHECK (weekly_plan_generated IN (0, 1))
+                """
+            )
+        connection.execute(
+            """
+            UPDATE trainings
+            SET weekly_plan_generated = 1
+            WHERE weekly_plan_id IS NOT NULL
+              AND weekly_plan_date = training_date
+            """
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (migration_version,),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
 def get_organization(
     database_path: Path = DATABASE_PATH,
     organization_id: int = 1,
@@ -495,6 +622,44 @@ def create_record(
             tuple(values.values()),
         )
         return int(cursor.lastrowid)
+
+
+def _migrate_invoice_previews(connection: sqlite3.Connection) -> None:
+    migration_version = 6
+    current_version = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()[0]
+    if current_version >= migration_version:
+        return
+
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(invoices)")
+        }
+        if "is_preview" not in existing_columns:
+            connection.execute(
+                """
+                ALTER TABLE invoices
+                ADD COLUMN is_preview INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_preview IN (0, 1))
+                """
+            )
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_unique_preview_period
+            ON invoices (year, month)
+            WHERE is_preview = 1
+            """
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (migration_version,),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
 
 
 def get_record(
@@ -594,6 +759,21 @@ def create_invoice_with_items(
 
     with sqlite3.connect(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("BEGIN IMMEDIATE")
+        existing = connection.execute(
+            """
+            SELECT id, is_preview
+            FROM invoices
+            WHERE year = ? AND month = ?
+            ORDER BY id
+            """,
+            (invoice["year"], invoice["month"]),
+        ).fetchall()
+        finalized = [row for row in existing if not row[1]]
+        if finalized:
+            raise InvoiceAlreadyExistsError
+        preview_ids = [row[0] for row in existing]
+
         if expected_next_invoice_number is not None:
             organization_id = invoice.get("organization_id", 1)
             cursor = connection.execute(
@@ -611,12 +791,31 @@ def create_invoice_with_items(
             )
             if cursor.rowcount != 1:
                 raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert")
-        invoice_cursor = connection.execute(
-            f"INSERT INTO invoices ({invoice_columns}) "
-            f"VALUES ({invoice_placeholders})",
-            tuple(invoice.values()),
-        )
-        invoice_id = int(invoice_cursor.lastrowid)
+
+        if preview_ids:
+            invoice_id = int(preview_ids[0])
+            assignments = ", ".join(f"{column} = ?" for column in invoice)
+            connection.execute(
+                f"UPDATE invoices SET {assignments} WHERE id = ?",
+                (*invoice.values(), invoice_id),
+            )
+            if len(preview_ids) > 1:
+                placeholders = ", ".join("?" for _ in preview_ids[1:])
+                connection.execute(
+                    f"DELETE FROM invoices WHERE id IN ({placeholders})",
+                    tuple(preview_ids[1:]),
+                )
+            connection.execute(
+                "DELETE FROM invoice_items WHERE invoice_id = ?",
+                (invoice_id,),
+            )
+        else:
+            invoice_cursor = connection.execute(
+                f"INSERT INTO invoices ({invoice_columns}) "
+                f"VALUES ({invoice_placeholders})",
+                tuple(invoice.values()),
+            )
+            invoice_id = int(invoice_cursor.lastrowid)
         if items:
             statement = (
                 f"INSERT INTO invoice_items ({item_columns}) "
@@ -624,6 +823,88 @@ def create_invoice_with_items(
             )
             connection.executemany(
                 statement,
+                [
+                    (invoice_id, *(item[field] for field in item_fields))
+                    for item in items
+                ],
+            )
+        return invoice_id
+
+
+class InvoiceAlreadyExistsError(ValueError):
+    """Raised when a finalized invoice already exists for the period."""
+
+
+def save_invoice_preview(
+    year: int,
+    month: int,
+    invoice_date: str,
+    total_amount_cents: int,
+    items: list[dict[str, Any]],
+    database_path: Path = DATABASE_PATH,
+) -> int:
+    for item in items:
+        _validate_fields("invoice_items", item)
+
+    item_fields = tuple(items[0]) if items else ()
+    if any(set(item) != set(item_fields) for item in items):
+        raise ValueError("Alle Rechnungspositionen müssen dieselben Felder haben")
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("BEGIN IMMEDIATE")
+        existing = connection.execute(
+            """
+            SELECT id, is_preview
+            FROM invoices
+            WHERE year = ? AND month = ?
+            ORDER BY id
+            """,
+            (year, month),
+        ).fetchall()
+        if any(not row[1] for row in existing):
+            raise InvoiceAlreadyExistsError
+
+        preview_ids = [int(row[0]) for row in existing]
+        if preview_ids:
+            invoice_id = preview_ids[0]
+            connection.execute(
+                """
+                UPDATE invoices
+                SET invoice_date = ?, total_amount_cents = ?,
+                    invoice_number = NULL, pdf_path = NULL,
+                    invoice_snapshot_json = NULL, logo_snapshot = NULL,
+                    logo_media_type = NULL
+                WHERE id = ?
+                """,
+                (invoice_date, total_amount_cents, invoice_id),
+            )
+            if len(preview_ids) > 1:
+                placeholders = ", ".join("?" for _ in preview_ids[1:])
+                connection.execute(
+                    f"DELETE FROM invoices WHERE id IN ({placeholders})",
+                    tuple(preview_ids[1:]),
+                )
+            connection.execute(
+                "DELETE FROM invoice_items WHERE invoice_id = ?",
+                (invoice_id,),
+            )
+        else:
+            cursor = connection.execute(
+                """
+                INSERT INTO invoices (
+                    year, month, is_preview, invoice_date, total_amount_cents
+                ) VALUES (?, ?, 1, ?, ?)
+                """,
+                (year, month, invoice_date, total_amount_cents),
+            )
+            invoice_id = int(cursor.lastrowid)
+
+        if items:
+            columns = ", ".join(("invoice_id", *item_fields))
+            placeholders = ", ".join("?" for _ in range(len(item_fields) + 1))
+            connection.executemany(
+                f"INSERT INTO invoice_items ({columns}) VALUES ({placeholders})",
                 [
                     (invoice_id, *(item[field] for field in item_fields))
                     for item in items

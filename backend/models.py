@@ -142,14 +142,14 @@ class WeeklyPlanEntry(APIModel):
     id: int | None = Field(default=None, gt=0)
     weekday: int = Field(ge=0, le=6)
     activity_type_id: int = Field(gt=0)
-    hours: float = Field(gt=0, allow_inf_nan=False)
+    hours: int = Field(gt=0, strict=True)
     is_active: bool = True
 
 
 class TrainingCreate(APIModel):
     training_date: date
     activity_type_id: int = Field(gt=0)
-    hours: float = Field(gt=0, allow_inf_nan=False)
+    hours: int | None = Field(default=None, gt=0, strict=True)
     status: Literal["planned", "completed", "cancelled"] = "planned"
     note: str | None = Field(default=None, max_length=1000)
 
@@ -157,7 +157,7 @@ class TrainingCreate(APIModel):
 class TrainingUpdate(APIModel):
     training_date: date | None = None
     activity_type_id: int | None = Field(default=None, gt=0)
-    hours: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    hours: int | None = Field(default=None, gt=0, strict=True)
     status: Literal["planned", "completed", "cancelled"] | None = None
     note: str | None = Field(default=None, max_length=1000)
 
