@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.database import (
     DATABASE_PATH,
+    get_connection,
     PROJECT_ROOT,
     InvoiceAlreadyExistsError,
     InvoicePreviewDeletionError,
@@ -281,7 +282,7 @@ def put_settings(
             detail="Es können höchstens vier Tätigkeitsarten verwaltet werden",
         )
 
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         for activity in payload.activities:
             if activity.id is None:
                 connection.execute(
@@ -432,7 +433,7 @@ def put_weekly_plan(
     entries: list[WeeklyPlanEntry],
     database_path: DatabasePath,
 ) -> list[dict[str, Any]]:
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         existing_entries = {
@@ -522,7 +523,7 @@ def get_calendar(
     last_day = calendar.monthrange(year, month)[1]
     month_start = date(year, month, 1)
     if month_start >= date.today().replace(day=1):
-        with sqlite3.connect(database_path) as connection:
+        with get_connection(database_path) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("BEGIN IMMEDIATE")
             _ensure_weekly_plan_occurrences(connection, month_start)
@@ -565,7 +566,7 @@ def complete_calendar_month(
 
     month_start = date(year, month, 1).isoformat()
     month_end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
         result = connection.execute(
             """

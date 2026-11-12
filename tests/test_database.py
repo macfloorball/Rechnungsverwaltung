@@ -280,3 +280,21 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
             "SELECT COUNT(*) FROM schema_migrations"
         ).fetchone() == (6,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_connection_rolls_back_closes_and_does_not_recreate_missing_database(tmp_path):
+    from backend.database import get_connection
+
+    path = tmp_path / "central.db"
+    initialize_database(path)
+    with pytest.raises(RuntimeError):
+        with get_connection(path) as connection:
+            assert connection.execute("PRAGMA foreign_keys").fetchone() == (1,)
+            connection.execute("INSERT INTO activity_types (name, hourly_rate_cents) VALUES ('Rollback', 1)")
+            raise RuntimeError("abort")
+    with pytest.raises(sqlite3.ProgrammingError):
+        connection.execute("SELECT 1")
+    assert list_records("activity_types", database_path=path) == []
+    with pytest.raises(sqlite3.OperationalError):
+        list_records("activity_types", database_path=tmp_path / "missing.db")
+    assert not (tmp_path / "missing.db").exists()

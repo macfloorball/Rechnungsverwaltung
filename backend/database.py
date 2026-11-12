@@ -1,6 +1,8 @@
 import re
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from collections.abc import Iterator
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -92,17 +94,26 @@ TABLE_COLUMNS = {
 }
 
 
-def get_connection(database_path: Path = DATABASE_PATH) -> sqlite3.Connection:
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path)
-    connection.execute("PRAGMA foreign_keys = ON")
-    if database_path.stat().st_size == 0:
-        connection.execute("VACUUM")
-    return connection
+@contextmanager
+def get_connection(
+    database_path: Path = DATABASE_PATH, *, create: bool = False,
+) -> Iterator[sqlite3.Connection]:
+    """One transaction per operation; always close, including on rollback."""
+    database_path = Path(database_path)
+    if create:
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+    uri = database_path.resolve().as_uri() + ("?mode=rwc" if create else "?mode=rw")
+    connection = sqlite3.connect(uri, uri=True, timeout=5)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            yield connection
+    finally:
+        connection.close()
 
 
 def initialize_database(database_path: Path = DATABASE_PATH) -> None:
-    with get_connection(database_path) as connection:
+    with get_connection(database_path, create=True) as connection:
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS organizations (
@@ -558,7 +569,7 @@ def get_organization(
     database_path: Path = DATABASE_PATH,
     organization_id: int = 1,
 ) -> dict[str, Any] | None:
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             "SELECT * FROM organizations WHERE id = ?",
@@ -577,7 +588,7 @@ def update_organization(
         return False
 
     assignments = ", ".join(f"{column} = ?" for column in values)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         cursor = connection.execute(
             f"""
             UPDATE organizations
@@ -615,7 +626,7 @@ def create_record(
 
     columns = ", ".join(values)
     placeholders = ", ".join("?" for _ in values)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
             f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
@@ -668,7 +679,7 @@ def get_record(
     database_path: Path = DATABASE_PATH,
 ) -> dict[str, Any] | None:
     _validate_table(table)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             f"SELECT * FROM {table} WHERE id = ?",
@@ -692,7 +703,7 @@ def list_records(
         )
         parameters = tuple(filters.values())
 
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             f"SELECT * FROM {table}{where_clause} ORDER BY id",
@@ -712,7 +723,7 @@ def update_record(
         raise ValueError("Zum Ändern eines Datensatzes sind Werte erforderlich")
 
     assignments = ", ".join(f"{column} = ?" for column in values)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
             f"UPDATE {table} SET {assignments} WHERE id = ?",
@@ -727,7 +738,7 @@ def delete_record(
     database_path: Path = DATABASE_PATH,
 ) -> bool:
     _validate_table(table)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
             f"DELETE FROM {table} WHERE id = ?",
@@ -757,7 +768,7 @@ def create_invoice_with_items(
     item_columns = ", ".join(("invoice_id", *item_fields))
     item_placeholders = ", ".join("?" for _ in range(len(item_fields) + 1))
 
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         existing = connection.execute(
@@ -843,7 +854,7 @@ def delete_final_invoice(
     invoice_id: int,
     database_path: Path = DATABASE_PATH,
 ) -> dict[str, Any] | None:
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         connection.row_factory = sqlite3.Row
@@ -881,7 +892,7 @@ def save_invoice_preview(
     if any(set(item) != set(item_fields) for item in items):
         raise ValueError("Alle Rechnungspositionen müssen dieselben Felder haben")
 
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         existing = connection.execute(
