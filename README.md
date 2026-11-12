@@ -489,3 +489,22 @@ weiterhin die Migrationen 1–6. Es findet keine Neuberechnung alter Rechnungen 
 Ein Stapel von Preis- oder Wochenplanänderungen wird bei Fehlern vollständig
 zurückgerollt. Der Nummernkreis wird weiterhin gemeinsam mit der Finalisierung
 aktualisiert, nicht durch eine getrennte UI-Aktion.
+
+### Übernahme bestehender Daten
+
+Beim Wechsel vom bisherigen Desktop-Stand kann `data/ttc.db` im alten Checkout
+oder unter `resources/app/data/ttc.db` liegen. Diese Daten müssen bei einem neuen
+Benutzerprofil übernommen werden; eine leere Desktop-Datenbank darf einen
+vorhandenen Altbestand nicht unbemerkt ersetzen. Electron meldet dem Backend den
+bisherigen Datenbankpfad. Ist noch keine Zieldatenbank vorhanden, wird eine
+geprüfte SQLite-Kopie übernommen und im Ziel migriert. Existiert das Ziel bereits,
+ist ausschließlich dieses maßgeblich; es gibt keine automatische Zusammenführung.
+
+Die Übernahme lässt die Quelle unverändert. Vorhandene IDs, Einstellungen,
+Nummernkreis, Preis-/Logo-/Rechnungssnapshots und Dateizuordnungen bleiben erhalten.
+Eine beschädigte, fremde oder von einer neueren App erzeugte Datenbank wird
+abgelehnt. Bei Fehlern bleibt das Ziel unveröffentlicht. Alte und neue App vor
+einem bewussten manuellen Import beenden; nicht gleichzeitig an beiden Beständen
+weiterarbeiten. Die Dokumentenablage bleibt bis Phase 3 separat: Der Datenbankimport
+verschiebt oder löscht keine PDFs, und vorhandene Rechnungsdateien müssen weiter
+im bisherigen Rechnungsverzeichnis verfügbar sein.
