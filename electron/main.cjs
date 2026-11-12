@@ -1,9 +1,10 @@
 'use strict';
 
-const { app, dialog } = require('electron');
+const { app, dialog, ipcMain } = require('electron');
 const { getDesktopConfig } = require('./config.cjs');
 const { waitForFrontend } = require('./startup.cjs');
 const { createMainWindow } = require('./window.cjs');
+const { registerAppIPC } = require('./ipc.cjs');
 const { APP_NAME, configureIdentity } = require('./identity.cjs');
 
 configureIdentity(app);
@@ -47,5 +48,7 @@ app.whenReady().then(async () => {
   await waitForFrontend(config);
   if (stopping) return;
   frontendURL = config.url;
+  const disposeIPC = registerAppIPC({ ipcMain, app, getMainWindow: () => mainWindow, getFrontendURL: () => frontendURL });
+  app.once('will-quit', disposeIPC);
   openMainWindow();
 }).catch(fail);

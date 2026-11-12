@@ -12,7 +12,7 @@ function run(file, requireMock, globals = {}) {
   }, { filename: file });
 }
 
-test('preload exposes metadata only, with no IPC or Node API', () => {
+test('preload exposes only metadata and the named version method', () => {
   let exposed;
   run('preload.cjs', (name) => {
     assert.equal(name, 'electron');
@@ -20,7 +20,8 @@ test('preload exposes metadata only, with no IPC or Node API', () => {
   });
   assert.equal(exposed.key, 'ttcDesktop');
   assert.equal(exposed.api.apiVersion, 1);
-  assert.deepEqual(Object.keys(exposed.api), ['apiVersion']);
+  assert.deepEqual(Object.keys(exposed.api), ['apiVersion', 'getVersion']);
+  assert.equal(typeof exposed.api.getVersion, 'function');
   assert.ok(Object.isFrozen(exposed.api));
 });
 
@@ -38,6 +39,7 @@ test('main owns one window, clears closed reference and quits on Windows', async
   const windows = [];
   run('main.cjs', (name) => {
     if (name === 'electron') return { app, dialog: { showErrorBox: () => {} } };
+    if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
     if (name === './identity.cjs') return { APP_NAME: 'TTC Rechnungsverwaltung', configureIdentity: () => {} };
     if (name === './startup.cjs') return { waitForFrontend: async () => {} };
     if (name === './config.cjs') return require('./config.cjs');

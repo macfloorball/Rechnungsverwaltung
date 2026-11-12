@@ -6,7 +6,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "desktop:dev": "node scripts/run.cjs desktop-dev",
-    "desktop:check": "node --check electron/identity.cjs && node --check electron/main.cjs && node --check electron/window.cjs && node --check electron/preload.cjs && node --check electron/startup.cjs && node --check scripts/build_frontend.cjs && node --check scripts/run.cjs && node --test electron/*.test.cjs scripts/*.test.cjs",
+    "desktop:check": "node --check electron/identity.cjs && node --check electron/ipc.cjs && node --check electron/main.cjs && node --check electron/window.cjs && node --check electron/preload.cjs && node --check electron/startup.cjs && node --check scripts/build_frontend.cjs && node --check scripts/run.cjs && node --test electron/*.test.cjs scripts/*.test.cjs",
     "frontend:build": "node scripts/build_frontend.cjs",
     "desktop:start": "node scripts/run.cjs desktop-production",
     "web:start": "node scripts/run.cjs web",
