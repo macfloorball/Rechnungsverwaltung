@@ -239,3 +239,39 @@ the operating-system level, especially on shared machines.
 
 Dependencies are listed in `requirements.txt`; package versions are not
 currently pinned in a lockfile.
+
+## Electron-Grundintegration (Phase 1, Schritt 1)
+
+Zusätzlich zur Python-Umgebung wird Node.js ab 22.12 mit npm benötigt.
+Electron ist als Entwicklungsabhängigkeit mit `package-lock.json` festgelegt:
+
+```bash
+npm ci
+npm run desktop:check
+npm run desktop:dev
+```
+
+Beim ersten Aufruf kann Electron seine plattformspezifische Binärdatei
+herunterladen. Ohne Konfiguration startet die unabhängige lokale Bereitschaftsseite.
+Der bisherige Webstart bleibt unverändert. Für eine technische Ladeprüfung:
+
+```bash
+# Terminal 1: bestehende Webanwendung
+python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+# Terminal 2: Linux/macOS
+TTC_DESKTOP_URL=http://127.0.0.1:8000 npm run desktop:dev
+```
+
+PowerShell (Terminal 2):
+
+```powershell
+$env:TTC_DESKTOP_URL = "http://127.0.0.1:8000"
+npm run desktop:dev
+```
+
+`TTC_DESKTOP_URL` akzeptiert ausschließlich HTTP-Origins mit `127.0.0.1`
+oder `[::1]`, optionalem Port, ohne Pfad, Zugangsdaten oder Queryparameter.
+Es gibt keinen automatisch gestarteten Server und keinen Produktionsbuild.
+Neue Fenster, fremde Navigation und Berechtigungsanfragen sind gesperrt;
+PDF-Popups und Downloads sind noch keine abgenommenen Desktop-Funktionen.
+Details und Prüfergebnisse: [Abschlussbericht](Planung/Phase_1_Schritt_1_Electron.md).
