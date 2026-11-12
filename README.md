@@ -435,3 +435,17 @@ mit ihrer Rechnung. Kalendererzeugung ordnet Wochenplanvorkommen eindeutig zu.
 Preis-, Einstellungs- und Logo-Snapshots erhalten historische Rechnungsdaten.
 PDF-Dateien sind eigenständige Dateien; ihre Erzeugung und SQLite-Transaktionen
 bilden keine gemeinsame atomare Operation.
+
+### Persistenzentscheidung
+
+SQLite bleibt die maßgebliche lokale Datenquelle für Organisation und den einen
+Rechnungsempfänger, Bank-/Steuerdaten, Texte, Nummernkreis und Logos, Tätigkeiten
+mit Preisen, Wochenplan, Termine samt Status und Preissnapshot sowie Entwürfe,
+finale Rechnungen und deren Positions-/Einstellungs-/Logo-Snapshots. Es werden
+keine neue Kundentabelle, Benutzerkonten oder Cloud-Datenhaltung eingeführt.
+Geldbeträge bleiben ganzzahlige Centwerte; optionale Stunden und bestehende IDs,
+Fremdschlüssel und JSON-/BLOB-Snapshots bleiben erhalten.
+
+PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält ihre bisherige
+Dateizuordnung; die Umstellung der Dokumentenablage gehört zur nachfolgenden
+Phase 3. Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
