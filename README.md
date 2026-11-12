@@ -308,3 +308,37 @@ aktiv, Node-Integration bleibt deaktiviert. Fremde Navigation und neue Fenster
 werden blockiert. Es gibt keine benötigten externen Webseiten mit Browserfreigabe;
 unbekannte URLs werden nicht automatisch geöffnet. PDF-Popups bleiben einer
 späteren Desktop-Integration vorbehalten. Native Windows-Abnahme steht noch aus.
+
+## Entpackter Windows-Testbuild
+
+```bash
+npm ci
+npm run desktop:build:win
+```
+
+Ausgabe: `dist/windows/TTC Rechnungsverwaltung-win32-x64/` mit
+`TTC Rechnungsverwaltung.exe`. Der gesamte Ordner gehört zum Testbuild;
+Build-Artefakte sind per `.gitignore` ausgeschlossen. Es gibt noch keinen
+Installer, keine Signatur und keinen automatischen Updateprozess.
+
+**Dieser Testbuild enthält noch keine Python-Laufzeit oder Python-Pakete.**
+Die EXE erwartet den vorhandenen lokalen Server. Zum Testen unter Windows
+zuerst im Ordner `resources/app` eine Python-Umgebung einrichten und den
+Server starten (PowerShell, Python ab 3.10 vorausgesetzt):
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:TTC_FRONTEND_DIRECTORY = "dist/frontend"
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Danach die EXE im Hauptordner starten. Bei abweichendem Port muss
+`TTC_DESKTOP_PRODUCTION_URL` vor dem EXE-Start zur Serveradresse passen.
+Der separat gestartete Server wird durch Schließen der EXE nicht beendet.
+Für den Test einen beschreibbaren Ordner und ausschließlich Testdaten verwenden:
+Die bisherigen Datenpfade bleiben unverändert (`resources/app/data/ttc.db`
+und `resources/app/rechnungen/`). Eine updatefeste lokale Datenablage sowie
+Backend-/Python-Einbettung sind noch nicht Bestandteil dieses Builds.
+Nach Installation der Abhängigkeiten benötigen die vorhandenen Fachfunktionen
+keine externen Dienste, aber weiterhin den laufenden lokalen Server.
