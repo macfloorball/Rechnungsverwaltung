@@ -94,3 +94,50 @@ test('a secondary Electron instance never starts a backend', () => {
   }, { process: proc });
   assert.equal(quit, 1);
 });
+
+for (const scenario of ['startup-failure', 'runtime-failure', 'cleanup-failure', 'forced-cleanup']) {
+  test(`main handles ${scenario} with exactly one backend shutdown and failure exit`, async () => {
+    const app = new EventEmitter();
+    app.requestSingleInstanceLock = () => true;
+    app.isReady = () => true;
+    app.getAppPath = () => __dirname;
+    app.whenReady = async () => {};
+    let shutdowns = 0;
+    let prompts = 0;
+    let onFailure;
+    const exits = [];
+    app.exit = code => exits.push(code);
+    app.quit = () => { app.emit('before-quit', { preventDefault() {} }); };
+    const proc = new EventEmitter();
+    proc.platform = 'win32'; proc.env = {}; proc.argv = [];
+    run('main.cjs', name => {
+      if (name === 'electron') return { app, dialog: { showErrorBox() { prompts++; } } };
+      if (name === './identity.cjs') return { APP_NAME: 'Test', configureIdentity() {} };
+      if (name === './config.cjs') return { getDesktopConfig: () => ({ url: 'http://127.0.0.1:8000/' }) };
+      if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
+      if (name === './window.cjs') return { createMainWindow: () => new EventEmitter() };
+      if (name === './backend.cjs') return { createBackend(options) {
+        onFailure = options.onFailure;
+        return {
+          async start() { if (scenario === 'startup-failure') throw new Error('start failed'); },
+          async stop() {
+            shutdowns++;
+            if (scenario === 'cleanup-failure') throw new Error('cleanup failed');
+            return scenario === 'forced-cleanup';
+          },
+        };
+      } };
+      throw new Error(name);
+    }, { process: proc });
+    await new Promise(setImmediate);
+    if (scenario !== 'startup-failure') {
+      if (scenario === 'runtime-failure') onFailure(new Error('backend failed'));
+      else app.quit();
+      app.quit();
+      await new Promise(setImmediate);
+    }
+    assert.equal(shutdowns, 1);
+    assert.deepEqual(exits, [1]);
+    assert.equal(prompts, ['startup-failure', 'runtime-failure'].includes(scenario) ? 1 : 0);
+  });
+}
