@@ -3,8 +3,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { getFrontendURL } = require('./config.cjs');
 
-test('ohne URL bleibt der Start unabhängig vom Backend', () => {
-  assert.equal(getFrontendURL(undefined), null);
+test('ohne URL wird die zentrale Loopback-Adresse verwendet', () => {
+  assert.equal(getFrontendURL(undefined), 'http://127.0.0.1:8000/');
 });
 test('explizite Loopback-Origins mit frei wählbarem Port', () => {
   assert.equal(getFrontendURL('http://127.0.0.1:8123'), 'http://127.0.0.1:8123/');

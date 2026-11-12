@@ -1,7 +1,8 @@
 'use strict';
 
-const { app } = require('electron');
-const { getFrontendURL } = require('./config.cjs');
+const { app, dialog } = require('electron');
+const { getDesktopConfig } = require('./config.cjs');
+const { waitForFrontend } = require('./startup.cjs');
 const { createMainWindow } = require('./window.cjs');
 
 let mainWindow = null;
@@ -12,6 +13,7 @@ function fail(error) {
   if (stopping) return;
   stopping = true;
   console.error('Electron-Fehler:', error instanceof Error ? error.message : 'Unbekannter Main-Prozessfehler');
+  dialog.showErrorBox('Rechnungsverwaltung – Startfehler', error instanceof Error ? error.message : 'Die Anwendung konnte nicht geladen werden.');
   app.exit(1);
 }
 
@@ -32,11 +34,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 app.on('activate', () => {
-  if (app.isReady()) {
+  if (app.isReady() && frontendURL) {
     try { openMainWindow(); } catch (error) { fail(error); }
   }
 });
-app.whenReady().then(() => {
-  frontendURL = getFrontendURL(process.env.TTC_DESKTOP_URL);
+app.whenReady().then(async () => {
+  const config = getDesktopConfig(process.env, process.argv, app.isPackaged);
+  await waitForFrontend(config);
+  if (stopping) return;
+  frontendURL = config.url;
   openMainWindow();
 }).catch(fail);

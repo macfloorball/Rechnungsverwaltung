@@ -240,50 +240,71 @@ the operating-system level, especially on shared machines.
 Dependencies are listed in `requirements.txt`; package versions are not
 currently pinned in a lockfile.
 
-## Electron-Grundintegration (Phase 1, Schritt 1)
+## Electron: Oberfläche laden
 
-Zusätzlich zur Python-Umgebung wird Node.js ab 22.12 mit npm benötigt.
-Electron ist als Entwicklungsabhängigkeit mit `package-lock.json` festgelegt:
+Node.js ab 22.12 und npm zusätzlich zur bestehenden Python-Umgebung:
 
 ```bash
 npm ci
 npm run desktop:check
-npm run desktop:dev
 ```
 
-Beim ersten Aufruf kann Electron seine plattformspezifische Binärdatei
-herunterladen. Ohne Konfiguration startet die unabhängige lokale Bereitschaftsseite.
-Der bisherige Webstart bleibt unverändert. Für eine technische Ladeprüfung:
+Entwicklung in zwei Terminals (aus dem Repository, Python-Umgebung aktiviert):
 
 ```bash
-# Terminal 1: bestehende Webanwendung
+# Terminal 1: unveränderter Webentwicklungsstart
 python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
-# Terminal 2: Linux/macOS
-TTC_DESKTOP_URL=http://127.0.0.1:8000 npm run desktop:dev
-```
-
-PowerShell (Terminal 2):
-
-```powershell
-$env:TTC_DESKTOP_URL = "http://127.0.0.1:8000"
+# Terminal 2
 npm run desktop:dev
 ```
 
-`TTC_DESKTOP_URL` akzeptiert ausschließlich HTTP-Origins mit `127.0.0.1`
-oder `[::1]`, optionalem Port, ohne Pfad, Zugangsdaten oder Queryparameter.
-Es gibt keinen automatisch gestarteten Server und keinen Produktionsbuild.
-Neue Fenster, fremde Navigation und Berechtigungsanfragen sind gesperrt;
-PDF-Popups und Downloads sind noch keine abgenommenen Desktop-Funktionen.
+Die Webanwendung bleibt unter `http://127.0.0.1:8000` unabhängig im Browser
+nutzbar. Electron wartet bis zu 15 Sekunden auf Oberfläche, Ressourcen und
+`/api/health`, bevor es das Hauptfenster erstellt. Bei fehlendem Server erscheint
+eine verständliche Fehlermeldung. Der Server wird weiterhin separat gestartet.
 
-### Prozessarchitektur (Phase 1, Schritt 2)
+Produktionsausgabe: Da das Frontend natives HTML/CSS/JavaScript verwendet,
+kopiert der Build die Dateien unverändert nach `dist/frontend` und erzeugt eine
+Build-Kennung. Der vorhandene FastAPI-Server liefert diese Dateien und die API
+aus; es wird weder ein Bundler noch ein zusätzlicher Server eingeführt.
 
-`electron/main.cjs` steuert Initialisierung, Lebenszyklus und zentrale
-Fehlerbehandlung. `electron/window.cjs` erstellt und schützt das Hauptfenster.
-Das sandboxfähige `electron/preload.cjs` stellt über `contextBridge` nur
-`window.ttcDesktop.apiVersion` bereit; es gibt noch keine aufrufbaren
-Desktop-Funktionen oder IPC-Kanäle. Das bestehende Frontend bleibt unverändert.
+```bash
+npm run frontend:build
+# Terminal 1: ohne Entwicklungsserver/Auto-Reload
+TTC_FRONTEND_DIRECTORY=dist/frontend python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+# Terminal 2
+npm run desktop:start
+```
 
-Unter Windows/Linux beendet das Schließen des letzten Fensters die App;
-unter macOS kann Aktivieren das Hauptfenster erneut öffnen. Schwere Main-,
-Preload-, Lade- oder Rendererfehler werden auf stderr gemeldet und beenden die
-App mit Exitcode 1. Es erfolgt kein automatischer Neustart.
+PowerShell für den Produktionsserver:
+
+```powershell
+$env:TTC_FRONTEND_DIRECTORY = "dist/frontend"
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+`TTC_FRONTEND_DIRECTORY` wird relativ zum Repository aufgelöst (absolute Pfade
+sind ebenfalls möglich). Ohne diese Variable bleibt `frontend/` der Webstandard.
+Electron kontrolliert im Produktionsmodus, ob der lokale Build existiert und der
+Server dessen Build-Kennung ausliefert. Nach Frontend-Änderungen erneut bauen.
+Ein Installer oder ein vollständiges Produktionspaket wird noch nicht erstellt.
+
+Die Adresse steht zentral in `electron/config.cjs` (Standard: Loopback, Port 8000).
+Für einen abweichenden Serverport in Terminal 2:
+
+```bash
+TTC_DESKTOP_URL=http://127.0.0.1:8123 npm run desktop:dev
+```
+
+PowerShell: `$env:TTC_DESKTOP_URL = "http://127.0.0.1:8123"`, anschließend
+`npm run desktop:dev` oder `npm run desktop:start`. Die Variable akzeptiert nur
+HTTP-Origins mit `127.0.0.1` oder `[::1]`, ohne Pfad, Zugangsdaten oder Query.
+Der Backend-Port muss dazu passen. Es gibt kein clientseitiges Routing;
+Abschnittsanker und Neuladen der Startseite funktionieren über dieselbe Origin.
+
+Main steuert den Lebenszyklus, `window.cjs` schützt das Fenster und Preload
+veröffentlicht nur `ttcDesktop.apiVersion`. Sandbox und Context Isolation bleiben
+aktiv, Node-Integration bleibt deaktiviert. Fremde Navigation und neue Fenster
+werden blockiert. Es gibt keine benötigten externen Webseiten mit Browserfreigabe;
+unbekannte URLs werden nicht automatisch geöffnet. PDF-Popups bleiben einer
+späteren Desktop-Integration vorbehalten. Native Windows-Abnahme steht noch aus.

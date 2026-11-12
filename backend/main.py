@@ -3,6 +3,7 @@ import base64
 import binascii
 import json
 import logging
+import os
 import sqlite3
 import struct
 from contextlib import asynccontextmanager
@@ -1115,6 +1116,9 @@ def get_invoice_pdf(
 
 app.mount(
     "/",
-    StaticFiles(directory=PROJECT_ROOT / "frontend", html=True),
+    StaticFiles(
+        directory=PROJECT_ROOT / os.environ.get("TTC_FRONTEND_DIRECTORY", "frontend"),
+        html=True,
+    ),
     name="frontend",
 )

@@ -34,10 +34,11 @@ test('main owns one window, clears closed reference and quits on Windows', async
   const exits = [];
   app.exit = (code) => exits.push(code);
   const proc = new EventEmitter();
-  proc.platform = 'win32'; proc.env = {};
+  proc.platform = 'win32'; proc.env = {}; proc.argv = [];
   const windows = [];
   run('main.cjs', (name) => {
-    if (name === 'electron') return { app };
+    if (name === 'electron') return { app, dialog: { showErrorBox: () => {} } };
+    if (name === './startup.cjs') return { waitForFrontend: async () => {} };
     if (name === './config.cjs') return require('./config.cjs');
     if (name === './window.cjs') return { createMainWindow: () => {
       const win = new EventEmitter();
