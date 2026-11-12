@@ -37,7 +37,7 @@ async function waitForFrontend(config, { timeoutMs = 15000, intervalMs = 250 } =
     }
   }
   throw new Error(config.mode === 'production'
-    ? 'Lokaler Anwendungsserver oder Frontend-Build nicht erreichbar. Server ohne --reload mit TTC_FRONTEND_DIRECTORY=dist/frontend starten und Adresse prüfen.'
-    : 'Entwicklungsserver oder API nicht erreichbar. Bitte den lokalen Uvicorn-Server starten und TTC_DESKTOP_URL prüfen.');
+    ? 'Lokaler Anwendungsserver oder Frontend-Build nicht erreichbar. Automatischen Backend-Start, Python-Pakete und Produktionsadresse prüfen.'
+    : 'Entwicklungsserver oder API nicht erreichbar. Automatischen Backend-Start, Python-Pakete und TTC_DESKTOP_URL prüfen.');
 }
 module.exports = { waitForFrontend };

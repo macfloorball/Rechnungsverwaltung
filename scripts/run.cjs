@@ -90,8 +90,7 @@ async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}
   return forced;
 }
 
-async function run(mode, { root = ROOT, env = process.env, electronEntry = root } = {}) {
-  const config = launchConfig(mode, env, root);
+function validateFrontend(config) {
   if (!fs.existsSync(path.join(config.frontend, 'index.html'))) {
     throw new Error(config.desktop && config.mode === 'production'
       ? 'Frontend-Build fehlt. Bitte npm run frontend:build ausführen.' : 'Frontend-Einstieg fehlt.');
@@ -99,6 +98,46 @@ async function run(mode, { root = ROOT, env = process.env, electronEntry = root 
   if (config.mode === 'production' && !fs.existsSync(path.join(config.buildDirectory, 'desktop-build.json'))) {
     throw new Error('Frontend-Build ist unvollständig. Bitte npm run frontend:build ausführen.');
   }
+}
+
+function spawnBackend(config, root, env) {
+  const child = spawn(config.python, config.args, {
+    cwd: root, env: { ...env, TTC_FRONTEND_DIRECTORY: config.frontend },
+    stdio: ['pipe', 'inherit', 'inherit'], detached: true, windowsHide: true,
+  });
+  child.managedBackend = true;
+  child.stdin.on('error', () => {});
+  return child;
+}
+
+function runElectron(config, root, env, electronEntry) {
+  const executable = require(path.join(root, 'node_modules', 'electron'));
+  const child = spawn(executable, [electronEntry, ...(config.mode === 'production' ? ['--desktop-production'] : [])], {
+    cwd: root, env, stdio: 'inherit', detached: true,
+  });
+  return new Promise((resolve) => {
+    let timer;
+    const onSignal = () => {
+      child.kill('SIGTERM');
+      timer ??= setTimeout(() => stopTree(child).catch(() => {}).finally(() => resolve(1)), 25000);
+    };
+    const finish = (code) => {
+      clearTimeout(timer);
+      process.removeListener('SIGINT', onSignal);
+      process.removeListener('SIGTERM', onSignal);
+      resolve(code);
+    };
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
+    child.once('error', () => { console.error('Electron konnte nicht gestartet werden.'); finish(1); });
+    child.once('exit', (code) => finish(code ?? 1));
+  });
+}
+
+async function run(mode, { root = ROOT, env = process.env, electronEntry = root } = {}) {
+  const config = launchConfig(mode, env, root);
+  if (config.desktop) return runElectron(config, root, env, electronEntry);
+  validateFrontend(config);
   await checkPort(config.url);
   const children = [];
   let stopping = false;
@@ -119,41 +158,26 @@ async function run(mode, { root = ROOT, env = process.env, electronEntry = root 
   const signals = ['SIGINT', 'SIGTERM'];
   const onSignal = () => { shutdown(0).catch(() => finish(1)); };
   signals.forEach((name) => process.on(name, onSignal));
-  function start(command, args, label) {
-    const child = spawn(command, args, { cwd: root, env: {
-      ...env,
-      TTC_FRONTEND_DIRECTORY: config.frontend,
-      // Each managed child receives an explicit, mode-specific address.
-      TTC_DESKTOP_URL: config.url,
-      TTC_DESKTOP_PRODUCTION_URL: config.url,
-    }, stdio: [label === 'Anwendungsserver' ? 'pipe' : 'inherit', 'inherit', 'inherit'], detached: true, windowsHide: false });
-    child.managedBackend = label === 'Anwendungsserver';
-    child.stdin?.on('error', () => {});
+  function startServer() {
+    const child = spawnBackend(config, root, env);
     children.push(child);
     child.once('error', () => {
-      console.error(`${label} konnte nicht gestartet werden. Python-Pfad (TTC_PYTHON), Installation und Abhängigkeiten prüfen.`);
+      console.error('Anwendungsserver konnte nicht gestartet werden. Python-Pfad (TTC_PYTHON), Installation und Abhängigkeiten prüfen.');
       shutdown(1).catch(() => finish(1));
     });
     child.once('exit', (code, signal) => {
       if (stopping) return;
-      if (label === 'Electron' && code === 0 && !signal) shutdown(0).catch(() => finish(1));
-      else {
-        console.error(`${label} unerwartet beendet (Code ${code ?? signal}).`);
-        shutdown(1).catch(() => finish(1));
-      }
+      console.error(`Anwendungsserver unerwartet beendet (Code ${code ?? signal}).`);
+      shutdown(1).catch(() => finish(1));
     });
   }
   try {
     console.log(`Start: ${mode} – ${config.url}`);
-    start(config.python, config.args, 'Anwendungsserver');
+    startServer();
     const ready = waitForFrontend(config).then(() => 'ready');
     const status = await Promise.race([ready, finished.then(() => 'stopped')]);
     if (status === 'ready' && !stopping) {
       console.log('Anwendungsserver und Frontend bereit.');
-      if (config.desktop) {
-        const electron = require(path.join(root, 'node_modules', 'electron'));
-        start(electron, [electronEntry, ...(config.mode === 'production' ? ['--desktop-production'] : [])], 'Electron');
-      }
     }
   } catch (error) {
     console.error(error.message);
@@ -167,4 +191,4 @@ async function run(mode, { root = ROOT, env = process.env, electronEntry = root 
 if (require.main === module) run(process.argv[2]).then((code) => process.exit(code)).catch((error) => {
   console.error(error.message); process.exitCode = 1;
 });
-module.exports = { launchConfig, checkPort, stopTree, run };
+module.exports = { launchConfig, checkPort, stopTree, validateFrontend, spawnBackend, run };

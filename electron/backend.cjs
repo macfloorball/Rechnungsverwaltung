@@ -1,0 +1,54 @@
+'use strict';
+const path = require('node:path');
+const fs = require('node:fs');
+const { launchConfig, validateFrontend, checkPort, spawnBackend, stopTree } = require('../scripts/run.cjs');
+const { waitForFrontend } = require('./startup.cjs');
+
+function createBackend({ config, root, env, onFailure }) {
+  const launch = launchConfig(config.mode === 'production' ? 'desktop-production' : 'desktop-dev', {
+    ...env, TTC_DESKTOP_URL: config.url, TTC_DESKTOP_PRODUCTION_URL: config.url,
+  }, root);
+  let child;
+  let starting;
+  let stopping = false;
+  let shutdown;
+  let ready = false;
+  return {
+    start() {
+      starting ??= (async () => {
+        validateFrontend(launch);
+        if (!fs.existsSync(path.join(root, 'scripts', 'managed_server.py'))) {
+          throw new Error('Backend-Startdateien fehlen. Dieser Build muss mit den Backend-Dateien paketiert werden.');
+        }
+        await checkPort(launch.url);
+        if (stopping) return;
+        child = spawnBackend(launch, root, env);
+        const failed = new Promise((_resolve, reject) => {
+          function failure(message) {
+            if (stopping) return;
+            const error = new Error(message);
+            if (ready) onFailure(error);
+            reject(error);
+          }
+          child.once('error', () => failure('Backend konnte nicht gestartet werden. Python-Pfad (TTC_PYTHON) und installierte Python-Pakete prüfen.'));
+          child.once('exit', () => failure('Der lokale Anwendungsserver wurde unerwartet beendet. Python-Pakete und Backend-Fehlerausgabe prüfen.'));
+        });
+        await Promise.race([waitForFrontend(launch), failed]);
+        if (!stopping) ready = true;
+      })();
+      return starting;
+    },
+    stop() {
+      if (!shutdown) {
+        stopping = true;
+        shutdown = (async () => {
+          // A quit during the port check must not race a late backend spawn.
+          if (!child) return false;
+          return stopTree(child);
+        })();
+      }
+      return shutdown;
+    },
+  };
+}
+module.exports = { createBackend };

@@ -30,8 +30,15 @@ test('main owns one window, clears closed reference and quits on Windows', async
   let ready;
   app.whenReady = () => new Promise((resolve) => { ready = resolve; });
   app.isReady = () => true;
+  app.requestSingleInstanceLock = () => true;
+  app.getAppPath = () => __dirname;
   let quit = 0;
-  app.quit = () => { quit++; };
+  app.quit = () => {
+    let prevented=false;
+    app.emit('before-quit',{preventDefault(){prevented=true;}});
+    if (!prevented) quit++;
+  };
+  let backendStarts=0;let backendStops=0;
   const exits = [];
   app.exit = (code) => exits.push(code);
   const proc = new EventEmitter();
@@ -41,7 +48,7 @@ test('main owns one window, clears closed reference and quits on Windows', async
     if (name === 'electron') return { app, dialog: { showErrorBox: () => {} } };
     if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
     if (name === './identity.cjs') return { APP_NAME: 'TTC Rechnungsverwaltung', configureIdentity: () => {} };
-    if (name === './startup.cjs') return { waitForFrontend: async () => {} };
+    if (name === './backend.cjs') return { createBackend: () => ({start:async()=>{backendStarts++;},stop:async()=>{backendStops++;return false;}}) };
     if (name === './config.cjs') return require('./config.cjs');
     if (name === './window.cjs') return { createMainWindow: () => {
       const win = new EventEmitter();
@@ -62,9 +69,28 @@ test('main owns one window, clears closed reference and quits on Windows', async
   assert.ok(windows[0].restored);
   windows[0].emit('closed'); app.emit('activate');
   assert.equal(windows.length, 2);
-  app.emit('window-all-closed'); assert.equal(quit, 1);
+  app.emit('window-all-closed');
+  app.quit();
+  await new Promise(setImmediate);
+  assert.equal(quit, 1);
+  assert.equal(backendStarts,1);assert.equal(backendStops,1);
   proc.emit('unhandledRejection', new Error('test failure'));
-  assert.deepEqual(exits, [1]);
+  assert.deepEqual(exits, []);
   proc.emit('uncaughtException', new Error('second failure'));
-  assert.deepEqual(exits, [1]);
+  assert.deepEqual(exits, []);
+});
+
+test('a secondary Electron instance never starts a backend', () => {
+  const app = new EventEmitter();
+  let quit = 0;
+  app.requestSingleInstanceLock = () => false;
+  app.quit = () => { quit++; };
+  const proc = new EventEmitter();
+  run('main.cjs', (name) => {
+    if (name === 'electron') return { app };
+    if (name === './identity.cjs') return { configureIdentity() {}, APP_NAME: 'Test' };
+    if (name === './backend.cjs') return { createBackend() { throw Error('secondary instance must not start backend'); } };
+    return {};
+  }, { process: proc });
+  assert.equal(quit, 1);
 });

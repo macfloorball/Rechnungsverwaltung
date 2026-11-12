@@ -2,23 +2,45 @@
 
 const { app, dialog, ipcMain } = require('electron');
 const { getDesktopConfig } = require('./config.cjs');
-const { waitForFrontend } = require('./startup.cjs');
+const { createBackend } = require('./backend.cjs');
 const { createMainWindow } = require('./window.cjs');
 const { registerAppIPC } = require('./ipc.cjs');
 const { APP_NAME, configureIdentity } = require('./identity.cjs');
 
 configureIdentity(app);
-
+const primaryInstance = app.requestSingleInstanceLock();
 let mainWindow = null;
 let frontendURL;
+let backend;
 let stopping = false;
+let shutdownComplete = false;
+let shutdownPromise;
+let exitCode = 0;
+
+function shutdown() {
+  if (!shutdownPromise) {
+    stopping = true;
+    shutdownPromise = Promise.resolve().then(() => backend?.stop()).then((forced) => {
+      if (forced) exitCode = 1;
+    }).catch(() => {
+      exitCode = 1;
+      console.error('Eigener Backend-Prozess konnte nicht kontrolliert beendet werden.');
+    }).then(() => {
+      shutdownComplete = true;
+      if (exitCode) app.exit(exitCode);
+      else app.quit();
+    });
+  }
+  return shutdownPromise;
+}
 
 function fail(error) {
   if (stopping) return;
-  stopping = true;
-  console.error('Electron-Fehler:', error instanceof Error ? error.message : 'Unbekannter Main-Prozessfehler');
-  dialog.showErrorBox(`${APP_NAME} – Startfehler`, error instanceof Error ? error.message : 'Die Anwendung konnte nicht geladen werden.');
-  app.exit(1);
+  exitCode = 1;
+  const message = error instanceof Error ? error.message : 'Die Anwendung konnte nicht geladen werden.';
+  console.error('Electron-Fehler:', message);
+  dialog.showErrorBox(`${APP_NAME} – Startfehler`, message);
+  shutdown();
 }
 
 function openMainWindow() {
@@ -34,7 +56,14 @@ function openMainWindow() {
 
 process.on('uncaughtException', fail);
 process.on('unhandledRejection', fail);
-app.on('before-quit', () => { stopping = true; });
+process.on('SIGINT', () => app.quit());
+process.on('SIGTERM', () => app.quit());
+app.on('before-quit', (event) => {
+  if (!shutdownComplete && primaryInstance) {
+    event.preventDefault();
+    shutdown();
+  }
+});
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
@@ -43,9 +72,15 @@ app.on('activate', () => {
     try { openMainWindow(); } catch (error) { fail(error); }
   }
 });
-app.whenReady().then(async () => {
+app.on('second-instance', () => {
+  if (frontendURL) openMainWindow();
+});
+
+if (!primaryInstance) app.quit();
+else app.whenReady().then(async () => {
   const config = getDesktopConfig(process.env, process.argv, app.isPackaged);
-  await waitForFrontend(config);
+  backend = createBackend({ config, root: app.getAppPath(), env: process.env, onFailure: fail });
+  await backend.start();
   if (stopping) return;
   frontendURL = config.url;
   const disposeIPC = registerAppIPC({ ipcMain, app, getMainWindow: () => mainWindow, getFrontendURL: () => frontendURL });

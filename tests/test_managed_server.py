@@ -13,7 +13,8 @@ import pytest
 
 
 @pytest.mark.parametrize("reload", [False, True])
-def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool):
+@pytest.mark.parametrize("control", ["command", "eof"])
+def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control: str):
     (tmp_path / "sample_app.py").write_text(
         'import asyncio\nfrom pathlib import Path\nfrom fastapi import FastAPI\n'
         'app = FastAPI()\n'
@@ -59,7 +60,8 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool):
                 while not (tmp_path / "started").exists():
                     assert time.monotonic() < deadline
                     time.sleep(0.01)
-                process.stdin.write(b"shutdown\n")
+                if control == "command":
+                    process.stdin.write(b"shutdown\n")
                 process.stdin.close()
                 assert response.result() == 200
             assert process.wait(timeout=10) == 0
