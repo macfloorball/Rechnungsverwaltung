@@ -473,3 +473,19 @@ Zur Rückkehr App und Backend vollständig beenden, den aktuellen Bestand samt
 SQLite-Begleitdateien separat sichern und eine passende Kopie mit der dazugehörigen
 älteren App-Version verwenden. Keine SQLite-Dateien während des Betriebs ersetzen.
 Diese Kopien enthalten keine PDFs und ersetzen kein vollständiges Backup.
+
+### Modell- und API-Kompatibilität
+
+`backend/models.py` bleibt das Eingabemodell der REST-API. Die Datenzugriffsschicht
+nimmt einfache Python-Werte entgegen und kennt weder FastAPI noch Electron oder
+die Oberfläche. Die API übersetzt fehlende Datensätze in HTTP 404, ungültige
+Stapeloperationen in 422 und verletzte Datenbankregeln in 409. SQL liegt zentral
+in `backend/database.py`; der PDF-Renderer erhält weiterhin fertige Rechnungswerte.
+
+Der Pfadwechsel benötigt keine neue fachliche Tabelle und keine zusätzliche
+Schemaversion: Schema 6, bestehende IDs, optionale Stunden, Statuswerte,
+Wochenplanzuordnung und Snapshots bleiben kompatibel. Alte Datenbanken durchlaufen
+weiterhin die Migrationen 1–6. Es findet keine Neuberechnung alter Rechnungen statt.
+Ein Stapel von Preis- oder Wochenplanänderungen wird bei Fehlern vollständig
+zurückgerollt. Der Nummernkreis wird weiterhin gemeinsam mit der Finalisierung
+aktualisiert, nicht durch eine getrennte UI-Aktion.
