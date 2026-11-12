@@ -324,3 +324,20 @@ def test_upgrade_creates_recovery_copy_and_is_idempotent(database_path):
         assert connection.execute("SELECT name FROM activity_types").fetchone() == ('Keep',)
     initialize_database(database_path)
     assert list(database_path.parent.glob("*.before-migration-*.sqlite3")) == copies
+
+
+def test_repository_batch_errors_roll_back_all_changes(database_path):
+    from backend.database import RecordNotFoundError, InvalidRecordError, save_activities, save_weekly_plan
+
+    with pytest.raises(RecordNotFoundError):
+        save_activities([
+            {"id": None, "name": "Rollback", "hourly_rate_cents": 100, "is_active": True},
+            {"id": 9999, "name": "Missing", "hourly_rate_cents": 100, "is_active": True},
+        ], database_path)
+    assert list_records("activity_types", database_path=database_path) == []
+    activity_id = create_record("activity_types", {"name": "Training", "hourly_rate_cents": 100}, database_path)
+    plan_id = create_record("weekly_plan", {"weekday": 1, "activity_type_id": activity_id, "hours": 1}, database_path)
+    entry = {"id": plan_id, "weekday": 2, "activity_type_id": activity_id, "hours": 2, "is_active": True}
+    with pytest.raises(InvalidRecordError):
+        save_weekly_plan([entry, entry], database_path)
+    assert get_record("weekly_plan", plan_id, database_path)["hours"] == 1

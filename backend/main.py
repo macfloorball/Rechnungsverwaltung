@@ -19,7 +19,12 @@ from fastapi.staticfiles import StaticFiles
 from backend.paths import get_database_path as resolve_database_path
 
 from backend.database import (
-    get_connection,
+    save_activities,
+    save_weekly_plan,
+    ensure_weekly_plan_month,
+    complete_planned_month,
+    RecordNotFoundError,
+    InvalidRecordError,
     PROJECT_ROOT,
     InvoiceAlreadyExistsError,
     InvoicePreviewDeletionError,
@@ -178,6 +183,16 @@ async def handle_integrity_error(_, _error: sqlite3.IntegrityError) -> JSONRespo
     )
 
 
+@app.exception_handler(RecordNotFoundError)
+async def handle_record_not_found(_, error: RecordNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(error)})
+
+
+@app.exception_handler(InvalidRecordError)
+async def handle_invalid_record(_, error: InvalidRecordError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": str(error)})
+
+
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
@@ -283,43 +298,7 @@ def put_settings(
             detail="Es können höchstens vier Tätigkeitsarten verwaltet werden",
         )
 
-    with get_connection(database_path) as connection:
-        for activity in payload.activities:
-            if activity.id is None:
-                connection.execute(
-                    """
-                    INSERT INTO activity_types (name, hourly_rate_cents, is_active)
-                    VALUES (?, ?, ?)
-                    """,
-                    (
-                        activity.name,
-                        activity.hourly_rate_cents,
-                        activity.is_active,
-                    ),
-                )
-            else:
-                exists = connection.execute(
-                    "SELECT 1 FROM activity_types WHERE id = ?",
-                    (activity.id,),
-                ).fetchone()
-                if exists is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Tätigkeitsart {activity.id} wurde nicht gefunden",
-                    )
-                connection.execute(
-                    """
-                    UPDATE activity_types
-                    SET name = ?, hourly_rate_cents = ?, is_active = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        activity.name,
-                        activity.hourly_rate_cents,
-                        activity.is_active,
-                        activity.id,
-                    ),
-                )
+    save_activities([activity.model_dump() for activity in payload.activities], database_path)
     return get_settings(database_path)
 
 
@@ -328,184 +307,12 @@ def get_weekly_plan(database_path: DatabasePath) -> list[dict[str, Any]]:
     return list_records("weekly_plan", database_path=database_path)
 
 
-def _ensure_weekly_plan_occurrences(
-    connection: sqlite3.Connection,
-    month_start: date,
-) -> None:
-    plan_entries = connection.execute(
-        """
-        SELECT weekly_plan.id, weekly_plan.organization_id, weekly_plan.weekday,
-               weekly_plan.activity_type_id, weekly_plan.hours,
-               activity_types.hourly_rate_cents
-        FROM weekly_plan
-        JOIN activity_types
-          ON activity_types.id = weekly_plan.activity_type_id
-         AND activity_types.organization_id = weekly_plan.organization_id
-        WHERE weekly_plan.organization_id = 1
-          AND weekly_plan.is_active = 1
-          AND activity_types.is_active = 1
-        ORDER BY weekly_plan.id
-        """
-    ).fetchall()
-    days_in_month = calendar.monthrange(month_start.year, month_start.month)[1]
-
-    for day_number in range(1, days_in_month + 1):
-        current_date = date(month_start.year, month_start.month, day_number)
-        date_string = current_date.isoformat()
-        matching_entries: dict[int, list[tuple[int, int, float, int]]] = {}
-        for entry in plan_entries:
-            if entry[2] == current_date.weekday():
-                matching_entries.setdefault(entry[3], []).append(
-                    (entry[0], entry[1], entry[4], entry[5])
-                )
-
-        for activity_type_id, entries in matching_entries.items():
-            existing_trainings = list(connection.execute(
-                """
-                SELECT id, weekly_plan_id
-                FROM trainings
-                WHERE organization_id = 1
-                  AND training_date = ?
-                  AND activity_type_id = ?
-                ORDER BY id
-                """,
-                (date_string, activity_type_id),
-            ).fetchall())
-            used_training_ids: set[int] = set()
-
-            for plan_id, organization_id, hours, unit_rate_cents in entries:
-                occurrence = connection.execute(
-                    """
-                    SELECT id
-                    FROM trainings
-                    WHERE weekly_plan_id = ? AND weekly_plan_date = ?
-                    """,
-                    (plan_id, date_string),
-                ).fetchone()
-                if occurrence is not None:
-                    used_training_ids.add(occurrence[0])
-                    continue
-
-                existing = next(
-                    (
-                        training
-                        for training in existing_trainings
-                        if training[0] not in used_training_ids
-                    ),
-                    None,
-                )
-                if existing is not None:
-                    used_training_ids.add(existing[0])
-                    if existing[1] is None:
-                        connection.execute(
-                            """
-                            UPDATE trainings
-                            SET weekly_plan_id = ?, weekly_plan_date = ?
-                            WHERE id = ? AND weekly_plan_id IS NULL
-                            """,
-                            (plan_id, date_string, existing[0]),
-                        )
-                    continue
-
-                cursor = connection.execute(
-                    """
-                    INSERT INTO trainings (
-                        organization_id, training_date, weekly_plan_id,
-                        weekly_plan_date, activity_type_id, hours, status,
-                        note, unit_rate_cents, weekly_plan_generated
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?, 1)
-                    """,
-                    (
-                        organization_id,
-                        date_string,
-                        plan_id,
-                        date_string,
-                        activity_type_id,
-                        hours,
-                        unit_rate_cents,
-                    ),
-                )
-                used_training_ids.add(cursor.lastrowid)
-                existing_trainings.append((cursor.lastrowid, plan_id))
-
-
 @app.put("/api/weekly-plan")
 def put_weekly_plan(
     entries: list[WeeklyPlanEntry],
     database_path: DatabasePath,
 ) -> list[dict[str, Any]]:
-    with get_connection(database_path) as connection:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        existing_entries = {
-            row[0]: row
-            for row in connection.execute(
-                """
-                SELECT id, weekday, activity_type_id, hours, is_active
-                FROM weekly_plan
-                WHERE organization_id = 1
-                """
-            ).fetchall()
-        }
-        retained_ids: set[int] = set()
-        requested_ids: set[int] = set()
-        for entry in entries:
-            if entry.id is not None:
-                if entry.id in requested_ids:
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail="Ein Planeintrag wurde mehrfach übermittelt",
-                    )
-                if entry.id not in existing_entries:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Planeintrag wurde nicht gefunden",
-                    )
-                requested_ids.add(entry.id)
-                connection.execute(
-                    """
-                    UPDATE weekly_plan
-                    SET weekday = ?, activity_type_id = ?, hours = ?, is_active = ?
-                    WHERE id = ? AND organization_id = 1
-                    """,
-                    (
-                        entry.weekday,
-                        entry.activity_type_id,
-                        entry.hours,
-                        entry.is_active,
-                        entry.id,
-                    ),
-                )
-                retained_ids.add(entry.id)
-                continue
-
-            cursor = connection.execute(
-                """
-                INSERT INTO weekly_plan (
-                    organization_id, weekday, activity_type_id, hours, is_active
-                ) VALUES (1, ?, ?, ?, ?)
-                """,
-                (
-                    entry.weekday,
-                    entry.activity_type_id,
-                    entry.hours,
-                    entry.is_active,
-                ),
-            )
-            retained_ids.add(cursor.lastrowid)
-
-        for plan_id in existing_entries.keys() - retained_ids:
-            connection.execute("DELETE FROM weekly_plan WHERE id = ?", (plan_id,))
-
-        current_month = date.today().replace(day=1)
-        following_month_index = current_month.year * 12 + current_month.month
-        following_month = date(
-            following_month_index // 12,
-            following_month_index % 12 + 1,
-            1,
-        )
-        _ensure_weekly_plan_occurrences(connection, current_month)
-        _ensure_weekly_plan_occurrences(connection, following_month)
+    save_weekly_plan([entry.model_dump() for entry in entries], database_path)
     return get_weekly_plan(database_path)
 
 
@@ -524,10 +331,7 @@ def get_calendar(
     last_day = calendar.monthrange(year, month)[1]
     month_start = date(year, month, 1)
     if month_start >= date.today().replace(day=1):
-        with get_connection(database_path) as connection:
-            connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("BEGIN IMMEDIATE")
-            _ensure_weekly_plan_occurrences(connection, month_start)
+        ensure_weekly_plan_month(month_start, database_path)
     trainings = list_records("trainings", database_path=database_path)
     activities = {
         activity["id"]: activity
@@ -565,26 +369,7 @@ def complete_calendar_month(
             detail="Jahr oder Monat liegt außerhalb des gültigen Bereichs",
         )
 
-    month_start = date(year, month, 1).isoformat()
-    month_end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
-    with get_connection(database_path) as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        result = connection.execute(
-            """
-            UPDATE trainings
-            SET status = 'completed'
-            WHERE organization_id = 1
-              AND training_date BETWEEN ? AND ?
-              AND status = 'planned'
-              AND weekly_plan_id IS NOT NULL
-              AND weekly_plan_generated = 1
-              AND weekly_plan_date = training_date
-            """,
-            (month_start, month_end),
-        )
-        updated_count = result.rowcount
-
-    return {"updated_count": updated_count}
+    return {"updated_count": complete_planned_month(year, month, database_path)}
 
 
 @app.post("/api/trainings", status_code=status.HTTP_201_CREATED)

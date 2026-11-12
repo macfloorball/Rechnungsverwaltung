@@ -1,3 +1,5 @@
+import calendar
+from datetime import date
 import re
 import sqlite3
 import tempfile
@@ -1021,3 +1023,246 @@ def get_invoice(
         database_path,
     )
     return invoice
+
+class RecordNotFoundError(ValueError):
+    """A requested record no longer exists."""
+
+
+class InvalidRecordError(ValueError):
+    """An invalid batch must be rolled back as a whole."""
+
+
+def save_activities(activities: list[dict[str, Any]], database_path: Path) -> None:
+    with get_connection(database_path) as connection:
+        for activity in activities:
+            if activity["id"] is None:
+                connection.execute(
+                    """
+                    INSERT INTO activity_types (name, hourly_rate_cents, is_active)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        activity["name"],
+                        activity["hourly_rate_cents"],
+                        activity["is_active"],
+                    ),
+                )
+            else:
+                exists = connection.execute(
+                    "SELECT 1 FROM activity_types WHERE id = ?",
+                    (activity["id"],),
+                ).fetchone()
+                if exists is None:
+                    raise RecordNotFoundError("Tätigkeitsart wurde nicht gefunden")
+                connection.execute(
+                    """
+                    UPDATE activity_types
+                    SET name = ?, hourly_rate_cents = ?, is_active = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        activity["name"],
+                        activity["hourly_rate_cents"],
+                        activity["is_active"],
+                        activity["id"],
+                    ),
+                )
+
+
+def _ensure_weekly_plan_occurrences(
+    connection: sqlite3.Connection,
+    month_start: date,
+) -> None:
+    plan_entries = connection.execute(
+        """
+        SELECT weekly_plan.id, weekly_plan.organization_id, weekly_plan.weekday,
+               weekly_plan.activity_type_id, weekly_plan.hours,
+               activity_types.hourly_rate_cents
+        FROM weekly_plan
+        JOIN activity_types
+          ON activity_types.id = weekly_plan.activity_type_id
+         AND activity_types.organization_id = weekly_plan.organization_id
+        WHERE weekly_plan.organization_id = 1
+          AND weekly_plan.is_active = 1
+          AND activity_types.is_active = 1
+        ORDER BY weekly_plan.id
+        """
+    ).fetchall()
+    days_in_month = calendar.monthrange(month_start.year, month_start.month)[1]
+
+    for day_number in range(1, days_in_month + 1):
+        current_date = date(month_start.year, month_start.month, day_number)
+        date_string = current_date.isoformat()
+        matching_entries: dict[int, list[tuple[int, int, float, int]]] = {}
+        for entry in plan_entries:
+            if entry[2] == current_date.weekday():
+                matching_entries.setdefault(entry[3], []).append(
+                    (entry[0], entry[1], entry[4], entry[5])
+                )
+
+        for activity_type_id, entries in matching_entries.items():
+            existing_trainings = list(connection.execute(
+                """
+                SELECT id, weekly_plan_id
+                FROM trainings
+                WHERE organization_id = 1
+                  AND training_date = ?
+                  AND activity_type_id = ?
+                ORDER BY id
+                """,
+                (date_string, activity_type_id),
+            ).fetchall())
+            used_training_ids: set[int] = set()
+
+            for plan_id, organization_id, hours, unit_rate_cents in entries:
+                occurrence = connection.execute(
+                    """
+                    SELECT id
+                    FROM trainings
+                    WHERE weekly_plan_id = ? AND weekly_plan_date = ?
+                    """,
+                    (plan_id, date_string),
+                ).fetchone()
+                if occurrence is not None:
+                    used_training_ids.add(occurrence[0])
+                    continue
+
+                existing = next(
+                    (
+                        training
+                        for training in existing_trainings
+                        if training[0] not in used_training_ids
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    used_training_ids.add(existing[0])
+                    if existing[1] is None:
+                        connection.execute(
+                            """
+                            UPDATE trainings
+                            SET weekly_plan_id = ?, weekly_plan_date = ?
+                            WHERE id = ? AND weekly_plan_id IS NULL
+                            """,
+                            (plan_id, date_string, existing[0]),
+                        )
+                    continue
+
+                cursor = connection.execute(
+                    """
+                    INSERT INTO trainings (
+                        organization_id, training_date, weekly_plan_id,
+                        weekly_plan_date, activity_type_id, hours, status,
+                        note, unit_rate_cents, weekly_plan_generated
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?, 1)
+                    """,
+                    (
+                        organization_id,
+                        date_string,
+                        plan_id,
+                        date_string,
+                        activity_type_id,
+                        hours,
+                        unit_rate_cents,
+                    ),
+                )
+                used_training_ids.add(cursor.lastrowid)
+                existing_trainings.append((cursor.lastrowid, plan_id))
+
+
+def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None:
+    with get_connection(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("BEGIN IMMEDIATE")
+        existing_entries = {
+            row[0]: row
+            for row in connection.execute(
+                """
+                SELECT id, weekday, activity_type_id, hours, is_active
+                FROM weekly_plan
+                WHERE organization_id = 1
+                """
+            ).fetchall()
+        }
+        retained_ids: set[int] = set()
+        requested_ids: set[int] = set()
+        for entry in entries:
+            if entry["id"] is not None:
+                if entry["id"] in requested_ids:
+                    raise InvalidRecordError("Ein Planeintrag wurde mehrfach übermittelt")
+                if entry["id"] not in existing_entries:
+                    raise RecordNotFoundError("Planeintrag wurde nicht gefunden")
+                requested_ids.add(entry["id"])
+                connection.execute(
+                    """
+                    UPDATE weekly_plan
+                    SET weekday = ?, activity_type_id = ?, hours = ?, is_active = ?
+                    WHERE id = ? AND organization_id = 1
+                    """,
+                    (
+                        entry["weekday"],
+                        entry["activity_type_id"],
+                        entry["hours"],
+                        entry["is_active"],
+                        entry["id"],
+                    ),
+                )
+                retained_ids.add(entry["id"])
+                continue
+
+            cursor = connection.execute(
+                """
+                INSERT INTO weekly_plan (
+                    organization_id, weekday, activity_type_id, hours, is_active
+                ) VALUES (1, ?, ?, ?, ?)
+                """,
+                (
+                    entry["weekday"],
+                    entry["activity_type_id"],
+                    entry["hours"],
+                    entry["is_active"],
+                ),
+            )
+            retained_ids.add(cursor.lastrowid)
+
+        for plan_id in existing_entries.keys() - retained_ids:
+            connection.execute("DELETE FROM weekly_plan WHERE id = ?", (plan_id,))
+
+        current_month = date.today().replace(day=1)
+        following_month_index = current_month.year * 12 + current_month.month
+        following_month = date(
+            following_month_index // 12,
+            following_month_index % 12 + 1,
+            1,
+        )
+        _ensure_weekly_plan_occurrences(connection, current_month)
+        _ensure_weekly_plan_occurrences(connection, following_month)
+
+
+def ensure_weekly_plan_month(month_start: date, database_path: Path) -> None:
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        _ensure_weekly_plan_occurrences(connection, month_start)
+
+
+def complete_planned_month(year: int, month: int, database_path: Path) -> int:
+    month_start = date(year, month, 1).isoformat()
+    month_end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        result = connection.execute(
+            """
+            UPDATE trainings
+            SET status = 'completed'
+            WHERE organization_id = 1
+              AND training_date BETWEEN ? AND ?
+              AND status = 'planned'
+              AND weekly_plan_id IS NOT NULL
+              AND weekly_plan_generated = 1
+              AND weekly_plan_date = training_date
+            """,
+            (month_start, month_end),
+        )
+        updated_count = result.rowcount
+
+    return updated_count
