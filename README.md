@@ -524,3 +524,19 @@ löschen, bevor Datenbank und Dokumente gesichert beziehungsweise übernommen si
 Der Import verwendet SQLite-Backup einschließlich bestätigter WAL-Daten,
 migriert eine temporäre Kopie und veröffentlicht sie atomar ohne Überschreiben.
 Dateisysteme ohne Hardlink-Unterstützung werden sicher mit einem Fehler abgelehnt.
+
+### Datenbankfehler
+
+Ein neues Profil wird beim ersten Start initialisiert. Eine während des Betriebs
+fehlende Datenbank wird hingegen nicht still neu angelegt. Leere, beschädigte,
+fremde oder nicht unterstützte Datenbanken führen zu einem Startfehler; sie
+werden nicht automatisch gelöscht oder ersetzt. Gesperrte Datenbanken haben
+eine begrenzte Wartezeit von fünf Sekunden. Andere Instanzen beenden und den
+Vorgang erneut versuchen. Bei Zugriffsfehlern Datenverzeichnis, Berechtigungen
+und freien Speicher prüfen; bei Beschädigung Originaldateien erhalten und eine
+Sicherung verwenden. Keine Reparatur am einzigen Original durchführen.
+
+Die lokale API meldet nicht verfügbare Datenbanken mit HTTP 503 und einer
+Handlungsanweisung ohne SQL oder personenbezogene Inhalte. Electron zeigt beim
+fehlgeschlagenen Backend-Start eine entsprechende feste Meldung. Schemafehler
+erfordern eine passende App-Version, keinen automatischen Datenbank-Reset.

@@ -341,3 +341,43 @@ def test_repository_batch_errors_roll_back_all_changes(database_path):
     with pytest.raises(InvalidRecordError):
         save_weekly_plan([entry, entry], database_path)
     assert get_record("weekly_plan", plan_id, database_path)["hours"] == 1
+
+
+@pytest.mark.parametrize("kind", ["empty", "corrupt", "directory", "readonly", "symlink"])
+def test_invalid_database_is_preserved_and_error_is_actionable(tmp_path, kind):
+    from backend.storage_errors import DatabaseAccessError
+
+    path = tmp_path / "database.db"
+    if kind == "directory":
+        path.mkdir()
+    elif kind == "symlink":
+        original = tmp_path / "original.db"
+        initialize_database(original)
+        path.symlink_to(original)
+    elif kind == "readonly":
+        initialize_database(path)
+        path.chmod(0o400)
+    else:
+        path.write_bytes(b"" if kind == "empty" else b"damaged data")
+    before = path.read_bytes() if path.is_file() else None
+    try:
+        with pytest.raises(DatabaseAccessError) as error:
+            initialize_database(path)
+        assert str(tmp_path) not in str(error.value)
+        assert (path.read_bytes() if path.is_file() else None) == before
+    finally:
+        if kind == "readonly":
+            path.chmod(0o600)
+
+
+def test_locked_database_has_bounded_actionable_failure(database_path):
+    from backend.database import get_connection
+    from backend.storage_errors import DatabaseAccessError
+
+    with sqlite3.connect(database_path) as owner:
+        owner.execute("BEGIN IMMEDIATE")
+        with pytest.raises(DatabaseAccessError) as error:
+            with get_connection(database_path) as connection:
+                connection.execute("INSERT INTO activity_types (name, hourly_rate_cents) VALUES ('Busy', 1)")
+        assert error.value.code == "locked"
+    assert list_records("activity_types", database_path=database_path) == []

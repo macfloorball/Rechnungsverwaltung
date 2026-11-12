@@ -33,7 +33,16 @@ function createBackend({ config, root, env, onFailure }) {
             reject(error);
           }
           child.once('error', () => failure('Backend konnte nicht gestartet werden. Python-Pfad (TTC_PYTHON) und installierte Python-Pakete prüfen.'));
-          child.once('exit', () => failure('Der lokale Anwendungsserver wurde unerwartet beendet. Python-Pakete und Backend-Fehlerausgabe prüfen.'));
+          child.once('exit', () => {
+            const databaseErrors = {
+              missing: 'Die lokale Datenbank fehlt. Datenverzeichnis prüfen oder eine Sicherung wiederherstellen.',
+              locked: 'Die lokale Datenbank ist belegt. Andere App-Instanzen schließen und erneut starten.',
+              corrupt: 'Die lokale Datenbank ist beschädigt oder ungültig. Original erhalten und eine Sicherung wiederherstellen.',
+              access: 'Die lokale Datenbank ist nicht erreichbar oder beschreibbar. Datenverzeichnis, Speicherplatz und Rechte prüfen.',
+              schema: 'Der Datenbankstand wird nicht unterstützt. Passende App-Version verwenden; Datenbank nicht löschen.',
+            };
+            failure(databaseErrors[child.databaseError] || 'Der lokale Anwendungsserver wurde unerwartet beendet. Python-Pakete und Backend-Fehlerausgabe prüfen.');
+          });
         });
         await Promise.race([waitForFrontend(launch), failed]);
         if (!stopping) ready = true;

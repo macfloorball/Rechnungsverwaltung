@@ -1913,3 +1913,20 @@ def test_saved_invoice_keeps_original_prices_after_price_change(
     assert december_preview.json()["items"][0]["unit_rate_cents"] == 2200
     assert december_preview.json()["items"][0]["amount_cents"] == 4400
     assert december_preview.json()["total_amount_cents"] == 4400
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_database_failure_returns_actionable_503_without_recreating(client, corrupt):
+    path = client.app.state.test_database_path
+    path.unlink()
+    if corrupt:
+        path.write_bytes(b"damaged")
+    response = client.get("/api/settings")
+    assert response.status_code == 503
+    assert str(path) not in response.text
+    if corrupt:
+        assert "beschädigt" in response.json()["detail"]
+        assert path.read_bytes() == b"damaged"
+    else:
+        assert "fehlt" in response.json()["detail"]
+        assert not path.exists()

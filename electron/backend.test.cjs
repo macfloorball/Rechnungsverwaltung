@@ -43,3 +43,15 @@ test('spawn failures abort startup and runtime crashes are reported',async()=>{
   f.child.emit('error',Error('private detail'));await assert.rejects(start,/Python-Pfad/);await f.backend.stop();
   const running=fixture();await running.backend.start();running.child.emit('exit',1);assert.equal(running.failures(),1);await running.backend.stop();
 });
+
+test('database startup failures produce a fixed actionable message', async () => {
+  for (const code of ['missing', 'locked', 'corrupt', 'access', 'schema']) {
+    const f = fixture({delayReady:true});
+    const start = f.backend.start();
+    await new Promise(setImmediate);
+    f.child.databaseError = code;
+    f.child.emit('exit', 1);
+    await assert.rejects(start, /Datenbank/);
+    await f.backend.stop();
+  }
+});

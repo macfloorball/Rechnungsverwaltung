@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from backend.paths import PROJECT_ROOT, get_database_path
+from backend.storage_errors import DatabaseAccessError, error_code
 
 # Compatibility constant; runtime defaults are resolved inside get_connection.
 DATABASE_PATH = PROJECT_ROOT / "data" / "ttc.db"
@@ -107,16 +108,30 @@ def get_connection(
 ) -> Iterator[sqlite3.Connection]:
     """One transaction per operation; always close, including on rollback."""
     database_path = Path(database_path) if database_path is not None else get_database_path()
-    if create:
-        database_path.parent.mkdir(parents=True, exist_ok=True)
-    uri = database_path.resolve().as_uri() + ("?mode=rwc" if create else "?mode=rw")
-    connection = sqlite3.connect(uri, uri=True, timeout=5)
+    connection = None
     try:
+        if database_path.is_symlink() or (database_path.exists() and not database_path.is_file()):
+            raise DatabaseAccessError("access")
+        if not create and not database_path.exists():
+            raise DatabaseAccessError("missing")
+        if database_path.exists() and not os.access(database_path, os.R_OK | os.W_OK):
+            raise DatabaseAccessError("access")
+        if create:
+            database_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        uri = database_path.resolve().as_uri() + ("?mode=rwc" if create else "?mode=rw")
+        connection = sqlite3.connect(uri, uri=True, timeout=5)
         connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             yield connection
+    except sqlite3.IntegrityError:
+        raise
+    except DatabaseAccessError:
+        raise
+    except (sqlite3.DatabaseError, OSError) as error:
+        raise DatabaseAccessError(error_code(error)) from None
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
 
 
 SCHEMA_VERSION = 6
@@ -155,11 +170,23 @@ def _backup_before_migration(connection: sqlite3.Connection, path: Path) -> None
 
 def initialize_database(database_path: Path | None = None) -> None:
     database_path = Path(database_path) if database_path is not None else get_database_path()
-    existed = database_path.exists() and database_path.stat().st_size > 0
+    existed = database_path.exists()
+    if existed and database_path.is_file() and database_path.stat().st_size == 0:
+        raise DatabaseAccessError("corrupt")
     with get_connection(database_path, create=True) as connection:
         if connection.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
             raise sqlite3.DatabaseError("Integritätsprüfung der Datenbank fehlgeschlagen")
         version = get_schema_version(connection)
+        if existed:
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            required_tables = set(TABLE_COLUMNS) - ({"organizations"} if version == 0 else set())
+            if not required_tables <= tables:
+                raise DatabaseAccessError("corrupt")
+            if version == SCHEMA_VERSION:
+                for table, fields in TABLE_COLUMNS.items():
+                    columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+                    if not (fields | {"id"}) <= columns:
+                        raise DatabaseAccessError("corrupt")
         if existed and version < SCHEMA_VERSION:
             _backup_before_migration(connection, database_path)
         schema = (

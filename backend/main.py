@@ -6,6 +6,7 @@ import logging
 import os
 import sqlite3
 import struct
+import sys
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -18,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.paths import get_database_path as resolve_database_path
 from backend.storage_import import prepare_database
+from backend.storage_errors import MESSAGES, error_code
 
 from backend.database import (
     save_activities,
@@ -63,9 +65,14 @@ from backend.models import (
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    target = getattr(app.state, "test_database_path", resolve_database_path())
-    legacy = os.environ.get("TTC_LEGACY_DATABASE")
-    prepare_database(target, Path(legacy) if legacy else None)
+    try:
+        target = getattr(app.state, "test_database_path", None) or resolve_database_path()
+        legacy = os.environ.get("TTC_LEGACY_DATABASE")
+        prepare_database(target, Path(legacy) if legacy else None)
+    except (OSError, sqlite3.Error, ValueError) as error:
+        code = error_code(error)
+        print("TTC_DATABASE_ERROR:" + code, file=sys.stderr, flush=True)
+        raise RuntimeError(MESSAGES[code]) from None
     yield
 
 
@@ -183,6 +190,13 @@ async def handle_integrity_error(_, _error: sqlite3.IntegrityError) -> JSONRespo
         status_code=status.HTTP_409_CONFLICT,
         content={"detail": "Die Änderung verletzt eine Datenbankregel"},
     )
+
+
+@app.exception_handler(sqlite3.DatabaseError)
+async def handle_database_error(_, error: sqlite3.DatabaseError) -> JSONResponse:
+    code = error_code(error)
+    logger.error("Database operation failed: %s", code)
+    return JSONResponse(status_code=503, content={"detail": MESSAGES[code]})
 
 
 @app.exception_handler(RecordNotFoundError)
