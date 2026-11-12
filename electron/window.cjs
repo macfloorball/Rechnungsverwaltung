@@ -1,7 +1,8 @@
 'use strict';
 
 const path = require('node:path');
-const { BrowserWindow, screen } = require('electron');
+const { BrowserWindow, screen, shell, dialog } = require('electron');
+const { openInvoicePDF } = require('./browser-links.cjs');
 const { APP_NAME, getWindowOptions } = require('./identity.cjs');
 
 const CONTENT_SECURITY_POLICY = [
@@ -41,7 +42,19 @@ function createMainWindow(frontendURL, onError) {
   const session = contents.session;
   session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.setPermissionCheckHandler(() => false);
-  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.setWindowOpenHandler(({ url }) => {
+    openInvoicePDF(url, frontendURL, shell, () => {
+      console.error('Rechnungs-PDF konnte nicht im Standardbrowser geöffnet werden.');
+      if (!mainWindow.isDestroyed()) {
+        dialog.showMessageBox(mainWindow, {
+          type: 'error', title: APP_NAME,
+          message: 'Die Rechnung konnte nicht im Standardbrowser geöffnet werden.',
+          detail: 'Bitte versuche es erneut oder verwende „PDF herunterladen“.',
+        }).catch(() => {});
+      }
+    });
+    return { action: 'deny' };
+  });
   contents.on('will-attach-webview', (event) => event.preventDefault());
   const allowedURL = frontendURL;
   for (const eventName of ['will-navigate', 'will-redirect']) {
