@@ -456,3 +456,20 @@ Fremdschlüssel und JSON-/BLOB-Snapshots bleiben erhalten.
 PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält ihre bisherige
 Dateizuordnung; die Umstellung der Dokumentenablage gehört zur nachfolgenden
 Phase 3. Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
+
+### Schemaänderungen
+
+Die bestehenden Migrationen 1–6 bleiben unverändert in ihrer fachlichen Wirkung.
+Der Starter prüft Integrität und eine lückenlose Versionsfolge, bevor er das
+Schema verändert. Neuere Schemastände werden abgelehnt; ein Downgrade führt keine
+Rückmigration aus. Jeder Migrationsschritt schreibt seinen Versionsmarker erst
+mit erfolgreichem Commit. Bei einem Fehler wird der laufende Schritt verworfen;
+der nächste Start kann nach Behebung ab der letzten bestätigten Version fortsetzen.
+
+Vor Änderungen an einer vorhandenen Datenbank erzeugt SQLite eine konsistente,
+eindeutig benannte `ttc.db.before-migration-*.sqlite3` neben der Datenbank.
+Diese Wiederherstellungskopien werden nicht automatisch überschrieben oder rotiert.
+Zur Rückkehr App und Backend vollständig beenden, den aktuellen Bestand samt
+SQLite-Begleitdateien separat sichern und eine passende Kopie mit der dazugehörigen
+älteren App-Version verwenden. Keine SQLite-Dateien während des Betriebs ersetzen.
+Diese Kopien enthalten keine PDFs und ersetzen kein vollständiges Backup.

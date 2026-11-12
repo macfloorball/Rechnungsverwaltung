@@ -298,3 +298,29 @@ def test_connection_rolls_back_closes_and_does_not_recreate_missing_database(tmp
     with pytest.raises(sqlite3.OperationalError):
         list_records("activity_types", database_path=tmp_path / "missing.db")
     assert not (tmp_path / "missing.db").exists()
+
+
+def test_schema_rejects_future_and_gapped_versions_without_modification(database_path):
+    from backend.database import SCHEMA_VERSION
+    for versions in ([1, 2, 4], list(range(1, SCHEMA_VERSION + 2))):
+        with sqlite3.connect(database_path) as connection:
+            connection.execute("DELETE FROM schema_migrations")
+            connection.executemany("INSERT INTO schema_migrations (version) VALUES (?)", [(v,) for v in versions])
+        before = database_path.read_bytes()
+        with pytest.raises(ValueError):
+            initialize_database(database_path)
+        assert database_path.read_bytes() == before
+
+
+def test_upgrade_creates_recovery_copy_and_is_idempotent(database_path):
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DELETE FROM schema_migrations WHERE version = 6")
+        connection.execute("INSERT INTO activity_types (name, hourly_rate_cents) VALUES ('Keep', 50)")
+    initialize_database(database_path)
+    copies = list(database_path.parent.glob("*.before-migration-*.sqlite3"))
+    assert len(copies) == 1
+    with sqlite3.connect(copies[0]) as connection:
+        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone() == (5,)
+        assert connection.execute("SELECT name FROM activity_types").fetchone() == ('Keep',)
+    initialize_database(database_path)
+    assert list(database_path.parent.glob("*.before-migration-*.sqlite3")) == copies

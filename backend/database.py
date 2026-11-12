@@ -1,5 +1,8 @@
 import re
 import sqlite3
+import tempfile
+import os
+from contextlib import closing
 from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Iterator
@@ -114,9 +117,50 @@ def get_connection(
         connection.close()
 
 
+SCHEMA_VERSION = 6
+
+
+def get_schema_version(connection: sqlite3.Connection) -> int:
+    tables = {row[0] for row in connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    )}
+    if "schema_migrations" not in tables:
+        return 0
+    versions = [row[0] for row in connection.execute(
+        "SELECT version FROM schema_migrations ORDER BY version"
+    )]
+    if versions != list(range(1, len(versions) + 1)):
+        raise ValueError("Ungültige Reihenfolge der Datenbankmigrationen")
+    if versions and versions[-1] > SCHEMA_VERSION:
+        raise ValueError("Diese Datenbank benötigt eine neuere App-Version")
+    return len(versions)
+
+
+def _backup_before_migration(connection: sqlite3.Connection, path: Path) -> None:
+    # SQLite backup includes committed WAL contents; never overwrite a recovery copy.
+    descriptor, name = tempfile.mkstemp(prefix=path.name + ".before-migration-", suffix=".sqlite3", dir=path.parent)
+    os.close(descriptor)
+    target = Path(name)
+    try:
+        with closing(sqlite3.connect(target)) as backup:
+            connection.backup(backup)
+            if backup.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                raise sqlite3.DatabaseError("Migrationssicherung ist beschädigt")
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+
 def initialize_database(database_path: Path | None = None) -> None:
+    database_path = Path(database_path) if database_path is not None else get_database_path()
+    existed = database_path.exists() and database_path.stat().st_size > 0
     with get_connection(database_path, create=True) as connection:
-        connection.executescript(
+        if connection.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise sqlite3.DatabaseError("Integritätsprüfung der Datenbank fehlgeschlagen")
+        version = get_schema_version(connection)
+        if existed and version < SCHEMA_VERSION:
+            _backup_before_migration(connection, database_path)
+        schema = (
             """
             CREATE TABLE IF NOT EXISTS organizations (
                 id INTEGER PRIMARY KEY,
@@ -244,16 +288,26 @@ def initialize_database(database_path: Path | None = None) -> None:
             );
             """
         )
+        # executescript would implicitly commit; keep bootstrap transactional.
+        connection.execute("BEGIN IMMEDIATE")
+        for statement in schema.split(";"):
+            if statement.strip():
+                connection.execute(statement)
         connection.execute(
             "INSERT OR IGNORE INTO organizations (id, name) VALUES (1, '')"
         )
         connection.commit()
-        _migrate_organization_support(connection)
-        _migrate_organization_invoice_fields(connection)
-        _migrate_weekly_plan_occurrences(connection)
-        _migrate_optional_training_hours(connection)
-        _migrate_weekly_plan_generated(connection)
-        _migrate_invoice_previews(connection)
+        for migration in (
+            _migrate_organization_support,
+            _migrate_organization_invoice_fields,
+            _migrate_weekly_plan_occurrences,
+            _migrate_optional_training_hours,
+            _migrate_weekly_plan_generated,
+            _migrate_invoice_previews,
+        ):
+            migration(connection)
+        if connection.execute("PRAGMA foreign_key_check").fetchall():
+            raise sqlite3.DatabaseError("Fremdschlüsselprüfung fehlgeschlagen")
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:
