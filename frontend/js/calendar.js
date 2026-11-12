@@ -171,6 +171,7 @@ export function initializeCalendar() {
       errorMessage.textContent = error instanceof Error
         ? error.message
         : "Kalender konnte nicht geladen werden.";
+      errorMessage.hidden = false;
     } finally {
       loading = false;
       calendar.setAttribute("aria-busy", "false");
