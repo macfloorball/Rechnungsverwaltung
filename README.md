@@ -561,3 +561,14 @@ Beim manuellen Datenbank-Backup für den Desktop dasselbe `TTC_DATA_DIRECTORY`
 setzen oder `--database` mit dem absoluten Desktop-Datenbankpfad angeben. Der
 Linux-systemd-Timer verwendet ohne eigene Konfiguration weiterhin die Web-Datenbank;
 für Desktop-Daten den Datenpfad ausdrücklich in der Unit konfigurieren.
+
+### Persistenzprüfung für die Entwicklung
+
+`python -m pytest -q` prüft unter anderem Migrationen und deren Rollback,
+Altdatenimport mit WAL-Daten und konkurrierendem Ziel, parallele Finalisierung,
+Datenbankfehler und den Austausch des Installationsverzeichnisses. Die
+Integrationstests starten und beenden echte lokale Backend-Prozesse mit und ohne
+Reload. Datenbank, Rechnungen und Testprotokolle liegen dabei in temporären
+Verzeichnissen. `npm run desktop:check` prüft zusätzlich Desktop-Datenpfad,
+Startfehler, IPC/Sandbox und den Ausschluss von Nutzerdaten aus dem Paket.
+Für Prozess- und HTTP-Tests muss die Testumgebung lokale Loopback-Sockets erlauben.

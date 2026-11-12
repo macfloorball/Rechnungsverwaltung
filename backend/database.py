@@ -175,7 +175,7 @@ def initialize_database(database_path: Path | None = None) -> None:
         raise DatabaseAccessError("corrupt")
     with get_connection(database_path, create=True) as connection:
         if connection.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
-            raise sqlite3.DatabaseError("Integritätsprüfung der Datenbank fehlgeschlagen")
+            raise DatabaseAccessError("corrupt")
         version = get_schema_version(connection)
         if existed:
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
@@ -341,7 +341,7 @@ def initialize_database(database_path: Path | None = None) -> None:
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
-            raise sqlite3.DatabaseError("Fremdschlüsselprüfung fehlgeschlagen")
+            raise DatabaseAccessError("corrupt")
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:

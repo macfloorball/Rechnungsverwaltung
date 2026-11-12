@@ -24,6 +24,13 @@ def error_code(error: BaseException) -> str:
         return "locked"
     if code & 255 in (11, 26):
         return "corrupt"
+    # Python 3.10 lacks sqlite_errorcode on SQLite exceptions.
+    if not code and isinstance(error, sqlite3.Error):
+        message = str(error).lower()
+        if "database is locked" in message or "database table is locked" in message:
+            return "locked"
+        if "not a database" in message or "malformed" in message:
+            return "corrupt"
     if isinstance(error, ValueError):
         return "schema"
     return "access"

@@ -75,3 +75,20 @@ def test_prepare_adopts_once_or_initializes_empty_profile(tmp_path):
     empty = tmp_path / "empty" / "ttc.db"
     prepare_database(empty, tmp_path / "missing.db")
     assert get_record("activity_types", 1, empty) is None
+
+
+def test_target_created_during_import_is_never_overwritten(tmp_path, monkeypatch):
+    import os
+    source = legacy_database(tmp_path / "legacy.db")
+    target = tmp_path / "profile" / "ttc.db"
+    real_link = os.link
+
+    def concurrent_target(staged, destination):
+        target.write_bytes(b"concurrent target")
+        real_link(staged, destination)
+
+    monkeypatch.setattr(os, "link", concurrent_target)
+    with pytest.raises(FileExistsError):
+        import_database(source, target)
+    assert target.read_bytes() == b"concurrent target"
+    assert not list(target.parent.glob(".ttc-import-*"))
