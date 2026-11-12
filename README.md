@@ -239,3 +239,106 @@ the operating-system level, especially on shared machines.
 
 Dependencies are listed in `requirements.txt`; package versions are not
 currently pinned in a lockfile.
+
+## Electron: Oberfläche laden
+
+Node.js ab 22.12 und npm zusätzlich zur bestehenden Python-Umgebung:
+
+```bash
+npm ci
+npm run desktop:check
+```
+
+Entwicklung in zwei Terminals (aus dem Repository, Python-Umgebung aktiviert):
+
+```bash
+# Terminal 1: unveränderter Webentwicklungsstart
+python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+# Terminal 2
+npm run desktop:dev
+```
+
+Die Webanwendung bleibt unter `http://127.0.0.1:8000` unabhängig im Browser
+nutzbar. Electron wartet bis zu 15 Sekunden auf Oberfläche, Ressourcen und
+`/api/health`, bevor es das Hauptfenster erstellt. Bei fehlendem Server erscheint
+eine verständliche Fehlermeldung. Der Server wird weiterhin separat gestartet.
+
+Produktionsausgabe: Da das Frontend natives HTML/CSS/JavaScript verwendet,
+kopiert der Build die Dateien unverändert nach `dist/frontend` und erzeugt eine
+Build-Kennung. Der vorhandene FastAPI-Server liefert diese Dateien und die API
+aus; es wird weder ein Bundler noch ein zusätzlicher Server eingeführt.
+
+```bash
+npm run frontend:build
+# Terminal 1: ohne Entwicklungsserver/Auto-Reload
+TTC_FRONTEND_DIRECTORY=dist/frontend python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+# Terminal 2
+npm run desktop:start
+```
+
+PowerShell für den Produktionsserver:
+
+```powershell
+$env:TTC_FRONTEND_DIRECTORY = "dist/frontend"
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+`TTC_FRONTEND_DIRECTORY` wird relativ zum Repository aufgelöst (absolute Pfade
+sind ebenfalls möglich). Ohne diese Variable bleibt `frontend/` der Webstandard.
+Electron kontrolliert im Produktionsmodus, ob der lokale Build existiert und der
+Server dessen Build-Kennung ausliefert. Nach Frontend-Änderungen erneut bauen.
+Ein Installer oder ein vollständiges Produktionspaket wird noch nicht erstellt.
+
+Die Adresse steht zentral in `electron/config.cjs` (Standard: Loopback, Port 8000).
+Für einen abweichenden Serverport in Terminal 2:
+
+```bash
+TTC_DESKTOP_URL=http://127.0.0.1:8123 npm run desktop:dev
+```
+
+PowerShell: `$env:TTC_DESKTOP_URL = "http://127.0.0.1:8123"`, anschließend
+`npm run desktop:dev` oder `npm run desktop:start`. Die Variable akzeptiert nur
+HTTP-Origins mit `127.0.0.1` oder `[::1]`, ohne Pfad, Zugangsdaten oder Query.
+Der Backend-Port muss dazu passen. Es gibt kein clientseitiges Routing;
+Abschnittsanker und Neuladen der Startseite funktionieren über dieselbe Origin.
+
+Main steuert den Lebenszyklus, `window.cjs` schützt das Fenster und Preload
+veröffentlicht nur `ttcDesktop.apiVersion`. Sandbox und Context Isolation bleiben
+aktiv, Node-Integration bleibt deaktiviert. Fremde Navigation und neue Fenster
+werden blockiert. Es gibt keine benötigten externen Webseiten mit Browserfreigabe;
+unbekannte URLs werden nicht automatisch geöffnet. PDF-Popups bleiben einer
+späteren Desktop-Integration vorbehalten. Native Windows-Abnahme steht noch aus.
+
+## Entpackter Windows-Testbuild
+
+```bash
+npm ci
+npm run desktop:build:win
+```
+
+Ausgabe: `dist/windows/TTC Rechnungsverwaltung-win32-x64/` mit
+`TTC Rechnungsverwaltung.exe`. Der gesamte Ordner gehört zum Testbuild;
+Build-Artefakte sind per `.gitignore` ausgeschlossen. Es gibt noch keinen
+Installer, keine Signatur und keinen automatischen Updateprozess.
+
+**Dieser Testbuild enthält noch keine Python-Laufzeit oder Python-Pakete.**
+Die EXE erwartet den vorhandenen lokalen Server. Zum Testen unter Windows
+zuerst im Ordner `resources/app` eine Python-Umgebung einrichten und den
+Server starten (PowerShell, Python ab 3.10 vorausgesetzt):
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:TTC_FRONTEND_DIRECTORY = "dist/frontend"
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Danach die EXE im Hauptordner starten. Bei abweichendem Port muss
+`TTC_DESKTOP_PRODUCTION_URL` vor dem EXE-Start zur Serveradresse passen.
+Der separat gestartete Server wird durch Schließen der EXE nicht beendet.
+Für den Test einen beschreibbaren Ordner und ausschließlich Testdaten verwenden:
+Die bisherigen Datenpfade bleiben unverändert (`resources/app/data/ttc.db`
+und `resources/app/rechnungen/`). Eine updatefeste lokale Datenablage sowie
+Backend-/Python-Einbettung sind noch nicht Bestandteil dieses Builds.
+Nach Installation der Abhängigkeiten benötigen die vorhandenen Fachfunktionen
+keine externen Dienste, aber weiterhin den laufenden lokalen Server.

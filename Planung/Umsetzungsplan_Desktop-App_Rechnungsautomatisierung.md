@@ -66,26 +66,31 @@ umzubauen.
 
 ## Entwicklungsschritte
 
--   [ ] Aktuelles Repository und den relevanten Entwicklungsbranch
+-   [x] Aktuelles Repository und den relevanten Entwicklungsbranch
     untersuchen.
--   [ ] Verwendetes Frontend-Framework, Backend, Datenbank und
+-   [x] Verwendetes Frontend-Framework, Backend, Datenbank und
     Build-System dokumentieren.
--   [ ] Prüfen, wie die Anwendung aktuell gestartet und gebaut wird.
--   [ ] Alle vorhandenen Funktionen erfassen, insbesondere Kunden,
+-   [x] Prüfen, wie die Anwendung aktuell gestartet und gebaut wird.
+-   [x] Alle vorhandenen Funktionen erfassen, insbesondere Kunden,
     Wochenplan, Termine, Statusverwaltung, Rechnungsentwürfe und finale
     Rechnungen.
--   [ ] Ermitteln, wo Daten aktuell gespeichert werden und welche
+-   [x] Ermitteln, wo Daten aktuell gespeichert werden und welche
     externen Dienste benötigt werden.
--   [ ] Prüfen, ob die Anwendung bereits lokal ohne Internetverbindung
+-   [x] Prüfen, ob die Anwendung bereits lokal ohne Internetverbindung
     laufen kann.
--   [ ] Abhängigkeiten von Browserfunktionen, Server-URLs und externen
+-   [x] Abhängigkeiten von Browserfunktionen, Server-URLs und externen
     APIs identifizieren.
--   [ ] Bestehende Tests und bekannte Fehler dokumentieren.
--   [ ] Festlegen, ob Electron in das bestehende Repository integriert
+-   [x] Bestehende Tests und bekannte Fehler dokumentieren.
+-   [x] Festlegen, ob Electron in das bestehende Repository integriert
     wird. Grundsätzlich soll das bestehende Repository weiterverwendet
     werden, sofern die Bestandsaufnahme keinen gewichtigen Grund dagegen
     zeigt.
--   [ ] Einen eigenen Branch für die Desktop-Umstellung anlegen.
+-   [x] Einen eigenen Branch für die Desktop-Umstellung anlegen.
+
+Bestandsaufnahme und Entscheidungen: [Phase_0_Bestandsaufnahme_Desktop.md](Phase_0_Bestandsaufnahme_Desktop.md).
+
+Die Entwicklungsschritte sind erledigt; die allgemeine Windows-Abnahme bleibt
+in dieser Linux-Sitzung offen.
 
 ## Ergebnis / Abnahmekriterien
 

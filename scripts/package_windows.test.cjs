@@ -1,0 +1,34 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { prepareWindowsSource } = require('./package_windows.cjs');
+
+test('Windows package contains runtime source and build, but no user or development data', async (t) => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-package-test-'));
+  t.after(() => fs.rm(fixture, { recursive: true, force: true }));
+  const root = path.join(fixture, 'source');
+  const target = path.join(fixture, 'package');
+  for (const name of ['electron/assets', 'backend', 'frontend/js', 'data', 'rechnungen', 'node_modules', '.venv']) {
+    await fs.mkdir(path.join(root, name), { recursive: true });
+  }
+  const files = {
+    'package.json': JSON.stringify({ name:'ttc-rechnungsverwaltung',productName:'TTC Rechnungsverwaltung',version:'0.1.0',main:'electron/main.cjs',devDependencies:{electron:'45.3.1'} }),
+    'electron/main.cjs':'// main', 'electron/example.test.cjs':'// test',
+    'electron/assets/app-icon.ico':'icon', 'electron/assets/app-icon.png':'icon','electron/assets/app-icon.svg':'icon',
+    'backend/main.py':'# backend', 'frontend/index.html':'<script src="js/app.js"></script>', 'frontend/js/app.js':'// frontend',
+    'data/ttc.db':'PRIVATE', 'rechnungen/private.pdf':'PRIVATE', '.env':'PRIVATE', 'requirements.txt':'fastapi',
+  };
+  for (const [name, value] of Object.entries(files)) await fs.writeFile(path.join(root, name), value);
+  await prepareWindowsSource(root, target);
+  const entries = await fs.readdir(target, { recursive: true });
+  for (const expected of ['electron/main.cjs', 'backend/main.py','dist/frontend/index.html','dist/frontend/desktop-build.json','requirements.txt']) {
+    assert.ok(entries.includes(expected.split('/').join(path.sep)), expected);
+  }
+  for (const excluded of ['data','rechnungen','.env','node_modules','.venv','electron/example.test.cjs']) {
+    assert.ok(!entries.includes(excluded.split('/').join(path.sep)), excluded);
+  }
+  assert.equal(JSON.parse(await fs.readFile(path.join(target,'package.json'),'utf8')).devDependencies,undefined);
+});

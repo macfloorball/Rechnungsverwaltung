@@ -49,3 +49,9 @@ rechnungen/*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Electron development dependencies
+node_modules/
+
+# Generated frontend assets
+dist/
