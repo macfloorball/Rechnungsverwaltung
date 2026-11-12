@@ -309,6 +309,7 @@ Standard ist `http://127.0.0.1:8000/`, zentral in `electron/config.cjs`.
 | `TTC_DESKTOP_URL` | Adresse für Desktop- und Webentwicklung |
 | `TTC_DESKTOP_PRODUCTION_URL` | Getrennte Adresse für Desktop-Produktion, EXE und `web:start`; ignoriert den Entwicklungswert |
 | `TTC_PYTHON` | Optionaler Interpreterpfad, vorzugsweise absolut |
+| `TTC_DATA_DIRECTORY` | Absolutes Verzeichnis für `ttc.db`; Desktop-Standard: Electron-`userData`, Web-Standard: `data/` im Projekt |
 | `TTC_FRONTEND_DIRECTORY` | Frontend-Pfad beim direkten Uvicorn-Webstart; verwaltete Startmodi setzen ihn selbst |
 
 Zulässig sind nur HTTP-Origins mit `127.0.0.1` oder `[::1]`, optionalem Port,
@@ -335,8 +336,14 @@ aufgelöst; absolute Pfade sind ebenfalls möglich. Ohne Variable gilt `frontend
 App-Name und Fenstertitel sind **TTC Rechnungsverwaltung**. Das Fenster startet
 mit 1280 × 800, mindestens 1000 × 650; auf kleineren Arbeitsflächen werden
 beide Werte begrenzt. Minimieren, Wiederherstellen und Maximieren sind nativ.
-Electron-Profile behalten den bisherigen technischen Namen; Rechnungsdaten
-werden dadurch nicht verschoben.
+Electron-Profile behalten den bisherigen technischen Namen. Die Desktop-Datenbank
+liegt als `ttc.db` im Electron-`userData`-Verzeichnis:
+Windows `%APPDATA%/ttc-rechnungsverwaltung`, Linux
+`${XDG_CONFIG_HOME:-~/.config}/ttc-rechnungsverwaltung`, macOS
+`~/Library/Application Support/ttc-rechnungsverwaltung`. Ein explizites
+`TTC_DATA_DIRECTORY` überschreibt diesen Ort. Die Web-Startmodi behalten ohne
+Override `data/ttc.db`. Entwicklung und Produktion nutzen dasselbe Desktop-Profil;
+für isolierte Tests ein separates absolutes Datenverzeichnis setzen.
 
 Sandbox, Context Isolation und CSP sind aktiv, Node-Integration und unnötige
 Berechtigungen deaktiviert. Preload stellt nur `ttcDesktop.apiVersion` und den
@@ -407,10 +414,10 @@ Der Build enthält Frontend, Electron-Module, Backend-Quellcode,
 `scripts/run.cjs`, `scripts/managed_server.py` und `requirements.txt`.
 Vorhandene `.venv`-Ordner, Python-Pakete, Datenbanken und Rechnungen werden
 nicht eingepackt. Tests ausschließlich mit neu angelegten Testdaten durchführen:
-Die bisherigen Datenpfade bleiben unverändert (`resources/app/data/ttc.db`
-und `resources/app/rechnungen/`). Eine updatefeste Datenablage sowie ein
-vollständiges Paket mit eingebetteter Python-Laufzeit und Abhängigkeiten sind
-spätere Arbeiten; dieser Testbuild ist noch nicht eigenständig verteilbar.
+Die Desktop-Datenbank liegt außerhalb des Builds im Benutzerprofil; PDFs
+liegen bis Phase 3 weiterhin unter `resources/app/rechnungen/`. Ein
+vollständiges Paket mit eingebetteter Python-Laufzeit und Abhängigkeiten bleibt
+offen; dieser Testbuild ist noch nicht eigenständig verteilbar.
 
 Nach Installation der Abhängigkeiten benötigen die vorhandenen Fachfunktionen
 keine externen Dienste, aber weiterhin das von Electron gestartete lokale
@@ -418,3 +425,150 @@ Backend. Erstinstallation und Paketierung benötigen Downloads. Der Build
 kann unter Linux erzeugt und statisch geprüft werden; die native Ausführung,
 Python-Erkennung und Prozessbeendigung müssen zusätzlich auf einem echten
 Windows-System abgenommen werden.
+
+## Datenzugriff und Transaktionsgrenzen
+
+Das Frontend verwendet ausschließlich die lokale REST-API. SQLite wird im
+Python-Backend verwendet; Electron und der PDF-Renderer berechnen keine
+Datenbankabfragen. Die dauerhaften Tabellen sind `organizations`,
+`activity_types`, `weekly_plan`, `trainings`, `invoices` und `invoice_items`.
+`schema_migrations` speichert den angewendeten Schemastand.
+
+`backend/database.py` enthält CRUD, Organisationseinstellungen und atomare
+Rechnungsoperationen. Finalisierung speichert Rechnung, Positionen und
+Nummernkreis gemeinsam; Vorschauaktualisierung ersetzt die Positionen in einer
+Transaktion. Fremdschlüssel schützen Zuordnungen und löschen Rechnungspositionen
+mit ihrer Rechnung. Kalendererzeugung ordnet Wochenplanvorkommen eindeutig zu.
+Preis-, Einstellungs- und Logo-Snapshots erhalten historische Rechnungsdaten.
+PDF-Dateien sind eigenständige Dateien; ihre Erzeugung und SQLite-Transaktionen
+bilden keine gemeinsame atomare Operation.
+
+### Persistenzentscheidung
+
+SQLite bleibt die maßgebliche lokale Datenquelle für Organisation und den einen
+Rechnungsempfänger, Bank-/Steuerdaten, Texte, Nummernkreis und Logos, Tätigkeiten
+mit Preisen, Wochenplan, Termine samt Status und Preissnapshot sowie Entwürfe,
+finale Rechnungen und deren Positions-/Einstellungs-/Logo-Snapshots. Es werden
+keine neue Kundentabelle, Benutzerkonten oder Cloud-Datenhaltung eingeführt.
+Geldbeträge bleiben ganzzahlige Centwerte; optionale Stunden und bestehende IDs,
+Fremdschlüssel und JSON-/BLOB-Snapshots bleiben erhalten.
+
+PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält ihre bisherige
+Dateizuordnung; die Umstellung der Dokumentenablage gehört zur nachfolgenden
+Phase 3. Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
+
+### Schemaänderungen
+
+Die bestehenden Migrationen 1–6 bleiben unverändert in ihrer fachlichen Wirkung.
+Der Starter prüft Integrität und eine lückenlose Versionsfolge, bevor er das
+Schema verändert. Neuere Schemastände werden abgelehnt; ein Downgrade führt keine
+Rückmigration aus. Jeder Migrationsschritt schreibt seinen Versionsmarker erst
+mit erfolgreichem Commit. Bei einem Fehler wird der laufende Schritt verworfen;
+der nächste Start kann nach Behebung ab der letzten bestätigten Version fortsetzen.
+
+Vor Änderungen an einer vorhandenen Datenbank erzeugt SQLite eine konsistente,
+eindeutig benannte `ttc.db.before-migration-*.sqlite3` neben der Datenbank.
+Diese Wiederherstellungskopien werden nicht automatisch überschrieben oder rotiert.
+Zur Rückkehr App und Backend vollständig beenden, den aktuellen Bestand samt
+SQLite-Begleitdateien separat sichern und eine passende Kopie mit der dazugehörigen
+älteren App-Version verwenden. Keine SQLite-Dateien während des Betriebs ersetzen.
+Diese Kopien enthalten keine PDFs und ersetzen kein vollständiges Backup.
+
+### Modell- und API-Kompatibilität
+
+`backend/models.py` bleibt das Eingabemodell der REST-API. Die Datenzugriffsschicht
+nimmt einfache Python-Werte entgegen und kennt weder FastAPI noch Electron oder
+die Oberfläche. Die API übersetzt fehlende Datensätze in HTTP 404, ungültige
+Stapeloperationen in 422 und verletzte Datenbankregeln in 409. SQL liegt zentral
+in `backend/database.py`; der PDF-Renderer erhält weiterhin fertige Rechnungswerte.
+
+Der Pfadwechsel benötigt keine neue fachliche Tabelle und keine zusätzliche
+Schemaversion: Schema 6, bestehende IDs, optionale Stunden, Statuswerte,
+Wochenplanzuordnung und Snapshots bleiben kompatibel. Alte Datenbanken durchlaufen
+weiterhin die Migrationen 1–6. Es findet keine Neuberechnung alter Rechnungen statt.
+Ein Stapel von Preis- oder Wochenplanänderungen wird bei Fehlern vollständig
+zurückgerollt. Der Nummernkreis wird weiterhin gemeinsam mit der Finalisierung
+aktualisiert, nicht durch eine getrennte UI-Aktion.
+
+### Übernahme bestehender Daten
+
+Beim Wechsel vom bisherigen Desktop-Stand kann `data/ttc.db` im alten Checkout
+oder unter `resources/app/data/ttc.db` liegen. Diese Daten müssen bei einem neuen
+Benutzerprofil übernommen werden; eine leere Desktop-Datenbank darf einen
+vorhandenen Altbestand nicht unbemerkt ersetzen. Electron meldet dem Backend den
+bisherigen Datenbankpfad. Ist noch keine Zieldatenbank vorhanden, wird eine
+geprüfte SQLite-Kopie übernommen und im Ziel migriert. Existiert das Ziel bereits,
+ist ausschließlich dieses maßgeblich; es gibt keine automatische Zusammenführung.
+
+Die Übernahme lässt die Quelle unverändert. Vorhandene IDs, Einstellungen,
+Nummernkreis, Preis-/Logo-/Rechnungssnapshots und Dateizuordnungen bleiben erhalten.
+Eine beschädigte, fremde oder von einer neueren App erzeugte Datenbank wird
+abgelehnt. Bei Fehlern bleibt das Ziel unveröffentlicht. Alte und neue App vor
+einem bewussten manuellen Import beenden; nicht gleichzeitig an beiden Beständen
+weiterarbeiten. Die Dokumentenablage bleibt bis Phase 3 separat: Der Datenbankimport
+verschiebt oder löscht keine PDFs, und vorhandene Rechnungsdateien müssen weiter
+im bisherigen Rechnungsverzeichnis verfügbar sein.
+
+Für einen Altbestand außerhalb der aktuellen Installation kann einmalig ein
+expliziter Import ausgeführt werden (Ziel darf noch nicht existieren):
+
+```bash
+python -m backend.storage_import --source /absoluter/alter/Pfad/data/ttc.db --target /absolutes/Benutzerverzeichnis/ttc.db
+```
+
+Unter PowerShell Windows-Pfade mit Leerzeichen in Anführungszeichen setzen.
+`TTC_LEGACY_DATABASE` kann beim Desktop-Start einen abweichenden Quellpfad
+angeben; ohne Override prüft Electron nur `data/ttc.db` seiner Installation.
+Ein neuer Build enthält selbst keine Altdaten. Deshalb einen alten Build nicht
+löschen, bevor Datenbank und Dokumente gesichert beziehungsweise übernommen sind.
+Der Import verwendet SQLite-Backup einschließlich bestätigter WAL-Daten,
+migriert eine temporäre Kopie und veröffentlicht sie atomar ohne Überschreiben.
+Dateisysteme ohne Hardlink-Unterstützung werden sicher mit einem Fehler abgelehnt.
+
+### Datenbankfehler
+
+Ein neues Profil wird beim ersten Start initialisiert. Eine während des Betriebs
+fehlende Datenbank wird hingegen nicht still neu angelegt. Leere, beschädigte,
+fremde oder nicht unterstützte Datenbanken führen zu einem Startfehler; sie
+werden nicht automatisch gelöscht oder ersetzt. Gesperrte Datenbanken haben
+eine begrenzte Wartezeit von fünf Sekunden. Andere Instanzen beenden und den
+Vorgang erneut versuchen. Bei Zugriffsfehlern Datenverzeichnis, Berechtigungen
+und freien Speicher prüfen; bei Beschädigung Originaldateien erhalten und eine
+Sicherung verwenden. Keine Reparatur am einzigen Original durchführen.
+
+Die lokale API meldet nicht verfügbare Datenbanken mit HTTP 503 und einer
+Handlungsanweisung ohne SQL oder personenbezogene Inhalte. Electron zeigt beim
+fehlgeschlagenen Backend-Start eine entsprechende feste Meldung. Schemafehler
+erfordern eine passende App-Version, keinen automatischen Datenbank-Reset.
+
+### Datenerhalt bei App-Austausch
+
+Desktop-Updates verwenden denselben technischen Profilnamen und damit denselben
+Datenbankpfad. Ein Start mit aktuellem Schema prüft nur Struktur, Integrität und
+Fremdschlüssel; er legt keine Tabellen oder Standarddatensätze erneut an. Neue
+App-Dateien enthalten keine Datenbank und keine Migrationssicherungen. Der Build
+kopiert ausschließlich Python-Quellmodule aus dem Backend-Verzeichnis.
+
+Der Austausch des Installationsverzeichnisses und wiederholte Starts erhalten
+Organisation/Empfänger, Wochenplan, Termine, Nummernkreis und Rechnungssnapshots.
+Der Datenpfad hängt weder vom Arbeitsverzeichnis noch vom Installationspfad ab.
+Ein explizit geänderter Profilpfad ist ein anderer Datenbestand. Auch beim
+Austausch der App keine alten Datenquellen oder Rechnungsverzeichnisse löschen.
+Installer, Deinstallation und Updates der PDF-Ablage werden in ihren späteren
+Phasen separat umgesetzt und auf Windows geprüft.
+
+Beim manuellen Datenbank-Backup für den Desktop dasselbe `TTC_DATA_DIRECTORY`
+setzen oder `--database` mit dem absoluten Desktop-Datenbankpfad angeben. Der
+Linux-systemd-Timer verwendet ohne eigene Konfiguration weiterhin die Web-Datenbank;
+für Desktop-Daten den Datenpfad ausdrücklich in der Unit konfigurieren.
+
+### Persistenzprüfung für die Entwicklung
+
+`python -m pytest -q` prüft unter anderem Migrationen und deren Rollback,
+Altdatenimport mit WAL-Daten und konkurrierendem Ziel, parallele Finalisierung,
+Datenbankfehler und den Austausch des Installationsverzeichnisses. Die
+Integrationstests starten und beenden echte lokale Backend-Prozesse mit und ohne
+Reload. Datenbank, Rechnungen und Testprotokolle liegen dabei in temporären
+Verzeichnissen. `npm run desktop:check` prüft zusätzlich Desktop-Datenpfad,
+Startfehler, IPC/Sandbox und den Ausschluss von Nutzerdaten aus dem Paket.
+Für Prozess- und HTTP-Tests muss die Testumgebung lokale Loopback-Sockets erlauben.

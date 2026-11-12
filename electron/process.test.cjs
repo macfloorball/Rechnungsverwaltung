@@ -32,6 +32,7 @@ test('main owns one window, clears closed reference and quits on Windows', async
   app.isReady = () => true;
   app.requestSingleInstanceLock = () => true;
   app.getAppPath = () => __dirname;
+  app.getPath = () => '/test/user-data';
   let quit = 0;
   app.quit = () => {
     let prevented=false;
@@ -48,7 +49,10 @@ test('main owns one window, clears closed reference and quits on Windows', async
     if (name === 'electron') return { app, dialog: { showErrorBox: () => {} } };
     if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
     if (name === './identity.cjs') return { APP_NAME: 'TTC Rechnungsverwaltung', configureIdentity: () => {} };
-    if (name === './backend.cjs') return { createBackend: () => ({start:async()=>{backendStarts++;},stop:async()=>{backendStops++;return false;}}) };
+    if (name === './backend.cjs') return { createBackend: (options) => {
+      assert.equal(options.env.TTC_DATA_DIRECTORY, '/test/user-data');
+      return {start:async()=>{backendStarts++;},stop:async()=>{backendStops++;return false;}};
+    } };
     if (name === './config.cjs') return require('./config.cjs');
     if (name === './window.cjs') return { createMainWindow: () => {
       const win = new EventEmitter();
@@ -101,6 +105,7 @@ for (const scenario of ['startup-failure', 'runtime-failure', 'cleanup-failure',
     app.requestSingleInstanceLock = () => true;
     app.isReady = () => true;
     app.getAppPath = () => __dirname;
+  app.getPath = () => '/test/user-data';
     app.whenReady = async () => {};
     let shutdowns = 0;
     let prompts = 0;

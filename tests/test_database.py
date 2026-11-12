@@ -280,3 +280,155 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
             "SELECT COUNT(*) FROM schema_migrations"
         ).fetchone() == (6,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_connection_rolls_back_closes_and_does_not_recreate_missing_database(tmp_path):
+    from backend.database import get_connection
+
+    path = tmp_path / "central.db"
+    initialize_database(path)
+    with pytest.raises(RuntimeError):
+        with get_connection(path) as connection:
+            assert connection.execute("PRAGMA foreign_keys").fetchone() == (1,)
+            connection.execute("INSERT INTO activity_types (name, hourly_rate_cents) VALUES ('Rollback', 1)")
+            raise RuntimeError("abort")
+    with pytest.raises(sqlite3.ProgrammingError):
+        connection.execute("SELECT 1")
+    assert list_records("activity_types", database_path=path) == []
+    with pytest.raises(sqlite3.OperationalError):
+        list_records("activity_types", database_path=tmp_path / "missing.db")
+    assert not (tmp_path / "missing.db").exists()
+
+
+def test_schema_rejects_future_and_gapped_versions_without_modification(database_path):
+    from backend.database import SCHEMA_VERSION
+    for versions in ([1, 2, 4], list(range(1, SCHEMA_VERSION + 2))):
+        with sqlite3.connect(database_path) as connection:
+            connection.execute("DELETE FROM schema_migrations")
+            connection.executemany("INSERT INTO schema_migrations (version) VALUES (?)", [(v,) for v in versions])
+        before = database_path.read_bytes()
+        with pytest.raises(ValueError):
+            initialize_database(database_path)
+        assert database_path.read_bytes() == before
+
+
+def test_upgrade_creates_recovery_copy_and_is_idempotent(database_path):
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DELETE FROM schema_migrations WHERE version = 6")
+        connection.execute("INSERT INTO activity_types (name, hourly_rate_cents) VALUES ('Keep', 50)")
+    initialize_database(database_path)
+    copies = list(database_path.parent.glob("*.before-migration-*.sqlite3"))
+    assert len(copies) == 1
+    with sqlite3.connect(copies[0]) as connection:
+        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone() == (5,)
+        assert connection.execute("SELECT name FROM activity_types").fetchone() == ('Keep',)
+    initialize_database(database_path)
+    assert list(database_path.parent.glob("*.before-migration-*.sqlite3")) == copies
+
+
+def test_repository_batch_errors_roll_back_all_changes(database_path):
+    from backend.database import RecordNotFoundError, InvalidRecordError, save_activities, save_weekly_plan
+
+    with pytest.raises(RecordNotFoundError):
+        save_activities([
+            {"id": None, "name": "Rollback", "hourly_rate_cents": 100, "is_active": True},
+            {"id": 9999, "name": "Missing", "hourly_rate_cents": 100, "is_active": True},
+        ], database_path)
+    assert list_records("activity_types", database_path=database_path) == []
+    activity_id = create_record("activity_types", {"name": "Training", "hourly_rate_cents": 100}, database_path)
+    plan_id = create_record("weekly_plan", {"weekday": 1, "activity_type_id": activity_id, "hours": 1}, database_path)
+    entry = {"id": plan_id, "weekday": 2, "activity_type_id": activity_id, "hours": 2, "is_active": True}
+    with pytest.raises(InvalidRecordError):
+        save_weekly_plan([entry, entry], database_path)
+    assert get_record("weekly_plan", plan_id, database_path)["hours"] == 1
+
+
+@pytest.mark.parametrize("kind", ["empty", "corrupt", "directory", "readonly", "symlink"])
+def test_invalid_database_is_preserved_and_error_is_actionable(tmp_path, kind):
+    from backend.storage_errors import DatabaseAccessError
+
+    path = tmp_path / "database.db"
+    if kind == "directory":
+        path.mkdir()
+    elif kind == "symlink":
+        original = tmp_path / "original.db"
+        initialize_database(original)
+        path.symlink_to(original)
+    elif kind == "readonly":
+        initialize_database(path)
+        path.chmod(0o400)
+    else:
+        path.write_bytes(b"" if kind == "empty" else b"damaged data")
+    before = path.read_bytes() if path.is_file() else None
+    try:
+        with pytest.raises(DatabaseAccessError) as error:
+            initialize_database(path)
+        assert str(tmp_path) not in str(error.value)
+        assert (path.read_bytes() if path.is_file() else None) == before
+    finally:
+        if kind == "readonly":
+            path.chmod(0o600)
+
+
+def test_locked_database_has_bounded_actionable_failure(database_path):
+    from backend.database import get_connection
+    from backend.storage_errors import DatabaseAccessError
+
+    with sqlite3.connect(database_path) as owner:
+        owner.execute("BEGIN IMMEDIATE")
+        with pytest.raises(DatabaseAccessError) as error:
+            with get_connection(database_path) as connection:
+                connection.execute("INSERT INTO activity_types (name, hourly_rate_cents) VALUES ('Busy', 1)")
+        assert error.value.code == "locked"
+    assert list_records("activity_types", database_path=database_path) == []
+
+
+def test_failed_migration_rolls_back_marker_and_schema(database_path, monkeypatch):
+    import backend.database as database
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DELETE FROM schema_migrations WHERE version = 6")
+
+    def failing_migration(connection):
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("CREATE TABLE incomplete_migration (id INTEGER)")
+        connection.execute("INSERT INTO schema_migrations (version) VALUES (6)")
+        raise sqlite3.DatabaseError("injected migration failure")
+
+    monkeypatch.setattr(database, "_migrate_invoice_previews", failing_migration)
+    with pytest.raises(sqlite3.DatabaseError):
+        initialize_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone() == (5,)
+        assert connection.execute("SELECT name FROM sqlite_master WHERE name = 'incomplete_migration'").fetchall() == []
+    assert list(database_path.parent.glob("*.before-migration-*.sqlite3"))
+
+
+def test_parallel_finalizations_commit_invoice_and_number_once(database_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.database import InvoiceAlreadyExistsError, get_organization
+
+    def finalize():
+        try:
+            return create_invoice_with_items(
+                {"year": 2026, "month": 1, "invoice_date": "2026-01-31", "total_amount_cents": 0},
+                [], database_path, expected_next_invoice_number=1,
+            )
+        except InvoiceAlreadyExistsError:
+            return None
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: finalize(), range(2)))
+    assert sum(result is not None for result in results) == 1
+    assert len(list_records("invoices", database_path=database_path)) == 1
+    assert get_organization(database_path)["next_invoice_number"] == 2
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("database is locked", "locked"),
+    ("database table is locked", "locked"),
+    ("file is not a database", "corrupt"),
+    ("database disk image is malformed", "corrupt"),
+    ("unable to open database file", "access"),
+])
+def test_storage_error_classification_without_python311_attributes(message, expected):
+    from backend.storage_errors import error_code
+    assert error_code(sqlite3.OperationalError(message)) == expected

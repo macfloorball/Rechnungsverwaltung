@@ -103,7 +103,15 @@ function validateFrontend(config) {
 function spawnBackend(config, root, env) {
   const child = spawn(config.python, config.args, {
     cwd: root, env: { ...env, TTC_FRONTEND_DIRECTORY: config.frontend },
-    stdio: ['pipe', 'inherit', 'inherit'], detached: true, windowsHide: true,
+    stdio: ['pipe', 'inherit', 'pipe'], detached: true, windowsHide: true,
+  });
+  let errorOutput = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    process.stderr.write(chunk);
+    errorOutput = (errorOutput + chunk).slice(-4096);
+    const match = errorOutput.match(/(?:^|\n)TTC_DATABASE_ERROR:(missing|locked|corrupt|access|schema)\r?\n/);
+    if (match) child.databaseError = match[1];
   });
   child.managedBackend = true;
   child.stdin.on('error', () => {});

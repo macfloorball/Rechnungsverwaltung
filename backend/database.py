@@ -1,9 +1,19 @@
+import calendar
+from datetime import date
 import re
 import sqlite3
+import tempfile
+import os
+from contextlib import closing
+from contextlib import contextmanager
 from pathlib import Path
+from collections.abc import Iterator
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from backend.paths import PROJECT_ROOT, get_database_path
+from backend.storage_errors import DatabaseAccessError, error_code
+
+# Compatibility constant; runtime defaults are resolved inside get_connection.
 DATABASE_PATH = PROJECT_ROOT / "data" / "ttc.db"
 
 TABLE_COLUMNS = {
@@ -92,18 +102,99 @@ TABLE_COLUMNS = {
 }
 
 
-def get_connection(database_path: Path = DATABASE_PATH) -> sqlite3.Connection:
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path)
-    connection.execute("PRAGMA foreign_keys = ON")
-    if database_path.stat().st_size == 0:
-        connection.execute("VACUUM")
-    return connection
+@contextmanager
+def get_connection(
+    database_path: Path | None = None, *, create: bool = False,
+) -> Iterator[sqlite3.Connection]:
+    """One transaction per operation; always close, including on rollback."""
+    database_path = Path(database_path) if database_path is not None else get_database_path()
+    connection = None
+    try:
+        if database_path.is_symlink() or (database_path.exists() and not database_path.is_file()):
+            raise DatabaseAccessError("access")
+        if not create and not database_path.exists():
+            raise DatabaseAccessError("missing")
+        if database_path.exists() and not os.access(database_path, os.R_OK | os.W_OK):
+            raise DatabaseAccessError("access")
+        if create:
+            database_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        uri = database_path.resolve().as_uri() + ("?mode=rwc" if create else "?mode=rw")
+        connection = sqlite3.connect(uri, uri=True, timeout=5)
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            yield connection
+    except sqlite3.IntegrityError:
+        raise
+    except DatabaseAccessError:
+        raise
+    except (sqlite3.DatabaseError, OSError) as error:
+        raise DatabaseAccessError(error_code(error)) from None
+    finally:
+        if connection is not None:
+            connection.close()
 
 
-def initialize_database(database_path: Path = DATABASE_PATH) -> None:
-    with get_connection(database_path) as connection:
-        connection.executescript(
+SCHEMA_VERSION = 6
+
+
+def get_schema_version(connection: sqlite3.Connection) -> int:
+    tables = {row[0] for row in connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    )}
+    if "schema_migrations" not in tables:
+        return 0
+    versions = [row[0] for row in connection.execute(
+        "SELECT version FROM schema_migrations ORDER BY version"
+    )]
+    if versions != list(range(1, len(versions) + 1)):
+        raise ValueError("Ungültige Reihenfolge der Datenbankmigrationen")
+    if versions and versions[-1] > SCHEMA_VERSION:
+        raise ValueError("Diese Datenbank benötigt eine neuere App-Version")
+    return len(versions)
+
+
+def _backup_before_migration(connection: sqlite3.Connection, path: Path) -> None:
+    # SQLite backup includes committed WAL contents; never overwrite a recovery copy.
+    descriptor, name = tempfile.mkstemp(prefix=path.name + ".before-migration-", suffix=".sqlite3", dir=path.parent)
+    os.close(descriptor)
+    target = Path(name)
+    try:
+        with closing(sqlite3.connect(target)) as backup:
+            connection.backup(backup)
+            if backup.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                raise sqlite3.DatabaseError("Migrationssicherung ist beschädigt")
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def initialize_database(database_path: Path | None = None) -> None:
+    database_path = Path(database_path) if database_path is not None else get_database_path()
+    existed = database_path.exists()
+    if existed and database_path.is_file() and database_path.stat().st_size == 0:
+        raise DatabaseAccessError("corrupt")
+    with get_connection(database_path, create=True) as connection:
+        if connection.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise DatabaseAccessError("corrupt")
+        version = get_schema_version(connection)
+        if existed:
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            required_tables = set(TABLE_COLUMNS) - ({"organizations"} if version == 0 else set())
+            if not required_tables <= tables:
+                raise DatabaseAccessError("corrupt")
+            if version == SCHEMA_VERSION:
+                for table, fields in TABLE_COLUMNS.items():
+                    columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+                    if not (fields | {"id"}) <= columns:
+                        raise DatabaseAccessError("corrupt")
+        if existed and version == SCHEMA_VERSION:
+            if connection.execute("PRAGMA foreign_key_check").fetchall():
+                raise DatabaseAccessError("corrupt")
+            # A normal restart/update validates only; never recreate or reseed data.
+            return
+        if existed and version < SCHEMA_VERSION:
+            _backup_before_migration(connection, database_path)
+        schema = (
             """
             CREATE TABLE IF NOT EXISTS organizations (
                 id INTEGER PRIMARY KEY,
@@ -231,16 +322,26 @@ def initialize_database(database_path: Path = DATABASE_PATH) -> None:
             );
             """
         )
+        # executescript would implicitly commit; keep bootstrap transactional.
+        connection.execute("BEGIN IMMEDIATE")
+        for statement in schema.split(";"):
+            if statement.strip():
+                connection.execute(statement)
         connection.execute(
             "INSERT OR IGNORE INTO organizations (id, name) VALUES (1, '')"
         )
         connection.commit()
-        _migrate_organization_support(connection)
-        _migrate_organization_invoice_fields(connection)
-        _migrate_weekly_plan_occurrences(connection)
-        _migrate_optional_training_hours(connection)
-        _migrate_weekly_plan_generated(connection)
-        _migrate_invoice_previews(connection)
+        for migration in (
+            _migrate_organization_support,
+            _migrate_organization_invoice_fields,
+            _migrate_weekly_plan_occurrences,
+            _migrate_optional_training_hours,
+            _migrate_weekly_plan_generated,
+            _migrate_invoice_previews,
+        ):
+            migration(connection)
+        if connection.execute("PRAGMA foreign_key_check").fetchall():
+            raise DatabaseAccessError("corrupt")
 
 
 def _migrate_organization_support(connection: sqlite3.Connection) -> None:
@@ -555,10 +656,10 @@ def _migrate_weekly_plan_generated(connection: sqlite3.Connection) -> None:
 
 
 def get_organization(
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
     organization_id: int = 1,
 ) -> dict[str, Any] | None:
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             "SELECT * FROM organizations WHERE id = ?",
@@ -569,7 +670,7 @@ def get_organization(
 
 def update_organization(
     values: dict[str, Any],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
     organization_id: int = 1,
 ) -> bool:
     _validate_fields("organizations", values)
@@ -577,7 +678,7 @@ def update_organization(
         return False
 
     assignments = ", ".join(f"{column} = ?" for column in values)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         cursor = connection.execute(
             f"""
             UPDATE organizations
@@ -607,7 +708,7 @@ def _validate_fields(table: str, fields: dict[str, Any]) -> None:
 def create_record(
     table: str,
     values: dict[str, Any],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> int:
     _validate_fields(table, values)
     if not values:
@@ -615,7 +716,7 @@ def create_record(
 
     columns = ", ".join(values)
     placeholders = ", ".join("?" for _ in values)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
             f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
@@ -665,10 +766,10 @@ def _migrate_invoice_previews(connection: sqlite3.Connection) -> None:
 def get_record(
     table: str,
     record_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> dict[str, Any] | None:
     _validate_table(table)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             f"SELECT * FROM {table} WHERE id = ?",
@@ -680,7 +781,7 @@ def get_record(
 def list_records(
     table: str,
     filters: dict[str, Any] | None = None,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     filters = filters or {}
     _validate_fields(table, filters)
@@ -692,7 +793,7 @@ def list_records(
         )
         parameters = tuple(filters.values())
 
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             f"SELECT * FROM {table}{where_clause} ORDER BY id",
@@ -705,14 +806,14 @@ def update_record(
     table: str,
     record_id: int,
     values: dict[str, Any],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> bool:
     _validate_fields(table, values)
     if not values:
         raise ValueError("Zum Ändern eines Datensatzes sind Werte erforderlich")
 
     assignments = ", ".join(f"{column} = ?" for column in values)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
             f"UPDATE {table} SET {assignments} WHERE id = ?",
@@ -724,10 +825,10 @@ def update_record(
 def delete_record(
     table: str,
     record_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> bool:
     _validate_table(table)
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
             f"DELETE FROM {table} WHERE id = ?",
@@ -739,7 +840,7 @@ def delete_record(
 def create_invoice_with_items(
     invoice: dict[str, Any],
     items: list[dict[str, Any]],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
     expected_next_invoice_number: int | None = None,
     updated_next_invoice_number: int | None = None,
 ) -> int:
@@ -757,7 +858,7 @@ def create_invoice_with_items(
     item_columns = ", ".join(("invoice_id", *item_fields))
     item_placeholders = ", ".join("?" for _ in range(len(item_fields) + 1))
 
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         existing = connection.execute(
@@ -841,9 +942,9 @@ class InvoicePreviewDeletionError(ValueError):
 
 def delete_final_invoice(
     invoice_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> dict[str, Any] | None:
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         connection.row_factory = sqlite3.Row
@@ -872,7 +973,7 @@ def save_invoice_preview(
     invoice_date: str,
     total_amount_cents: int,
     items: list[dict[str, Any]],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> int:
     for item in items:
         _validate_fields("invoice_items", item)
@@ -881,7 +982,7 @@ def save_invoice_preview(
     if any(set(item) != set(item_fields) for item in items):
         raise ValueError("Alle Rechnungspositionen müssen dieselben Felder haben")
 
-    with sqlite3.connect(database_path) as connection:
+    with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         existing = connection.execute(
@@ -943,7 +1044,7 @@ def save_invoice_preview(
 
 def get_invoice(
     invoice_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> dict[str, Any] | None:
     invoice = get_record("invoices", invoice_id, database_path)
     if invoice is None:
@@ -954,3 +1055,246 @@ def get_invoice(
         database_path,
     )
     return invoice
+
+class RecordNotFoundError(ValueError):
+    """A requested record no longer exists."""
+
+
+class InvalidRecordError(ValueError):
+    """An invalid batch must be rolled back as a whole."""
+
+
+def save_activities(activities: list[dict[str, Any]], database_path: Path) -> None:
+    with get_connection(database_path) as connection:
+        for activity in activities:
+            if activity["id"] is None:
+                connection.execute(
+                    """
+                    INSERT INTO activity_types (name, hourly_rate_cents, is_active)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        activity["name"],
+                        activity["hourly_rate_cents"],
+                        activity["is_active"],
+                    ),
+                )
+            else:
+                exists = connection.execute(
+                    "SELECT 1 FROM activity_types WHERE id = ?",
+                    (activity["id"],),
+                ).fetchone()
+                if exists is None:
+                    raise RecordNotFoundError("Tätigkeitsart wurde nicht gefunden")
+                connection.execute(
+                    """
+                    UPDATE activity_types
+                    SET name = ?, hourly_rate_cents = ?, is_active = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        activity["name"],
+                        activity["hourly_rate_cents"],
+                        activity["is_active"],
+                        activity["id"],
+                    ),
+                )
+
+
+def _ensure_weekly_plan_occurrences(
+    connection: sqlite3.Connection,
+    month_start: date,
+) -> None:
+    plan_entries = connection.execute(
+        """
+        SELECT weekly_plan.id, weekly_plan.organization_id, weekly_plan.weekday,
+               weekly_plan.activity_type_id, weekly_plan.hours,
+               activity_types.hourly_rate_cents
+        FROM weekly_plan
+        JOIN activity_types
+          ON activity_types.id = weekly_plan.activity_type_id
+         AND activity_types.organization_id = weekly_plan.organization_id
+        WHERE weekly_plan.organization_id = 1
+          AND weekly_plan.is_active = 1
+          AND activity_types.is_active = 1
+        ORDER BY weekly_plan.id
+        """
+    ).fetchall()
+    days_in_month = calendar.monthrange(month_start.year, month_start.month)[1]
+
+    for day_number in range(1, days_in_month + 1):
+        current_date = date(month_start.year, month_start.month, day_number)
+        date_string = current_date.isoformat()
+        matching_entries: dict[int, list[tuple[int, int, float, int]]] = {}
+        for entry in plan_entries:
+            if entry[2] == current_date.weekday():
+                matching_entries.setdefault(entry[3], []).append(
+                    (entry[0], entry[1], entry[4], entry[5])
+                )
+
+        for activity_type_id, entries in matching_entries.items():
+            existing_trainings = list(connection.execute(
+                """
+                SELECT id, weekly_plan_id
+                FROM trainings
+                WHERE organization_id = 1
+                  AND training_date = ?
+                  AND activity_type_id = ?
+                ORDER BY id
+                """,
+                (date_string, activity_type_id),
+            ).fetchall())
+            used_training_ids: set[int] = set()
+
+            for plan_id, organization_id, hours, unit_rate_cents in entries:
+                occurrence = connection.execute(
+                    """
+                    SELECT id
+                    FROM trainings
+                    WHERE weekly_plan_id = ? AND weekly_plan_date = ?
+                    """,
+                    (plan_id, date_string),
+                ).fetchone()
+                if occurrence is not None:
+                    used_training_ids.add(occurrence[0])
+                    continue
+
+                existing = next(
+                    (
+                        training
+                        for training in existing_trainings
+                        if training[0] not in used_training_ids
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    used_training_ids.add(existing[0])
+                    if existing[1] is None:
+                        connection.execute(
+                            """
+                            UPDATE trainings
+                            SET weekly_plan_id = ?, weekly_plan_date = ?
+                            WHERE id = ? AND weekly_plan_id IS NULL
+                            """,
+                            (plan_id, date_string, existing[0]),
+                        )
+                    continue
+
+                cursor = connection.execute(
+                    """
+                    INSERT INTO trainings (
+                        organization_id, training_date, weekly_plan_id,
+                        weekly_plan_date, activity_type_id, hours, status,
+                        note, unit_rate_cents, weekly_plan_generated
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?, 1)
+                    """,
+                    (
+                        organization_id,
+                        date_string,
+                        plan_id,
+                        date_string,
+                        activity_type_id,
+                        hours,
+                        unit_rate_cents,
+                    ),
+                )
+                used_training_ids.add(cursor.lastrowid)
+                existing_trainings.append((cursor.lastrowid, plan_id))
+
+
+def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None:
+    with get_connection(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("BEGIN IMMEDIATE")
+        existing_entries = {
+            row[0]: row
+            for row in connection.execute(
+                """
+                SELECT id, weekday, activity_type_id, hours, is_active
+                FROM weekly_plan
+                WHERE organization_id = 1
+                """
+            ).fetchall()
+        }
+        retained_ids: set[int] = set()
+        requested_ids: set[int] = set()
+        for entry in entries:
+            if entry["id"] is not None:
+                if entry["id"] in requested_ids:
+                    raise InvalidRecordError("Ein Planeintrag wurde mehrfach übermittelt")
+                if entry["id"] not in existing_entries:
+                    raise RecordNotFoundError("Planeintrag wurde nicht gefunden")
+                requested_ids.add(entry["id"])
+                connection.execute(
+                    """
+                    UPDATE weekly_plan
+                    SET weekday = ?, activity_type_id = ?, hours = ?, is_active = ?
+                    WHERE id = ? AND organization_id = 1
+                    """,
+                    (
+                        entry["weekday"],
+                        entry["activity_type_id"],
+                        entry["hours"],
+                        entry["is_active"],
+                        entry["id"],
+                    ),
+                )
+                retained_ids.add(entry["id"])
+                continue
+
+            cursor = connection.execute(
+                """
+                INSERT INTO weekly_plan (
+                    organization_id, weekday, activity_type_id, hours, is_active
+                ) VALUES (1, ?, ?, ?, ?)
+                """,
+                (
+                    entry["weekday"],
+                    entry["activity_type_id"],
+                    entry["hours"],
+                    entry["is_active"],
+                ),
+            )
+            retained_ids.add(cursor.lastrowid)
+
+        for plan_id in existing_entries.keys() - retained_ids:
+            connection.execute("DELETE FROM weekly_plan WHERE id = ?", (plan_id,))
+
+        current_month = date.today().replace(day=1)
+        following_month_index = current_month.year * 12 + current_month.month
+        following_month = date(
+            following_month_index // 12,
+            following_month_index % 12 + 1,
+            1,
+        )
+        _ensure_weekly_plan_occurrences(connection, current_month)
+        _ensure_weekly_plan_occurrences(connection, following_month)
+
+
+def ensure_weekly_plan_month(month_start: date, database_path: Path) -> None:
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        _ensure_weekly_plan_occurrences(connection, month_start)
+
+
+def complete_planned_month(year: int, month: int, database_path: Path) -> int:
+    month_start = date(year, month, 1).isoformat()
+    month_end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        result = connection.execute(
+            """
+            UPDATE trainings
+            SET status = 'completed'
+            WHERE organization_id = 1
+              AND training_date BETWEEN ? AND ?
+              AND status = 'planned'
+              AND weekly_plan_id IS NOT NULL
+              AND weekly_plan_generated = 1
+              AND weekly_plan_date = training_date
+            """,
+            (month_start, month_end),
+        )
+        updated_count = result.rowcount
+
+    return updated_count
