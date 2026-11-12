@@ -19,7 +19,7 @@ function launchConfig(mode, env = process.env, root = ROOT) {
   const url = new URL(config.url);
   const venv = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   const python = env.TTC_PYTHON || (fs.existsSync(venv) ? venv : process.platform === 'win32' ? 'python' : 'python3');
-  const args = ['-m', 'uvicorn', 'backend.main:app', '--host', url.hostname.replace(/[\[\]]/g, ''), '--port', url.port || '80'];
+  const args = ['-m', 'scripts.managed_server', 'backend.main:app', '--host', url.hostname.replace(/[\[\]]/g, ''), '--port', url.port || '80'];
   if (!production) args.push('--reload', '--reload-dir', path.join(root, 'backend'));
   return { ...config, python, args, desktop: mode.startsWith('desktop-'),
     frontend: mode === 'desktop-production' ? path.join(root, 'dist', 'frontend') : path.join(root, 'frontend') };
@@ -34,27 +34,60 @@ function checkPort(url) {
   });
 }
 
-async function stopTree(child) {
-  if (!child?.pid) return;
+const stoppingTrees = new WeakMap();
+function stopTree(child, options = {}) {
+  if (!child) return Promise.resolve(false);
+  if (!stoppingTrees.has(child)) stoppingTrees.set(child, stopOwnedTree(child, options));
+  return stoppingTrees.get(child);
+}
+
+async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}) {
+  if (!child?.pid) return false;
+  let forced = false;
+  if (child.managedBackend && child.exitCode === null && child.signalCode === null) {
+    child.stdin?.end('shutdown\n');
+    const deadline = Date.now() + graceMs;
+    while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (child.exitCode === null && child.signalCode === null) {
+      forced = true;
+      console.error('Server-Shutdown überschritten. Erzwinge Beenden eigener Prozesse; laufende Datenoperationen können unterbrochen werden.');
+    }
+  }
+  if (child.managedBackend && child.exitCode !== null && child.exitCode !== 0) {
+    console.error('Anwendungsserver wurde nicht fehlerfrei beendet.');
+    forced = true;
+  }
   if (process.platform === 'win32') {
-    await new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) return forced;
+    await new Promise((resolve, reject) => {
       const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
-      killer.once('error', resolve); killer.once('exit', resolve);
+      const timer = setTimeout(() => { killer.kill(); reject(new Error('Prozessbereinigung hat das Zeitlimit überschritten')); }, 5000);
+      killer.once('error', (error) => { clearTimeout(timer); reject(error); });
+      killer.once('exit', (code) => { clearTimeout(timer);
+        if (code !== 0 && child.exitCode === null && child.signalCode === null) reject(new Error('Eigener Prozess konnte nicht beendet werden'));
+        else resolve();
+      });
     });
-    return;
+    return forced;
   }
   const signal = (name) => {
     try { process.kill(-child.pid, name); return true; }
     catch (error) { if (error.code !== 'ESRCH') throw error; return false; }
   };
-  if (!signal('SIGTERM')) return;
+  if (!signal('SIGTERM')) return forced;
   // Also wait for reload workers when their parent has already exited.
-  const deadline = Date.now() + 2000;
+  const deadline = Date.now() + terminateMs;
   while (Date.now() < deadline) {
-    try { process.kill(-child.pid, 0); } catch { return; }
+    try { process.kill(-child.pid, 0); } catch (error) { if (error.code === 'ESRCH') return forced; throw error; }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  signal('SIGKILL');
+  if (signal('SIGKILL')) {
+    console.error('Eigener Prozessbaum reagiert nicht; erzwungen beendet.');
+    return true;
+  }
+  return forced;
 }
 
 async function run(mode, { root = ROOT, env = process.env, electronEntry = root } = {}) {
@@ -76,8 +109,10 @@ async function run(mode, { root = ROOT, env = process.env, electronEntry = root 
     if (shutdownPromise) return shutdownPromise;
     stopping = true;
     shutdownPromise = (async () => {
-      await Promise.all(children.map(stopTree));
-      finish(code);
+      const results = await Promise.allSettled(children.map((child) => stopTree(child)));
+      const failed = results.some((result) => result.status === 'rejected' || result.value === true);
+      if (results.some((result) => result.status === 'rejected')) console.error('Fehler beim Beenden eigener Prozesse; Prozessstatus prüfen.');
+      finish(failed ? 1 : code);
     })();
     return shutdownPromise;
   }
@@ -91,7 +126,9 @@ async function run(mode, { root = ROOT, env = process.env, electronEntry = root 
       // Each managed child receives an explicit, mode-specific address.
       TTC_DESKTOP_URL: config.url,
       TTC_DESKTOP_PRODUCTION_URL: config.url,
-    }, stdio: 'inherit', detached: true, windowsHide: false });
+    }, stdio: [label === 'Anwendungsserver' ? 'pipe' : 'inherit', 'inherit', 'inherit'], detached: true, windowsHide: false });
+    child.managedBackend = label === 'Anwendungsserver';
+    child.stdin?.on('error', () => {});
     children.push(child);
     child.once('error', () => {
       console.error(`${label} konnte nicht gestartet werden. Python-Pfad (TTC_PYTHON), Installation und Abhängigkeiten prüfen.`);

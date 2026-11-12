@@ -1,11 +1,13 @@
 'use strict';
 
 const path = require('node:path');
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, screen } = require('electron');
+const { APP_NAME, getWindowOptions } = require('./identity.cjs');
 
 function createMainWindow(frontendURL, onError) {
   const mainWindow = new BrowserWindow({
-    width: 1200, height: 850, minWidth: 760, minHeight: 600, show: false,
+    ...getWindowOptions(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea),
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -17,7 +19,13 @@ function createMainWindow(frontendURL, onError) {
   });
 
   const contents = mainWindow.webContents;
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.on('page-title-updated', (event) => {
+    event.preventDefault();
+    mainWindow.setTitle(APP_NAME);
+  });
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow.isDestroyed()) mainWindow.show();
+  });
   const session = contents.session;
   session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.setPermissionCheckHandler(() => false);
@@ -48,10 +56,12 @@ function createMainWindow(frontendURL, onError) {
     if (details.reason !== 'clean-exit') onError(new Error(`Renderer beendet: ${details.reason}`));
   });
   contents.on('did-fail-load', (_event, code, _description, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3) onError(new Error(`Frontend-Ladefehler (${code})`));
+    if (!mainWindow.isDestroyed() && isMainFrame && code !== -3) onError(new Error(`Frontend-Ladefehler (${code})`));
   });
   const loaded = mainWindow.loadURL(frontendURL);
-  loaded.catch(() => onError(new Error('Frontend konnte nicht geladen werden')));
+  loaded.catch(() => {
+    if (!mainWindow.isDestroyed()) onError(new Error('Frontend konnte nicht geladen werden'));
+  });
   return mainWindow;
 }
 

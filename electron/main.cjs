@@ -4,6 +4,9 @@ const { app, dialog } = require('electron');
 const { getDesktopConfig } = require('./config.cjs');
 const { waitForFrontend } = require('./startup.cjs');
 const { createMainWindow } = require('./window.cjs');
+const { APP_NAME, configureIdentity } = require('./identity.cjs');
+
+configureIdentity(app);
 
 let mainWindow = null;
 let frontendURL;
@@ -13,13 +16,14 @@ function fail(error) {
   if (stopping) return;
   stopping = true;
   console.error('Electron-Fehler:', error instanceof Error ? error.message : 'Unbekannter Main-Prozessfehler');
-  dialog.showErrorBox('Rechnungsverwaltung – Startfehler', error instanceof Error ? error.message : 'Die Anwendung konnte nicht geladen werden.');
+  dialog.showErrorBox(`${APP_NAME} – Startfehler`, error instanceof Error ? error.message : 'Die Anwendung konnte nicht geladen werden.');
   app.exit(1);
 }
 
 function openMainWindow() {
   if (stopping) return;
   if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
     return;
   }

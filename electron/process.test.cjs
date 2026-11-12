@@ -38,11 +38,14 @@ test('main owns one window, clears closed reference and quits on Windows', async
   const windows = [];
   run('main.cjs', (name) => {
     if (name === 'electron') return { app, dialog: { showErrorBox: () => {} } };
+    if (name === './identity.cjs') return { APP_NAME: 'TTC Rechnungsverwaltung', configureIdentity: () => {} };
     if (name === './startup.cjs') return { waitForFrontend: async () => {} };
     if (name === './config.cjs') return require('./config.cjs');
     if (name === './window.cjs') return { createMainWindow: () => {
       const win = new EventEmitter();
       win.isDestroyed = () => false;
+      win.isMinimized = () => true;
+      win.restore = () => { win.restored = true; };
       win.focus = () => { win.focused = true; };
       windows.push(win);
       return win;
@@ -54,6 +57,7 @@ test('main owns one window, clears closed reference and quits on Windows', async
   app.emit('activate');
   assert.equal(windows.length, 1);
   assert.ok(windows[0].focused);
+  assert.ok(windows[0].restored);
   windows[0].emit('closed'); app.emit('activate');
   assert.equal(windows.length, 2);
   app.emit('window-all-closed'); assert.equal(quit, 1);

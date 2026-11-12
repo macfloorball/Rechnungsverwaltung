@@ -39,3 +39,25 @@ test('managed process can be terminated', async () => {
   await stopTree(child); await ended;
   assert.ok(child.signalCode || child.exitCode !== null);
 });
+
+test('cooperative shutdown waits for an active operation and is idempotent', async () => {
+  const child = spawn(process.execPath, ['-e', `process.stdin.once('data',()=>setTimeout(()=>process.exit(0),150));`],
+    { detached: true, stdio: ['pipe','ignore','ignore'] });
+  child.managedBackend = true;
+  child.stdin.on('error',()=>{});
+  await once(child,'spawn');
+  const first = stopTree(child, {graceMs: 2000});
+  assert.equal(stopTree(child), first);
+  assert.equal(await first, false);
+  assert.equal(child.exitCode,0);
+  assert.equal(await stopTree(child),false);
+});
+
+test('unresponsive backend has a bounded shutdown and reports escalation', async () => {
+  const child = spawn(process.execPath, ['-e', 'process.stdin.resume();setInterval(()=>{},1000)'],
+    { detached: true, stdio: ['pipe','ignore','ignore'] });
+  child.managedBackend = true;
+  child.stdin.on('error',()=>{});
+  await once(child,'spawn');
+  assert.equal(await stopTree(child,{graceMs:100,terminateMs:100}),true);
+});
