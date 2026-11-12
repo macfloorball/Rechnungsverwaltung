@@ -309,6 +309,7 @@ Standard ist `http://127.0.0.1:8000/`, zentral in `electron/config.cjs`.
 | `TTC_DESKTOP_URL` | Adresse für Desktop- und Webentwicklung |
 | `TTC_DESKTOP_PRODUCTION_URL` | Getrennte Adresse für Desktop-Produktion, EXE und `web:start`; ignoriert den Entwicklungswert |
 | `TTC_PYTHON` | Optionaler Interpreterpfad, vorzugsweise absolut |
+| `TTC_DATA_DIRECTORY` | Absolutes Verzeichnis für `ttc.db`; Desktop-Standard: Electron-`userData`, Web-Standard: `data/` im Projekt |
 | `TTC_FRONTEND_DIRECTORY` | Frontend-Pfad beim direkten Uvicorn-Webstart; verwaltete Startmodi setzen ihn selbst |
 
 Zulässig sind nur HTTP-Origins mit `127.0.0.1` oder `[::1]`, optionalem Port,
@@ -335,8 +336,14 @@ aufgelöst; absolute Pfade sind ebenfalls möglich. Ohne Variable gilt `frontend
 App-Name und Fenstertitel sind **TTC Rechnungsverwaltung**. Das Fenster startet
 mit 1280 × 800, mindestens 1000 × 650; auf kleineren Arbeitsflächen werden
 beide Werte begrenzt. Minimieren, Wiederherstellen und Maximieren sind nativ.
-Electron-Profile behalten den bisherigen technischen Namen; Rechnungsdaten
-werden dadurch nicht verschoben.
+Electron-Profile behalten den bisherigen technischen Namen. Die Desktop-Datenbank
+liegt als `ttc.db` im Electron-`userData`-Verzeichnis:
+Windows `%APPDATA%/ttc-rechnungsverwaltung`, Linux
+`${XDG_CONFIG_HOME:-~/.config}/ttc-rechnungsverwaltung`, macOS
+`~/Library/Application Support/ttc-rechnungsverwaltung`. Ein explizites
+`TTC_DATA_DIRECTORY` überschreibt diesen Ort. Die Web-Startmodi behalten ohne
+Override `data/ttc.db`. Entwicklung und Produktion nutzen dasselbe Desktop-Profil;
+für isolierte Tests ein separates absolutes Datenverzeichnis setzen.
 
 Sandbox, Context Isolation und CSP sind aktiv, Node-Integration und unnötige
 Berechtigungen deaktiviert. Preload stellt nur `ttcDesktop.apiVersion` und den
@@ -407,10 +414,10 @@ Der Build enthält Frontend, Electron-Module, Backend-Quellcode,
 `scripts/run.cjs`, `scripts/managed_server.py` und `requirements.txt`.
 Vorhandene `.venv`-Ordner, Python-Pakete, Datenbanken und Rechnungen werden
 nicht eingepackt. Tests ausschließlich mit neu angelegten Testdaten durchführen:
-Die bisherigen Datenpfade bleiben unverändert (`resources/app/data/ttc.db`
-und `resources/app/rechnungen/`). Eine updatefeste Datenablage sowie ein
-vollständiges Paket mit eingebetteter Python-Laufzeit und Abhängigkeiten sind
-spätere Arbeiten; dieser Testbuild ist noch nicht eigenständig verteilbar.
+Die Desktop-Datenbank liegt außerhalb des Builds im Benutzerprofil; PDFs
+liegen bis Phase 3 weiterhin unter `resources/app/rechnungen/`. Ein
+vollständiges Paket mit eingebetteter Python-Laufzeit und Abhängigkeiten bleibt
+offen; dieser Testbuild ist noch nicht eigenständig verteilbar.
 
 Nach Installation der Abhängigkeiten benötigen die vorhandenen Fachfunktionen
 keine externen Dienste, aber weiterhin das von Electron gestartete lokale

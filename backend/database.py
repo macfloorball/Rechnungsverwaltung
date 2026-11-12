@@ -5,7 +5,9 @@ from pathlib import Path
 from collections.abc import Iterator
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from backend.paths import PROJECT_ROOT, get_database_path
+
+# Compatibility constant; runtime defaults are resolved inside get_connection.
 DATABASE_PATH = PROJECT_ROOT / "data" / "ttc.db"
 
 TABLE_COLUMNS = {
@@ -96,10 +98,10 @@ TABLE_COLUMNS = {
 
 @contextmanager
 def get_connection(
-    database_path: Path = DATABASE_PATH, *, create: bool = False,
+    database_path: Path | None = None, *, create: bool = False,
 ) -> Iterator[sqlite3.Connection]:
     """One transaction per operation; always close, including on rollback."""
-    database_path = Path(database_path)
+    database_path = Path(database_path) if database_path is not None else get_database_path()
     if create:
         database_path.parent.mkdir(parents=True, exist_ok=True)
     uri = database_path.resolve().as_uri() + ("?mode=rwc" if create else "?mode=rw")
@@ -112,7 +114,7 @@ def get_connection(
         connection.close()
 
 
-def initialize_database(database_path: Path = DATABASE_PATH) -> None:
+def initialize_database(database_path: Path | None = None) -> None:
     with get_connection(database_path, create=True) as connection:
         connection.executescript(
             """
@@ -566,7 +568,7 @@ def _migrate_weekly_plan_generated(connection: sqlite3.Connection) -> None:
 
 
 def get_organization(
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
     organization_id: int = 1,
 ) -> dict[str, Any] | None:
     with get_connection(database_path) as connection:
@@ -580,7 +582,7 @@ def get_organization(
 
 def update_organization(
     values: dict[str, Any],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
     organization_id: int = 1,
 ) -> bool:
     _validate_fields("organizations", values)
@@ -618,7 +620,7 @@ def _validate_fields(table: str, fields: dict[str, Any]) -> None:
 def create_record(
     table: str,
     values: dict[str, Any],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> int:
     _validate_fields(table, values)
     if not values:
@@ -676,7 +678,7 @@ def _migrate_invoice_previews(connection: sqlite3.Connection) -> None:
 def get_record(
     table: str,
     record_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> dict[str, Any] | None:
     _validate_table(table)
     with get_connection(database_path) as connection:
@@ -691,7 +693,7 @@ def get_record(
 def list_records(
     table: str,
     filters: dict[str, Any] | None = None,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     filters = filters or {}
     _validate_fields(table, filters)
@@ -716,7 +718,7 @@ def update_record(
     table: str,
     record_id: int,
     values: dict[str, Any],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> bool:
     _validate_fields(table, values)
     if not values:
@@ -735,7 +737,7 @@ def update_record(
 def delete_record(
     table: str,
     record_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> bool:
     _validate_table(table)
     with get_connection(database_path) as connection:
@@ -750,7 +752,7 @@ def delete_record(
 def create_invoice_with_items(
     invoice: dict[str, Any],
     items: list[dict[str, Any]],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
     expected_next_invoice_number: int | None = None,
     updated_next_invoice_number: int | None = None,
 ) -> int:
@@ -852,7 +854,7 @@ class InvoicePreviewDeletionError(ValueError):
 
 def delete_final_invoice(
     invoice_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> dict[str, Any] | None:
     with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -883,7 +885,7 @@ def save_invoice_preview(
     invoice_date: str,
     total_amount_cents: int,
     items: list[dict[str, Any]],
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> int:
     for item in items:
         _validate_fields("invoice_items", item)
@@ -954,7 +956,7 @@ def save_invoice_preview(
 
 def get_invoice(
     invoice_id: int,
-    database_path: Path = DATABASE_PATH,
+    database_path: Path | None = None,
 ) -> dict[str, Any] | None:
     invoice = get_record("invoices", invoice_id, database_path)
     if invoice is None:

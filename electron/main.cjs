@@ -79,7 +79,7 @@ app.on('second-instance', () => {
 if (!primaryInstance) app.quit();
 else app.whenReady().then(async () => {
   const config = getDesktopConfig(process.env, process.argv, app.isPackaged);
-  backend = createBackend({ config, root: app.getAppPath(), env: process.env, onFailure: fail });
+  backend = createBackend({ config, root: app.getAppPath(), env: { ...process.env, TTC_DATA_DIRECTORY: process.env.TTC_DATA_DIRECTORY || app.getPath('userData') }, onFailure: fail });
   await backend.start();
   if (stopping) return;
   frontendURL = config.url;

@@ -32,6 +32,7 @@ test('main owns one window, clears closed reference and quits on Windows', async
   app.isReady = () => true;
   app.requestSingleInstanceLock = () => true;
   app.getAppPath = () => __dirname;
+  app.getPath = () => '/test/user-data';
   let quit = 0;
   app.quit = () => {
     let prevented=false;
@@ -101,6 +102,7 @@ for (const scenario of ['startup-failure', 'runtime-failure', 'cleanup-failure',
     app.requestSingleInstanceLock = () => true;
     app.isReady = () => true;
     app.getAppPath = () => __dirname;
+  app.getPath = () => '/test/user-data';
     app.whenReady = async () => {};
     let shutdowns = 0;
     let prompts = 0;

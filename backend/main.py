@@ -16,8 +16,9 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.paths import get_database_path as resolve_database_path
+
 from backend.database import (
-    DATABASE_PATH,
     get_connection,
     PROJECT_ROOT,
     InvoiceAlreadyExistsError,
@@ -57,7 +58,7 @@ from backend.models import (
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    initialize_database(getattr(app.state, "test_database_path", DATABASE_PATH))
+    initialize_database(getattr(app.state, "test_database_path", resolve_database_path()))
     yield
 
 
@@ -66,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_database_path() -> Path:
-    return DATABASE_PATH
+    return resolve_database_path()
 
 
 def get_invoice_directory() -> Path:

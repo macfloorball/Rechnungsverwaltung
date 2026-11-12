@@ -3,11 +3,15 @@ import os
 import re
 import sqlite3
 import tempfile
+import sys
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from backend.paths import get_database_path
+
 DEFAULT_DATABASE = PROJECT_ROOT / "data" / "ttc.db"
 DEFAULT_BACKUP_DIRECTORY = Path.home() / "ttc-rechnungsverwaltung-backups"
 BACKUP_NAME_PATTERN = re.compile(r"ttc-(\d{8}T\d{12}Z)\.sqlite3\Z")
@@ -34,11 +38,12 @@ def _remove_expired_backups(
 
 
 def create_database_backup(
-    database_path: Path = DEFAULT_DATABASE,
+    database_path: Path | None = None,
     backup_directory: Path = DEFAULT_BACKUP_DIRECTORY,
     retention_days: int = 30,
     now: datetime | None = None,
 ) -> Path:
+    database_path = database_path if database_path is not None else get_database_path()
     if retention_days < 1:
         raise ValueError("Die Aufbewahrungsdauer muss mindestens 1 Tag betragen")
     if not database_path.is_file():
@@ -88,7 +93,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Erstellt und rotiert zugriffsgeschützte SQLite-Sicherungen."
     )
-    parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
+    parser.add_argument("--database", type=Path, default=None)
     parser.add_argument(
         "--backup-directory",
         type=Path,
