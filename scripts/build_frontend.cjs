@@ -15,13 +15,15 @@ async function buildFrontend(root = path.join(__dirname, '..')) {
   const hash = crypto.createHash('sha256');
   const contents = await Promise.all(files.map(async (file) => {
     const data = await fs.readFile(path.join(source, file));
-    hash.update(file.split(path.sep).join('/')).update(data);
     return data;
   }));
   await fs.rm(target, { recursive: true, force: true });
   for (const [index, file] of files.entries()) {
     await fs.mkdir(path.dirname(path.join(target, file)), { recursive: true });
     await fs.writeFile(path.join(target, file), contents[index]);
+  }
+  for (const [index, file] of files.entries()) {
+    hash.update(file.split(path.sep).join('/')).update(contents[index]);
   }
   const manifest = { buildId: hash.digest('hex') };
   await fs.writeFile(path.join(target, 'desktop-build.json'), JSON.stringify(manifest));

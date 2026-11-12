@@ -9,7 +9,7 @@ const { waitForFrontend } = require('./startup.cjs');
 const { getDesktopConfig } = require('./config.cjs');
 
 test('production selects repository-relative build and configurable loopback origin', () => {
-  const config = getDesktopConfig({ TTC_DESKTOP_URL: 'http://127.0.0.1:8123' }, ['--desktop-production']);
+  const config = getDesktopConfig({ TTC_DESKTOP_PRODUCTION_URL: 'http://127.0.0.1:8123', TTC_DESKTOP_URL: 'http://127.0.0.1:9999' }, ['--desktop-production']);
   assert.equal(config.mode, 'production');
   assert.equal(config.url, 'http://127.0.0.1:8123/');
   assert.equal(config.buildDirectory, path.join(__dirname, '..', 'dist', 'frontend'));
