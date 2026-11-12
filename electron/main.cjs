@@ -1,53 +1,42 @@
 'use strict';
 
-const path = require('node:path');
-const { app, BrowserWindow } = require('electron');
+const { app } = require('electron');
 const { getFrontendURL } = require('./config.cjs');
+const { createMainWindow } = require('./window.cjs');
 
-let mainWindow;
-
-async function createWindow() {
-  const frontendURL = getFrontendURL(process.env.TTC_DESKTOP_URL);
-  mainWindow = new BrowserWindow({
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-      webviewTag: false,
-    },
-  });
-
-  const contents = mainWindow.webContents;
-  const session = contents.session;
-  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  session.setPermissionCheckHandler(() => false);
-  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  contents.on('will-attach-webview', (event) => event.preventDefault());
-  const allowedURL = frontendURL || require('node:url').pathToFileURL(path.join(__dirname, 'ready.html')).href;
-  for (const eventName of ['will-navigate', 'will-redirect']) {
-    contents.on(eventName, (event, url) => {
-      if (url !== allowedURL) event.preventDefault();
-    });
-  }
-  session.webRequest.onBeforeRequest((details, callback) => {
-    const allowed = frontendURL
-      ? new URL(details.url).origin === new URL(frontendURL).origin
-      : details.url === allowedURL;
-    callback({ cancel: !allowed });
-  });
-  contents.on('console-message', (event) => {
-    if (event.level === 'error') console.error('[renderer]', event.message);
-  });
-  if (frontendURL) await mainWindow.loadURL(frontendURL);
-  else await mainWindow.loadFile(path.join(__dirname, 'ready.html'));
-}
+let mainWindow = null;
+let frontendURL;
+let stopping = false;
 
 function fail(error) {
-  console.error('Electron-Start fehlgeschlagen:', error.message);
+  if (stopping) return;
+  stopping = true;
+  console.error('Electron-Fehler:', error instanceof Error ? error.message : 'Unbekannter Main-Prozessfehler');
   app.exit(1);
 }
 
-app.whenReady().then(createWindow).catch(fail);
-app.on('window-all-closed', () => app.quit());
-// No preload or IPC handlers: the renderer receives no privileged API.
+function openMainWindow() {
+  if (stopping) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.focus();
+    return;
+  }
+  mainWindow = createMainWindow(frontendURL, fail);
+  mainWindow.once('closed', () => { mainWindow = null; });
+}
+
+process.on('uncaughtException', fail);
+process.on('unhandledRejection', fail);
+app.on('before-quit', () => { stopping = true; });
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+app.on('activate', () => {
+  if (app.isReady()) {
+    try { openMainWindow(); } catch (error) { fail(error); }
+  }
+});
+app.whenReady().then(() => {
+  frontendURL = getFrontendURL(process.env.TTC_DESKTOP_URL);
+  openMainWindow();
+}).catch(fail);

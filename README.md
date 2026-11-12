@@ -274,4 +274,16 @@ oder `[::1]`, optionalem Port, ohne Pfad, Zugangsdaten oder Queryparameter.
 Es gibt keinen automatisch gestarteten Server und keinen Produktionsbuild.
 Neue Fenster, fremde Navigation und Berechtigungsanfragen sind gesperrt;
 PDF-Popups und Downloads sind noch keine abgenommenen Desktop-Funktionen.
-Details und Prüfergebnisse: [Abschlussbericht](Planung/Phase_1_Schritt_1_Electron.md).
+
+### Prozessarchitektur (Phase 1, Schritt 2)
+
+`electron/main.cjs` steuert Initialisierung, Lebenszyklus und zentrale
+Fehlerbehandlung. `electron/window.cjs` erstellt und schützt das Hauptfenster.
+Das sandboxfähige `electron/preload.cjs` stellt über `contextBridge` nur
+`window.ttcDesktop.apiVersion` bereit; es gibt noch keine aufrufbaren
+Desktop-Funktionen oder IPC-Kanäle. Das bestehende Frontend bleibt unverändert.
+
+Unter Windows/Linux beendet das Schließen des letzten Fensters die App;
+unter macOS kann Aktivieren das Hauptfenster erneut öffnen. Schwere Main-,
+Preload-, Lade- oder Rendererfehler werden auf stderr gemeldet und beenden die
+App mit Exitcode 1. Es erfolgt kein automatischer Neustart.
