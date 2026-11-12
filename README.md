@@ -418,3 +418,20 @@ Backend. Erstinstallation und Paketierung benötigen Downloads. Der Build
 kann unter Linux erzeugt und statisch geprüft werden; die native Ausführung,
 Python-Erkennung und Prozessbeendigung müssen zusätzlich auf einem echten
 Windows-System abgenommen werden.
+
+## Datenzugriff und Transaktionsgrenzen
+
+Das Frontend verwendet ausschließlich die lokale REST-API. SQLite wird im
+Python-Backend verwendet; Electron und der PDF-Renderer berechnen keine
+Datenbankabfragen. Die dauerhaften Tabellen sind `organizations`,
+`activity_types`, `weekly_plan`, `trainings`, `invoices` und `invoice_items`.
+`schema_migrations` speichert den angewendeten Schemastand.
+
+`backend/database.py` enthält CRUD, Organisationseinstellungen und atomare
+Rechnungsoperationen. Finalisierung speichert Rechnung, Positionen und
+Nummernkreis gemeinsam; Vorschauaktualisierung ersetzt die Positionen in einer
+Transaktion. Fremdschlüssel schützen Zuordnungen und löschen Rechnungspositionen
+mit ihrer Rechnung. Kalendererzeugung ordnet Wochenplanvorkommen eindeutig zu.
+Preis-, Einstellungs- und Logo-Snapshots erhalten historische Rechnungsdaten.
+PDF-Dateien sind eigenständige Dateien; ihre Erzeugung und SQLite-Transaktionen
+bilden keine gemeinsame atomare Operation.
