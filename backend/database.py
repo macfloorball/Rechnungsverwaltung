@@ -187,6 +187,11 @@ def initialize_database(database_path: Path | None = None) -> None:
                     columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
                     if not (fields | {"id"}) <= columns:
                         raise DatabaseAccessError("corrupt")
+        if existed and version == SCHEMA_VERSION:
+            if connection.execute("PRAGMA foreign_key_check").fetchall():
+                raise DatabaseAccessError("corrupt")
+            # A normal restart/update validates only; never recreate or reseed data.
+            return
         if existed and version < SCHEMA_VERSION:
             _backup_before_migration(connection, database_path)
         schema = (

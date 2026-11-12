@@ -540,3 +540,24 @@ Die lokale API meldet nicht verfügbare Datenbanken mit HTTP 503 und einer
 Handlungsanweisung ohne SQL oder personenbezogene Inhalte. Electron zeigt beim
 fehlgeschlagenen Backend-Start eine entsprechende feste Meldung. Schemafehler
 erfordern eine passende App-Version, keinen automatischen Datenbank-Reset.
+
+### Datenerhalt bei App-Austausch
+
+Desktop-Updates verwenden denselben technischen Profilnamen und damit denselben
+Datenbankpfad. Ein Start mit aktuellem Schema prüft nur Struktur, Integrität und
+Fremdschlüssel; er legt keine Tabellen oder Standarddatensätze erneut an. Neue
+App-Dateien enthalten keine Datenbank und keine Migrationssicherungen. Der Build
+kopiert ausschließlich Python-Quellmodule aus dem Backend-Verzeichnis.
+
+Der Austausch des Installationsverzeichnisses und wiederholte Starts erhalten
+Organisation/Empfänger, Wochenplan, Termine, Nummernkreis und Rechnungssnapshots.
+Der Datenpfad hängt weder vom Arbeitsverzeichnis noch vom Installationspfad ab.
+Ein explizit geänderter Profilpfad ist ein anderer Datenbestand. Auch beim
+Austausch der App keine alten Datenquellen oder Rechnungsverzeichnisse löschen.
+Installer, Deinstallation und Updates der PDF-Ablage werden in ihren späteren
+Phasen separat umgesetzt und auf Windows geprüft.
+
+Beim manuellen Datenbank-Backup für den Desktop dasselbe `TTC_DATA_DIRECTORY`
+setzen oder `--database` mit dem absoluten Desktop-Datenbankpfad angeben. Der
+Linux-systemd-Timer verwendet ohne eigene Konfiguration weiterhin die Web-Datenbank;
+für Desktop-Daten den Datenpfad ausdrücklich in der Unit konfigurieren.
