@@ -19,8 +19,10 @@ from backend.database import (
     DATABASE_PATH,
     PROJECT_ROOT,
     InvoiceAlreadyExistsError,
+    InvoicePreviewDeletionError,
     create_invoice_with_items,
     create_record,
+    delete_final_invoice,
     delete_record,
     get_invoice,
     get_organization,
@@ -722,20 +724,14 @@ def preview_invoice(
         payload.month,
         database_path,
     )
-    try:
-        save_invoice_preview(
-            payload.year,
-            payload.month,
-            date.today().isoformat(),
-            total_amount_cents,
-            items,
-            database_path,
-        )
-    except InvoiceAlreadyExistsError as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Für diesen Monat wurde bereits eine endgültige Rechnung erstellt",
-        ) from error
+    save_invoice_preview(
+        payload.year,
+        payload.month,
+        date.today().isoformat(),
+        total_amount_cents,
+        items,
+        database_path,
+    )
     return {
         "year": payload.year,
         "month": payload.month,
@@ -1016,6 +1012,69 @@ def post_invoice(
         for key, value in invoice.items()
         if key not in {"invoice_snapshot_json", "logo_snapshot", "logo_media_type"}
     }
+
+
+@app.delete("/api/invoices/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_invoice(
+    invoice_id: int,
+    database_path: DatabasePath,
+    invoice_directory: InvoiceDirectory,
+) -> Response:
+    existing_invoice = get_invoice(invoice_id, database_path)
+    if existing_invoice is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Endgültige Rechnung wurde nicht gefunden",
+        )
+    if existing_invoice["is_preview"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rechnungsvorschauen können nicht gelöscht werden",
+        )
+    if existing_invoice["pdf_path"] and (
+        existing_invoice["pdf_path"]
+        != build_invoice_filename(
+            existing_invoice["year"],
+            existing_invoice["month"],
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Die zugehörige PDF-Datei konnte nicht sicher zugeordnet werden",
+        )
+
+    try:
+        invoice = delete_final_invoice(invoice_id, database_path)
+    except InvoicePreviewDeletionError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rechnungsvorschauen können nicht gelöscht werden",
+        ) from error
+    if invoice is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Endgültige Rechnung wurde nicht gefunden",
+        )
+
+    pdf_path = invoice["pdf_path"]
+    if pdf_path:
+        expected_filename = build_invoice_filename(
+            invoice["year"],
+            invoice["month"],
+        )
+        if pdf_path != expected_filename:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Rechnung wurde gelöscht, die PDF-Datei konnte nicht sicher zugeordnet werden",
+            )
+        try:
+            (invoice_directory / expected_filename).unlink(missing_ok=True)
+        except OSError as error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Rechnung wurde gelöscht, die zugehörige PDF-Datei konnte jedoch nicht entfernt werden",
+            ) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.get("/api/invoices/{invoice_id}/pdf")

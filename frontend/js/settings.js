@@ -238,6 +238,7 @@ function renderInvoices(rows, emptyMessage, invoices) {
     );
 
     const actions = element("td");
+    actions.className = "invoice-history-actions";
     if (invoice.pdf_path) {
       const pdfUrl = `/api/invoices/${invoice.id}/pdf`;
       const openLink = element("a", "Rechnung öffnen");
@@ -248,11 +249,15 @@ function renderInvoices(rows, emptyMessage, invoices) {
       downloadLink.href = pdfUrl;
       downloadLink.download =
         `Rechnung_TTC_${String(invoice.year).padStart(4, "0")}-${String(invoice.month).padStart(2, "0")}.pdf`;
-      actions.className = "invoice-history-actions";
       actions.append(openLink, downloadLink);
     } else {
-      actions.textContent = "Kein gespeichertes PDF vorhanden";
+      actions.append(element("span", "Kein gespeichertes PDF vorhanden"));
     }
+    const deleteButton = element("button", "Rechnung löschen");
+    deleteButton.type = "button";
+    deleteButton.className = "secondary-button";
+    deleteButton.dataset.deleteInvoice = String(invoice.id);
+    actions.append(deleteButton);
     row.append(actions);
     rows.append(row);
   }
@@ -625,6 +630,47 @@ export function initializeSettings() {
       reloadInvoicesButton.disabled = false;
     }
   }
+
+  invoiceRows.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const deleteButton = target.closest("[data-delete-invoice]");
+    if (!(deleteButton instanceof HTMLButtonElement)) {
+      return;
+    }
+    if (!window.confirm("Soll diese endgültige Rechnung einschließlich der PDF-Datei gelöscht werden?")) {
+      return;
+    }
+
+    deleteButton.disabled = true;
+    invoiceError.hidden = true;
+    try {
+      const response = await fetch(
+        `/api/invoices/${deleteButton.dataset.deleteInvoice}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) {
+        let detail = `Rechnung konnte nicht gelöscht werden (HTTP ${response.status}).`;
+        try {
+          const body = await response.json();
+          detail = formatRequestErrorDetail(body.detail) || detail;
+        } catch {
+          // Keep the HTTP error when the server response is not JSON.
+        }
+        throw new Error(detail);
+      }
+      await loadInvoices();
+    } catch (error) {
+      showMessage(
+        invoiceError,
+        error instanceof Error ? error.message : "Rechnung konnte nicht gelöscht werden.",
+      );
+    } finally {
+      deleteButton.disabled = false;
+    }
+  });
 
   reloadInvoicesButton.addEventListener("click", loadInvoices);
   loadOrganizationSettings();
