@@ -24,6 +24,12 @@ async function prepareWindowsSource(root, target) {
       }
     }
   }
+  // Required by electron/backend.cjs; include only the runtime launcher and
+  // Python lifecycle adapter, never the build/test tools or an existing venv.
+  await fs.mkdir(path.join(target, 'scripts'), { recursive: true });
+  for (const name of ['run.cjs', 'managed_server.py']) {
+    await fs.copyFile(path.join(root, 'scripts', name), path.join(target, 'scripts', name));
+  }
   await fs.mkdir(path.join(target, 'electron', 'assets'), { recursive: true });
   for (const name of ['app-icon.ico', 'app-icon.png', 'app-icon.svg']) {
     await fs.copyFile(path.join(root, 'electron', 'assets', name), path.join(target, 'electron', 'assets', name));

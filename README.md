@@ -321,24 +321,44 @@ Ausgabe: `dist/windows/TTC Rechnungsverwaltung-win32-x64/` mit
 Build-Artefakte sind per `.gitignore` ausgeschlossen. Es gibt noch keinen
 Installer, keine Signatur und keinen automatischen Updateprozess.
 
-**Dieser Testbuild enthält noch keine Python-Laufzeit oder Python-Pakete.**
-Die EXE erwartet den vorhandenen lokalen Server. Zum Testen unter Windows
-zuerst im Ordner `resources/app` eine Python-Umgebung einrichten und den
-Server starten (PowerShell, Python ab 3.10 vorausgesetzt):
+**Phase-1-Testbuild: Python-Laufzeit und Python-Pakete sind noch nicht eingebettet.**
+Electron startet den lokalen Backend-Prozess jetzt selbst, wartet auf dessen
+Bereitschaft und beendet ihn beim Schließen kontrolliert. Ein separat manuell
+gestarteter Server ist für die EXE nicht erforderlich und würde den Port belegen.
+
+Zum Testen den gesamten Build-Ordner an einen beschreibbaren Ort kopieren.
+Python ab 3.10 vorausgesetzt, einmalig im Unterordner `resources/app`
+eine Testumgebung einrichten (PowerShell):
 
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-$env:TTC_FRONTEND_DIRECTORY = "dist/frontend"
-.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Danach die EXE im Hauptordner starten. Bei abweichendem Port muss
-`TTC_DESKTOP_PRODUCTION_URL` vor dem EXE-Start zur Serveradresse passen.
-Der separat gestartete Server wird durch Schließen der EXE nicht beendet.
-Für den Test einen beschreibbaren Ordner und ausschließlich Testdaten verwenden:
+Danach `TTC Rechnungsverwaltung.exe` im Hauptordner starten. Die Anwendung
+findet `resources/app/.venv/Scripts/python.exe` automatisch. Alternativ lässt
+sich der absolute Interpreterpfad über `TTC_PYTHON` vorgeben. Externes Python
+und dessen Pakete sind Voraussetzungen dieses Testbuilds, nicht mitgelieferte
+Laufzeitkomponenten. Node.js oder npm werden zum Start der EXE nicht benötigt.
+
+Standardadresse ist `http://127.0.0.1:8000/`. Bei einem abweichenden Port
+`TTC_DESKTOP_PRODUCTION_URL` vor dem EXE-Start auf eine andere Loopback-Origin
+setzen. Belegte Ports werden abgelehnt; vorhandene fremde Server werden
+nicht übernommen oder beendet. Wiederholtes Starten aktiviert die bestehende
+Electron-Instanz, statt einen zweiten Backend-Prozess zu starten.
+
+Der Build enthält Frontend, Electron-Module, Backend-Quellcode,
+`scripts/run.cjs`, `scripts/managed_server.py` und `requirements.txt`.
+Vorhandene `.venv`-Ordner, Python-Pakete, Datenbanken und Rechnungen werden
+nicht eingepackt. Tests ausschließlich mit neu angelegten Testdaten durchführen:
 Die bisherigen Datenpfade bleiben unverändert (`resources/app/data/ttc.db`
-und `resources/app/rechnungen/`). Eine updatefeste lokale Datenablage sowie
-Backend-/Python-Einbettung sind noch nicht Bestandteil dieses Builds.
+und `resources/app/rechnungen/`). Eine updatefeste Datenablage sowie ein
+vollständiges Paket mit eingebetteter Python-Laufzeit und Abhängigkeiten sind
+spätere Arbeiten; dieser Testbuild ist noch nicht eigenständig verteilbar.
+
 Nach Installation der Abhängigkeiten benötigen die vorhandenen Fachfunktionen
-keine externen Dienste, aber weiterhin den laufenden lokalen Server.
+keine externen Dienste, aber weiterhin das von Electron gestartete lokale
+Backend. Erstinstallation und Paketierung benötigen Downloads. Der Build
+kann unter Linux erzeugt und statisch geprüft werden; die native Ausführung,
+Python-Erkennung und Prozessbeendigung müssen zusätzlich auf einem echten
+Windows-System abgenommen werden.
