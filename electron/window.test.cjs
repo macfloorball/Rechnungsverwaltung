@@ -14,7 +14,7 @@ test('closing during load does not reopen the window or report a spurious load f
     constructor() {
       super(); window=this; this.destroyed=false; this.shown=false;
       this.webContents=new EventEmitter();
-      this.webContents.session={setPermissionRequestHandler(){},setPermissionCheckHandler(){},webRequest:{onBeforeRequest(){}}};
+      this.webContents.session={setPermissionRequestHandler(){},setPermissionCheckHandler(){},webRequest:{onBeforeRequest(){},onHeadersReceived(){}}};
       this.webContents.setWindowOpenHandler=()=>{};
     }
     loadURL(){return new Promise((_resolve,reject)=>{rejectLoad=reject;});}
