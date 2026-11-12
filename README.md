@@ -508,3 +508,19 @@ einem bewussten manuellen Import beenden; nicht gleichzeitig an beiden Bestände
 weiterarbeiten. Die Dokumentenablage bleibt bis Phase 3 separat: Der Datenbankimport
 verschiebt oder löscht keine PDFs, und vorhandene Rechnungsdateien müssen weiter
 im bisherigen Rechnungsverzeichnis verfügbar sein.
+
+Für einen Altbestand außerhalb der aktuellen Installation kann einmalig ein
+expliziter Import ausgeführt werden (Ziel darf noch nicht existieren):
+
+```bash
+python -m backend.storage_import --source /absoluter/alter/Pfad/data/ttc.db --target /absolutes/Benutzerverzeichnis/ttc.db
+```
+
+Unter PowerShell Windows-Pfade mit Leerzeichen in Anführungszeichen setzen.
+`TTC_LEGACY_DATABASE` kann beim Desktop-Start einen abweichenden Quellpfad
+angeben; ohne Override prüft Electron nur `data/ttc.db` seiner Installation.
+Ein neuer Build enthält selbst keine Altdaten. Deshalb einen alten Build nicht
+löschen, bevor Datenbank und Dokumente gesichert beziehungsweise übernommen sind.
+Der Import verwendet SQLite-Backup einschließlich bestätigter WAL-Daten,
+migriert eine temporäre Kopie und veröffentlicht sie atomar ohne Überschreiben.
+Dateisysteme ohne Hardlink-Unterstützung werden sicher mit einem Fehler abgelehnt.

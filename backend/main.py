@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.paths import get_database_path as resolve_database_path
+from backend.storage_import import prepare_database
 
 from backend.database import (
     save_activities,
@@ -35,7 +36,6 @@ from backend.database import (
     get_invoice,
     get_organization,
     get_record,
-    initialize_database,
     list_records,
     save_invoice_preview,
     update_organization,
@@ -63,7 +63,9 @@ from backend.models import (
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    initialize_database(getattr(app.state, "test_database_path", resolve_database_path()))
+    target = getattr(app.state, "test_database_path", resolve_database_path())
+    legacy = os.environ.get("TTC_LEGACY_DATABASE")
+    prepare_database(target, Path(legacy) if legacy else None)
     yield
 
 

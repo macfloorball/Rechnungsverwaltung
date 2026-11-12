@@ -22,7 +22,9 @@ function createBackend({ config, root, env, onFailure }) {
         }
         await checkPort(launch.url);
         if (stopping) return;
-        child = spawnBackend(launch, root, env);
+        child = spawnBackend(launch, root, {
+          ...env, TTC_LEGACY_DATABASE: env.TTC_LEGACY_DATABASE || path.join(root, 'data', 'ttc.db'),
+        });
         const failed = new Promise((_resolve, reject) => {
           function failure(message) {
             if (stopping) return;
