@@ -1,7 +1,8 @@
-# TTC-Rechnungsverwaltung
+# TTC Rechnungsverwaltung
 
-Eine lokale Webanwendung zur Verwaltung von Trainingsterminen und zur
-Erstellung monatlicher Rechnungen für einen Tischtennisverein. Das Projekt
+Eine lokale Webanwendung mit zusätzlichem Electron-Desktop-Grundgerüst zur
+Verwaltung von Trainingsterminen und zur Erstellung monatlicher Rechnungen
+für einen Tischtennisverein. Das Projekt
 verbindet eine FastAPI-Schnittstelle mit einer browserbasierten Oberfläche,
 SQLite und PDF-Rechnungserstellung.
 
@@ -31,11 +32,14 @@ SQLite und PDF-Rechnungserstellung.
 - **Persistenz:** SQLite mit versionierten Datenbankmigrationen.
 - **Frontend:** HTML, CSS und natives JavaScript mit ES-Modulen.
 - **PDF:** ReportLab zur Erzeugung von Rechnungen.
+- **Desktop:** Electron mit lokalem Python-/Uvicorn-Prozess, sicherem Preload
+  und begrenzter IPC-Schnittstelle.
 - **Tests:** pytest für API, Datenbank, Rechnungen/PDFs und Backups;
   Kalender- und Abrechnungsabläufe werden teilweise über API-Tests geprüft.
 
 Das Frontend wird vom FastAPI-Backend ausgeliefert und kommuniziert mit ihm
-über die API. Es gibt keine separate Frontend-Build-Pipeline.
+über die API. Es gibt keinen Frontend-Bundler; für den Desktop-Produktionsstart
+kopiert `npm run frontend:build` die Dateien nach `dist/frontend`.
 
 ## Voraussetzungen
 
@@ -103,12 +107,16 @@ Backup-Ordner und -Dateien restriktive Rechte. Die PDF-Dateien im Ordner
 ```text
 backend/       FastAPI-Anwendung, Datenbank, Modelle und Rechnungslogik
 frontend/      HTML-Oberfläche, Stylesheets und JavaScript-Module
-scripts/       Datenbank-Backup und systemd-Timer
+electron/      Main, Preload, IPC, Fensterkonfiguration und Icons
+scripts/       Start-/Prozessverwaltung, Build-Werkzeuge, Backups und Timer
+Planung/       Umsetzungspläne und bestehende Bestandsaufnahme
+dist/          Generierte Frontend- und Windows-Builds (nicht versioniert)
 tests/         Automatisierte Tests
 data/          Lokale Laufzeitdatenbank (nicht versioniert)
 rechnungen/    Generierte Rechnungs-PDFs (nicht versioniert)
 requirements.txt
-TTC_Rechnungsverwaltung_Umsetzungsplan.md
+Planung/TTC_Rechnungsverwaltung_Umsetzungsplan.md
+Planung/Umsetzungsplan_Desktop-App_Rechnungsautomatisierung.md
 ```
 
 ## Datenschutz und Sicherheit
@@ -126,15 +134,16 @@ Anwendung erzwingt momentan keine restriktiven Dateirechte für die Laufzeit-
 Datenbank und die erzeugten PDFs; diese Dateien sollten auf gemeinsam
 genutzten Systemen zusätzlich auf Betriebssystemebene geschützt werden.
 
-Die Abhängigkeiten sind in `requirements.txt` aufgeführt; derzeit gibt es
-keine Lockdatei mit festgeschriebenen Paketversionen.
+Python-Abhängigkeiten stehen in `requirements.txt` und sind bisher nicht
+versionsgebunden. Die zusätzlichen JavaScript-Abhängigkeiten sind über
+`package-lock.json` festgeschrieben.
 
 ---
 
 # TTC Invoice Management
 
-A local web application for managing training sessions and creating monthly
-invoices for a table-tennis club. It combines a FastAPI backend, a browser-based
+A local web application with an additional Electron desktop shell for managing
+training sessions and creating monthly invoices for a table-tennis club. It combines a FastAPI backend, a browser-based
 interface, SQLite persistence, and PDF invoice generation.
 
 > **Portfolio note:** The application does not currently provide user accounts
@@ -163,7 +172,8 @@ interface, SQLite persistence, and PDF invoice generation.
   calendar and billing flows are covered by API tests.
 
 The FastAPI backend serves the frontend, which communicates with it through the
-API. There is no separate frontend build pipeline.
+API. There is no frontend bundler; `npm run frontend:build` copies the static
+files to `dist/frontend` for desktop production mode.
 
 ## Requirements
 
@@ -237,77 +247,123 @@ public proxy. The application does not currently enforce restrictive
 permissions on its runtime database or generated PDFs; protect these files at
 the operating-system level, especially on shared machines.
 
-Dependencies are listed in `requirements.txt`; package versions are not
-currently pinned in a lockfile.
+Python dependencies are listed in `requirements.txt` and are not currently
+pinned. JavaScript dependencies are locked in `package-lock.json`. Electron
+owns the local Python backend during desktop use; Python and its packages
+are still external prerequisites of the Phase 1 Windows test build. Native
+Windows execution has not yet been verified.
 
-## Electron: Oberfläche laden
+## Electron: Entwicklung und Produktionsstart
 
-Node.js ab 22.12 und npm zusätzlich zur bestehenden Python-Umgebung:
+Der Desktop-Start benötigt Python mit den Paketen aus `requirements.txt`.
+Zum Entwickeln, Testen und Bauen zusätzlich Node.js ab 22.12 und npm:
 
 ```bash
 npm ci
 npm run desktop:check
 ```
 
-Entwicklung in zwei Terminals (aus dem Repository, Python-Umgebung aktiviert):
+Aus dem Repository starten:
+
+| Betriebsart | Befehl | Prozessbesitz / Frontend |
+| --- | --- | --- |
+| Web ohne Reload | `npm run web:start` | Starter verwaltet Uvicorn; Quellfrontend, Browser separat öffnen |
+| Webentwicklung | `npm run web:dev` | Starter verwaltet Uvicorn mit Reload; Quellfrontend |
+| Desktop-Entwicklung | `npm run desktop:dev` | Starter startet nur Electron; Electron besitzt Backend mit Reload und lädt Quellfrontend |
+| Frontend bauen | `npm run frontend:build` | Kopie der statischen Dateien mit Build-Kennung nach `dist/frontend` |
+| Desktop-Produktion | `npm run desktop:start` | Electron besitzt Backend ohne Reload und lädt `dist/frontend` |
+| Windows-Testbuild erzeugen | `npm run desktop:build:win` | Erzeugt zuerst Frontend-Build, dann entpackten Windows-x64-Testbuild |
+
+Für die Desktop-Entwicklung ist nur **ein** Startbefehl erforderlich:
 
 ```bash
-# Terminal 1: unveränderter Webentwicklungsstart
-python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
-# Terminal 2
 npm run desktop:dev
 ```
 
-Die Webanwendung bleibt unter `http://127.0.0.1:8000` unabhängig im Browser
-nutzbar. Electron wartet bis zu 15 Sekunden auf Oberfläche, Ressourcen und
-`/api/health`, bevor es das Hauptfenster erstellt. Bei fehlendem Server erscheint
-eine verständliche Fehlermeldung. Der Server wird weiterhin separat gestartet.
-
-Produktionsausgabe: Da das Frontend natives HTML/CSS/JavaScript verwendet,
-kopiert der Build die Dateien unverändert nach `dist/frontend` und erzeugt eine
-Build-Kennung. Der vorhandene FastAPI-Server liefert diese Dateien und die API
-aus; es wird weder ein Bundler noch ein zusätzlicher Server eingeführt.
+Für den Produktionsmodus im Checkout:
 
 ```bash
 npm run frontend:build
-# Terminal 1: ohne Entwicklungsserver/Auto-Reload
-TTC_FRONTEND_DIRECTORY=dist/frontend python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
-# Terminal 2
 npm run desktop:start
 ```
 
-PowerShell für den Produktionsserver:
+Keinen zweiten Uvicorn-Server parallel auf demselben Port starten. Electron
+startet seinen Server selbst, wartet bis zu 15 Sekunden auf Oberfläche,
+Ressourcen und `/api/health` und erstellt erst danach das Hauptfenster.
+Im Produktionsmodus muss die ausgelieferte Build-Kennung zur lokalen Ausgabe
+passen. Nach Frontend-Änderungen erneut bauen.
 
-```powershell
-$env:TTC_FRONTEND_DIRECTORY = "dist/frontend"
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
-```
+Die im Repository vorhandene `.venv` wird automatisch verwendet; alternativ
+`TTC_PYTHON` auf den Interpreter setzen. Ohne beides wird `python` unter Windows
+beziehungsweise `python3` auf anderen Plattformen gesucht. Fehlende Interpreter,
+Pakete, Builds und belegte Ports führen zu einer Startfehlermeldung.
+Die bestehende Webanwendung bleibt zusätzlich über den oben beschriebenen
+direkten Befehl `python -m uvicorn backend.main:app ...` startbar.
 
-`TTC_FRONTEND_DIRECTORY` wird relativ zum Repository aufgelöst (absolute Pfade
-sind ebenfalls möglich). Ohne diese Variable bleibt `frontend/` der Webstandard.
-Electron kontrolliert im Produktionsmodus, ob der lokale Build existiert und der
-Server dessen Build-Kennung ausliefert. Nach Frontend-Änderungen erneut bauen.
-Ein Installer oder ein vollständiges Produktionspaket wird noch nicht erstellt.
+### Konfiguration
 
-Die Adresse steht zentral in `electron/config.cjs` (Standard: Loopback, Port 8000).
-Für einen abweichenden Serverport in Terminal 2:
+Standard ist `http://127.0.0.1:8000/`, zentral in `electron/config.cjs`.
+
+| Variable | Verwendung |
+| --- | --- |
+| `TTC_DESKTOP_URL` | Adresse für Desktop- und Webentwicklung |
+| `TTC_DESKTOP_PRODUCTION_URL` | Getrennte Adresse für Desktop-Produktion, EXE und `web:start`; ignoriert den Entwicklungswert |
+| `TTC_PYTHON` | Optionaler Interpreterpfad, vorzugsweise absolut |
+| `TTC_FRONTEND_DIRECTORY` | Frontend-Pfad beim direkten Uvicorn-Webstart; verwaltete Startmodi setzen ihn selbst |
+
+Zulässig sind nur HTTP-Origins mit `127.0.0.1` oder `[::1]`, optionalem Port,
+ohne Zugangsdaten, Pfad, Query oder Fragment. Beispiel Linux/macOS:
 
 ```bash
 TTC_DESKTOP_URL=http://127.0.0.1:8123 npm run desktop:dev
+TTC_DESKTOP_PRODUCTION_URL=http://127.0.0.1:8124 npm run desktop:start
 ```
 
-PowerShell: `$env:TTC_DESKTOP_URL = "http://127.0.0.1:8123"`, anschließend
-`npm run desktop:dev` oder `npm run desktop:start`. Die Variable akzeptiert nur
-HTTP-Origins mit `127.0.0.1` oder `[::1]`, ohne Pfad, Zugangsdaten oder Query.
-Der Backend-Port muss dazu passen. Es gibt kein clientseitiges Routing;
-Abschnittsanker und Neuladen der Startseite funktionieren über dieselbe Origin.
+PowerShell:
 
-Main steuert den Lebenszyklus, `window.cjs` schützt das Fenster und Preload
-veröffentlicht nur `ttcDesktop.apiVersion`. Sandbox und Context Isolation bleiben
-aktiv, Node-Integration bleibt deaktiviert. Fremde Navigation und neue Fenster
-werden blockiert. Es gibt keine benötigten externen Webseiten mit Browserfreigabe;
-unbekannte URLs werden nicht automatisch geöffnet. PDF-Popups bleiben einer
-späteren Desktop-Integration vorbehalten. Native Windows-Abnahme steht noch aus.
+```powershell
+$env:TTC_DESKTOP_URL = "http://127.0.0.1:8123"
+npm run desktop:dev
+```
+
+Für Produktion stattdessen `$env:TTC_DESKTOP_PRODUCTION_URL` setzen.
+`TTC_FRONTEND_DIRECTORY` beim direkten Webstart wird relativ zum Repository
+aufgelöst; absolute Pfade sind ebenfalls möglich. Ohne Variable gilt `frontend/`.
+
+### Fenster, Sicherheit und Beenden
+
+App-Name und Fenstertitel sind **TTC Rechnungsverwaltung**. Das Fenster startet
+mit 1280 × 800, mindestens 1000 × 650; auf kleineren Arbeitsflächen werden
+beide Werte begrenzt. Minimieren, Wiederherstellen und Maximieren sind nativ.
+Electron-Profile behalten den bisherigen technischen Namen; Rechnungsdaten
+werden dadurch nicht verschoben.
+
+Sandbox, Context Isolation und CSP sind aktiv, Node-Integration und unnötige
+Berechtigungen deaktiviert. Preload stellt nur `ttcDesktop.apiVersion` und den
+lesenden Aufruf `ttcDesktop.getVersion()` bereit. Der Main-Prozess validiert
+IPC-Absender, Hauptframe, URL und Argumente. Es gibt kein clientseitiges Routing;
+Abschnittsanker und Neuladen bleiben auf der lokalen Oberfläche.
+
+Unbekannte URLs und neue Electron-Fenster werden blockiert. Nur validierte
+lokale Rechnungs-PDF-Endpunkte werden an den Standardbrowser übergeben.
+Downloads und PNG-/JPEG-Logo-Uploads nutzen die vorhandenen Browserabläufe.
+Für einen neuen PDF-Abruf muss der lokale Server noch laufen; nach Schließen
+der App steht ihr eigener Backend-Dienst nicht mehr zur Verfügung.
+
+Unter Windows/Linux beendet das letzte geschlossene Hauptfenster die App.
+Electron fordert über eine private Pipe den kontrollierten Backend-Shutdown
+an und wartet auf dessen Abschluss. Nur eigene Prozessreferenzen werden
+bereinigt; fremde Server bleiben erhalten. Bei hartem Main-Prozessabbruch
+fordert das Pipe-Ende ebenfalls den Shutdown an. Ein blockierter Dienst kann
+nach begrenzter Wartezeit mit protokollierter Warnung erzwungen beendet werden;
+ein unterbrochener Datenvorgang ist dabei nicht vollständig auszuschließen.
+Ungespeicherte Formulareingaben werden nicht zuverlässig erkannt oder geschützt.
+
+Unter macOS kann die App nach Schließen des letzten Fensters aktiv bleiben
+und bei Aktivierung ein neues Hauptfenster öffnen; native macOS-Abnahme offen.
+Windows-Einzelausführung und -Prozessbeendigung sind ebenfalls noch offen.
+Den tatsächlichen Phase-1-Abnahmestand beschreibt der
+[Desktop-Umsetzungsplan](Planung/Umsetzungsplan_Desktop-App_Rechnungsautomatisierung.md#phase-1----desktop-grundgerüst).
 
 ## Entpackter Windows-Testbuild
 

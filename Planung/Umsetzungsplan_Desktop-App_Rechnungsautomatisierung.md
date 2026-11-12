@@ -108,33 +108,123 @@ in dieser Linux-Sitzung offen.
 **Ziel:** Die bestehende Anwendung soll erstmals als eigenständiges
 Windows-Programm gestartet werden können.
 
+**Stand 12.11.2026:** Technisch weitgehend umgesetzt; **Phase 1 ist noch
+nicht vollständig abgenommen**. Der Windows-x64-Testbuild wurde erzeugt,
+aber nicht nativ unter Windows ausgeführt. Die Tests unten beziehen sich
+auf Linux beziehungsweise auf statische Prüfungen der Windows-Dateien.
+
+Die Markierungen unter Entwicklungsschritte kennzeichnen die vorhandene
+Implementierung. Sie ersetzen keine plattformbezogene Abnahme.
+
 ## Entwicklungsschritte
 
--   [ ] Electron in das bestehende Projekt integrieren.
--   [ ] Electron-Hauptprozess und Renderer-Prozess sauber einrichten.
--   [ ] Die bestehende Benutzeroberfläche im Electron-Fenster laden.
--   [ ] Entwicklungs- und Produktionsstart voneinander trennen.
--   [ ] Fenstertitel, App-Name, Symbol und Fenstergröße festlegen.
--   [ ] Fensterverhalten für Minimieren, Maximieren und Schließen
+-   [x] Electron in das bestehende Projekt integrieren.
+-   [x] Electron-Hauptprozess und Renderer-Prozess sauber einrichten.
+-   [x] Die bestehende Benutzeroberfläche im Electron-Fenster laden.
+-   [x] Entwicklungs- und Produktionsstart voneinander trennen.
+-   [x] Fenstertitel, App-Name, Symbol und Fenstergröße festlegen.
+-   [x] Fensterverhalten für Minimieren, Maximieren und Schließen
     umsetzen.
--   [ ] Sichere Electron-Grundeinstellungen verwenden, insbesondere
+-   [x] Sichere Electron-Grundeinstellungen verwenden, insbesondere
     `contextIsolation` aktivieren und Node-Zugriff im Renderer
     deaktivieren.
--   [ ] Eine klar begrenzte IPC-Schnittstelle für später benötigte
+-   [x] Eine klar begrenzte IPC-Schnittstelle für später benötigte
     Desktop-Funktionen vorsehen.
--   [ ] Browser-spezifische Funktionen identifizieren und bei Bedarf
+-   [x] Browser-spezifische Funktionen identifizieren und bei Bedarf
     durch Desktop-kompatible Lösungen ersetzen.
 -   [ ] Prüfen, ob alle bisherigen Ansichten und Arbeitsabläufe im
-    Desktop-Fenster funktionieren.
--   [ ] Einen ersten Windows-Build erzeugen.
+    Desktop-Fenster funktionieren. Unter Linux in beiden Modi praktisch
+    geprüft; native Windows-Prüfung, manuelle Betriebssystemdialoge und
+    tatsächliche PDF-Darstellung im Standardbrowser noch offen.
+-   [x] Einen ersten Windows-Build erzeugen.
 
 ## Ergebnis / Abnahmekriterien
 
--   Die Anwendung startet in einem eigenen Fenster.
--   Es ist kein manuelles Öffnen des Browsers erforderlich.
--   Die wichtigsten bestehenden Funktionen sind weiterhin erreichbar.
--   Es gibt keine unnötigen Änderungen an der Rechnungslogik.
--   Die Desktop-App kann im Entwicklungsmodus gestartet werden.
+| Kriterium | Nachweis / Status |
+| --- | --- |
+| Anwendung startet im eigenen Fenster | Unter Linux für Entwicklung und Produktion geprüft; native Windows-Abnahme offen |
+| Hauptoberfläche benötigt kein manuelles Browseröffnen | Electron lädt sie selbst; Rechnungs-PDFs werden gezielt an den Standardbrowser übergeben |
+| Wichtigste bestehende Funktionen erreichbar | Kalender, Monatswechsel, Terminbearbeitung und -abschluss, Wochenplan, Empfängereinstellungen, Vorschauaktualisierung, Finalisierung, Archiv, Download und Logo-Upload unter Linux geprüft |
+| Rechnungslogik erhalten | Keine fachliche Umstellung; Regressionstests bestanden. Kalender-Ladefehler werden nach einer gezielten UI-Korrektur sichtbar angezeigt |
+| Entwicklungsstart möglich | `npm run desktop:dev` startet Electron; Electron besitzt den Python-/Uvicorn-Prozess und wartet vor dem Laden auf dessen Bereitschaft |
+| Windows-Start des Testbuilds | Noch nicht geprüft; eine erzeugte PE-Datei ist kein Nachweis erfolgreicher Windows-Ausführung |
+
+## Vorhandene Architektur und Prüfung
+
+- Electron-Main, sandboxfähiger Preload und Renderer sind getrennt.
+  `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false` und
+  eine restriktive CSP sind aktiv. Fremde Navigation und beliebige neue
+  Fenster bleiben blockiert.
+- Die Bridge bietet nur `apiVersion` und den lesenden Versionsabruf
+  `getVersion()` an. Der Main-Prozess prüft Absender, Hauptframe, Origin
+  und Argumente. Keine Datei-, Datenbank- oder Prozess-API im Renderer.
+- App-Name und Fenstertitel: **TTC Rechnungsverwaltung**. PNG-/ICO-Symbol,
+  Standardgröße 1280 × 800, Mindestgröße 1000 × 650; Begrenzung auf die
+  verfügbare Arbeitsfläche. Minimieren, Wiederherstellen und Maximieren
+  unter Linux/X11 geprüft; Windows-Skalierung und echte Mehrmonitortests offen.
+- Electron startet und beendet nur sein eigenes Backend. Mehrfachstart,
+  Portkonflikte, fehlendes Python, Backend-Ausfall, Schließen während einer
+  laufenden Anfrage und harter Electron-Absturz wurden in temporären
+  Testkopien geprüft. Der Steuerrohr-EOF-Fall lässt den Server nach einem
+  Main-Prozessabbruch kontrolliert herunterfahren. Fremde Server bleiben erhalten.
+- Entwicklung nutzt `frontend/` mit Backend-Reload. Produktion nutzt die
+  unverändert kopierten Dateien unter `dist/frontend` ohne Reload und
+  prüft deren Build-Kennung. Python und seine Pakete müssen lokal vorhanden sein.
+- `npm run desktop:build:win` erzeugt einen entpackten x64-Testbuild unter
+  `dist/windows/TTC Rechnungsverwaltung-win32-x64/`. EXE-Format, Name,
+  Version 0.1.0, eingebettete Icons, erforderliche Starterdateien und
+  Ausschluss von Nutzerdaten/Entwicklungsumgebungen wurden geprüft.
+  Der tatsächliche Paketinhalt wurde zusätzlich mit Linux-Electron aus
+  temporärer Kopie gestartet, auch aus fremdem Arbeitsverzeichnis und
+  mit Leerzeichen im Pfad. Das ersetzt keine Windows-Ausführung.
+- Technische Abschlussprüfung am 12.11.2026: **42 JavaScript-Tests** mit
+  `npm run desktop:check` und **53 Python-Tests** mit `python -m pytest -q`
+  bestanden. Dazu praktische Linux-Prüfungen beider Desktop- und Webmodi.
+  Geprüfter Code-Stand: `b0cd290`; weitere nachvollziehbare Stände:
+  `5afa29b` (Backend-Lebenszyklus), `c331b2b` (Paketinhalt),
+  `bde1c06` (sichtbare Kalenderfehler).
+
+## Offene Abnahme und bekannte Einschränkungen
+
+- [ ] Windows-EXE auf einem echten Windows-System ausführen: Start,
+  Python-Erkennung, API, Fenstersteuerung, Mehrfachstart und Prozessbeendigung.
+- [ ] Native Windows-Skalierung und Mehrmonitorverhalten praktisch prüfen.
+- [ ] Datei-/Speicherdialoge und Bestätigungsfenster manuell bedienen.
+  Die automatisierten Tests nutzten Testdateien, feste Downloadpfade und
+  kontrollierte Bestätigungsantworten für Abbrechen/Bestätigen.
+- [ ] PDF im tatsächlich gestarteten Standardbrowser anzeigen und drucken.
+  PDF-Erzeugung, gespeicherter Download und validierte Browserübergabe sind
+  geprüft; die Übergabe wurde im Test abgefangen.
+- [ ] Betrieb mit tatsächlich deaktivierter Internetverbindung praktisch
+  abnehmen. Bisher wurden externe Renderer-Verbindungen blockiert, während
+  die lokalen Dienste weiter liefen; kein Netzwerkadapter wurde abgeschaltet.
+
+Der Testbuild enthält noch keine Python-Laufzeit oder Python-Pakete und ist
+**kein vollständig eigenständig verteilbares Desktop-Paket**. Nach einmaliger
+Einrichtung einer lokalen Python-Umgebung startet Electron das Backend selbst.
+Eine vollständige Laufzeit-Einbettung bleibt offen; sie wurde nicht als erledigt
+markiert und muss vor einer eigenständig verteilbaren Version geklärt werden.
+
+Datenbank und Rechnungen liegen weiterhin relativ zum Backend: im Checkout
+`data/ttc.db` und `rechnungen/`, im Testbuild unter `resources/app/`.
+Updatefeste Datenpfade, vollständige Backups, Installer und Updates sind
+spätere Arbeiten. Keine dieser späteren Phasen wird hier als umgesetzt bewertet.
+
+Ungespeicherte Formulareingaben werden nicht zuverlässig erkannt oder automatisch
+vor dem Schließen geschützt. Bei einem dauerhaft blockierten Backend erfolgt
+nach einem begrenzten Shutdown-Versuch eine protokollierte Eskalation; eine
+Unterbrechung laufender Datenoperationen ist dann nicht vollständig auszuschließen.
+
+Es gibt keine separate Kundenverwaltung; vorhanden sind Organisation und ein
+Rechnungsempfänger in den Einstellungen. Die aktuelle Python-Abhängigkeitsliste
+ist nicht versionsgebunden. Der Testbuild besitzt keinen Installer, keine
+Signatur und keine automatische Update-Funktion.
+
+**Abschlussbewertung:** Implementierung und ausführbare Linux-Prüfungen sind
+weitgehend erledigt. Wegen der offenen Windows- und manuellen Abnahmen ist
+Phase 1 nach der allgemeinen Definition of Done noch nicht vollständig
+abgeschlossen. Eine Freigabe für spätere Arbeiten ist keine nachträgliche
+Bestätigung dieser ungeprüften Eigenschaften.
 
 ------------------------------------------------------------------------
 
