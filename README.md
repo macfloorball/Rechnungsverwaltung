@@ -1045,3 +1045,40 @@ Datumswerte ISO-Text und Binärwerte erhalten `base64:`. Formelfähige Textfelde
 werden mit einem Apostroph entschärft. Der Export verwendet denselben konsistenten
 Snapshot wie Backups. Er dient der Auswertung; CSV-Import und Zusammenführung
 sind nicht vorgesehen. Zur Wiederherstellung das vollständige Backup verwenden.
+
+
+#### Regelmäßig sichern und Sicherungen aufbewahren
+
+Nach wichtigen Änderungen und vor Updates eine vollständige Sicherung erstellen.
+Mindestens eine zusätzliche Kopie auf einem getrennten Datenträger aufbewahren;
+eine Sicherung auf derselben Platte schützt nicht vor deren Ausfall. Mehrere
+Generationen behalten und gelegentlich bei beendeter App in ein neues Profil
+wiederherstellen. Rechnungen, Termine, Einstellungen und PDFs dort kontrollieren,
+bevor alte Sicherungen oder Profile manuell entfernt werden. Vollständige
+Sicherungen werden nicht automatisch rotiert; der bisherige Linux-Timer sichert
+weiterhin ausschließlich SQLite und ersetzt diesen Ablauf nicht.
+
+ZIP-Backups und Exporte sind unverschlüsselt und enthalten personenbezogene
+Daten einschließlich Kontodaten. Sicherungsmedien und Zugriffsrechte entsprechend
+schützen. Unix-Dateien erhalten private Rechte; unter Windows gelten zusätzlich
+die Berechtigungen des Zielordners. Genügend freien Platz für Arbeitskopie und
+ZIP vorhalten. Ein lokales Dateisystem mit Hardlink-Unterstützung ist erforderlich.
+Auch die Backup-Erstellung lehnt Archive über dem Wiederherstellungslimit ab.
+Nicht alle Dateisysteme auf USB-Sticks unterstützen die benötigten Operationen.
+
+Während einer Sicherung werden App-Schreibvorgänge vorübergehend blockiert;
+größere Bestände möglichst ohne parallele Bearbeitung sichern. Temporäre
+`.ttc-document-write-*`-Unterordner sind unveröffentlichte Schreibvorgänge und
+werden nicht gesichert. Andere Unterordner, Links und unter Windows mehrdeutige
+Namen führen zum Abbruch. Ein bereits vor der Sicherung veröffentlichter, aber
+noch nicht in SQLite bestätigter PDF-Schreibvorgang kann als nicht zugeordnete
+Datei enthalten sein; solche Dateien werden erhalten, niemals automatisch gelöscht.
+Die App bietet weiterhin keine gemeinsame Transaktion über SQLite und Dateisystem.
+
+Die beschriebenen Bedienabläufe können unter Linux automatisiert mit
+`TTC_RUN_ELECTRON_TESTS=1 python -m pytest -q -s tests/test_desktop_invoice.py`
+geprüft werden. Der Test nutzt ausschließlich temporäre Profile und kontrollierte
+Downloadpfade. Native Windows-Bedienung, manuelle Speicherdialoge sowie reale
+Stromausfälle sind gesondert zu prüfen; ein Windows-Testbuild ersetzt diese
+Prüfungen nicht. Windows-Installer und eingebettete Python-Laufzeit bleiben den
+späteren Projektphasen zugeordnet.
