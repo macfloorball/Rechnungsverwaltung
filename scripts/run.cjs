@@ -112,6 +112,8 @@ function spawnBackend(config, root, env) {
     errorOutput = (errorOutput + chunk).slice(-4096);
     const match = errorOutput.match(/(?:^|\n)TTC_DATABASE_ERROR:(missing|locked|corrupt|access|schema)\r?\n/);
     if (match) child.databaseError = match[1];
+    const documentMatch = errorOutput.match(/(?:^|\n)TTC_DOCUMENT_ERROR:(missing|access|space|exists|changed|invalid|unsupported|io)\r?\n/);
+    if (documentMatch) child.documentError = documentMatch[1];
   });
   child.managedBackend = true;
   child.stdin.on('error', () => {});

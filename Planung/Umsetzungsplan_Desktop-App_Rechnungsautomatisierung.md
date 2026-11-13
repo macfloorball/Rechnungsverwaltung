@@ -275,24 +275,62 @@ verwaltet.
 
 ## Entwicklungsschritte
 
--   [ ] Festlegen, in welchem lokalen Verzeichnis Anwendungsdokumente
-    gespeichert werden.
--   [ ] Einen zentralen Dienst für Dateiablage und Dateizugriff
-    einrichten.
--   [ ] Rechnungs-PDFs und weitere Anhänge eindeutig zuordnen.
--   [ ] Dateipfade nicht an verschiedenen Stellen im Programm fest
-    verdrahten.
--   [ ] Einen einstellbaren Speicherort vorsehen, sofern dies mit
-    vertretbarem Aufwand möglich ist.
--   [ ] Prüfen, ob vorhandene PDF-Erstellung und PDF-Vorschau in
-    Electron funktionieren.
--   [ ] Speichern, Öffnen, Umbenennen und Löschen von Dateien
-    kontrolliert umsetzen.
--   [ ] Fehlerfälle behandeln, etwa fehlende Dateien oder fehlende
-    Schreibrechte.
--   [ ] Sicherstellen, dass das Löschen einer Rechnung nicht
-    versehentlich nicht zugehörige Dokumente entfernt.
--   [ ] Bestehende Rechnungs- und Vorschauabläufe vollständig testen.
+-   [x] Festlegen, in welchem lokalen Verzeichnis Anwendungsdokumente
+    gespeichert werden. Zielentscheidung: `documents/` im bestehenden
+    Desktop-Datenverzeichnis außerhalb der Installation; Webbetrieb ohne
+    Datenpfad-Override behält `rechnungen/`. Details und Abgrenzung zum noch
+    unveränderten Dateizugriff: [README.md](../README.md#dokumentenverzeichnis-phase-3-schritt-1).
+-   [x] Einen zentralen Dienst für Dateiablage und Dateizugriff
+    einrichten. `backend/document_storage.py` bündelt das exklusive Schreiben
+    und Auffinden von Dokumenten. Die Rechnungs-API nutzt seit Schritt 4
+    die zentrale Pfadauflösung einschließlich der Bestandsübernahme.
+-   [x] Rechnungs-PDFs und weitere Anhänge eindeutig zuordnen.
+    `backend/invoice_documents.py` prüft finale Rechnung, Zeitraum und
+    eindeutigen Dateiverweis; Mehrfachzuordnungen werden auch bei
+    unterschiedlicher Groß-/Kleinschreibung abgelehnt. Bestehende Logos und
+    Logo-Snapshots bleiben ihren SQLite-Datensätzen zugeordnet; eine allgemeine
+    Anhangsfunktion ist im bisherigen Funktionsumfang nicht vorhanden.
+-   [x] Dateipfade nicht an verschiedenen Stellen im Programm fest
+    verdrahten. `backend/paths.py` bestimmt Ziel- und bisherige Ablage;
+    die Rechnungs-API nutzt diese Auflösung. Eindeutig zugeordnete Bestands-PDFs
+    werden beim Start ohne Überschreiben oder Löschen der Quellen übernommen.
+-   [x] Einen einstellbaren Speicherort vorsehen, sofern dies mit
+    vertretbarem Aufwand möglich ist. `TTC_DOCUMENT_DIRECTORY` erlaubt einen
+    absoluten Dokumentenpfad unabhängig von SQLite. Konfiguration erfolgt
+    über die Startumgebung; sichere Übernahme aus der Standardablage und
+    bewusster Wechsel zwischen eigenen Ordnern sind in der README beschrieben.
+-   [x] Prüfen, ob vorhandene PDF-Erstellung und PDF-Vorschau in
+    Electron funktionieren. Unter Linux mit echten Electron-Fenstern in
+    Entwicklung und Produktion geprüft: HTML-Vorschau, Finalisierung,
+    PDF-Download, erneute Vorschau und Archivöffnung. Reproduzierbarer
+    Opt-in-Test: `tests/test_desktop_invoice.py`. Die Standardbrowser-Übergabe
+    wird im Test abgefangen; native Windows-Ausführung sowie Darstellung
+    und Drucken im tatsächlichen Standardbrowser bleiben offene Abnahmen.
+-   [x] Speichern, Öffnen, Umbenennen und Löschen von Dateien
+    kontrolliert umsetzen. Der Dokumentendienst veröffentlicht vollständige
+    Dateien ohne Überschreiben, bietet geprüften Lesezugriff sowie Umbenennen
+    ohne Zielersetzung und identitätsgeprüftes Löschen. Die Rechnungs-API nutzt
+    den Dienst auch zur Fehlerbereinigung; Originalnamen finaler Rechnungen
+    bleiben gemäß bestehender Zuordnung fest.
+-   [x] Fehlerfälle behandeln, etwa fehlende Dateien oder fehlende
+    Schreibrechte. Dokumentenfehler werden an API- und Startgrenzen in feste
+    Handlungsanweisungen übersetzt, ohne interne Dateipfade weiterzugeben.
+    Electron erkennt auch Dokumenten-Startfehler des Reload-Workers. PDF-Abrufe
+    behandeln Lesefehler vor Übertragungsbeginn; Fehlerbehebung und erneutes
+    Speichern sind mit echten Electron-Fenstern geprüft.
+-   [x] Sicherstellen, dass das Löschen einer Rechnung nicht
+    versehentlich nicht zugehörige Dokumente entfernt. Auswahl und exklusive
+    Dateizuordnung werden beim Löschen unter SQLite-Schreibsperre erneut geprüft.
+    Vor der PDF-Bereinigung verhindert eine weitere geschützte Zuordnungsprüfung
+    konkurrierende Datenbankänderungen; geänderte Dateien und fremde Zuordnungen
+    bleiben erhalten. Fehler-, Manipulations- und Konkurrenzfälle sind getestet.
+-   [x] Bestehende Rechnungs- und Vorschauabläufe vollständig testen.
+    Automatisierte Linux-Prüfung über API, Dateidienst und echte Electron-Fenster
+    einschließlich Vorschauänderung, Finalisierung, Download, Löschabbruch,
+    bestätigtem Löschen, Neu-Finalisierung und vollständigem App-Neustart.
+    Entwicklung/Produktion werden jeweils mit Standardablage und eigenem
+    Dokumentenordner geprüft. Native Windows-Abnahme, tatsächliche
+    Standardbrowser-Darstellung und manuelle Betriebssystemdialoge bleiben offen.
 
 ## Ergebnis / Abnahmekriterien
 

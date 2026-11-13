@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const net = require('node:net');
-const { launchConfig, checkPort, stopTree } = require('./run.cjs');
+const { launchConfig, checkPort, stopTree, spawnBackend } = require('./run.cjs');
 
 test('development uses one Uvicorn service and the development address', () => {
   const config = launchConfig('desktop-dev', { TTC_DESKTOP_URL: 'http://127.0.0.1:8123', TTC_FRONTEND_DIRECTORY: 'wrong' });
@@ -60,4 +60,16 @@ test('unresponsive backend has a bounded shutdown and reports escalation', async
   child.stdin.on('error',()=>{});
   await once(child,'spawn');
   assert.equal(await stopTree(child,{graceMs:100,terminateMs:100}),true);
+});
+
+test('Dokumenten-Startmarker werden auch über mehrere Ausgabeblöcke erkannt', async () => {
+  const child = spawnBackend({
+    python: process.execPath, frontend: __dirname,
+    args: ['-e', `process.stderr.write('TTC_DOC'); setTimeout(() => {
+      process.stderr.write('UMENT_ERROR:space\\nTTC_DOCUMENT_ERROR:unknown\\n');
+    }, 20);`],
+  }, __dirname, process.env);
+  await once(child, 'close');
+  assert.equal(child.documentError, 'space');
+  assert.equal(child.databaseError, undefined);
 });

@@ -70,7 +70,10 @@ curl http://127.0.0.1:8000/api/health
 ```
 
 Die Anwendung legt die lokale Datenbank unter `data/ttc.db` an. Erstellte
-Rechnungs-PDFs werden unter `rechnungen/` gespeichert.
+Rechnungs-PDFs werden ohne Pfad-Overrides unter `rechnungen/` gespeichert.
+Mit `TTC_DATA_DIRECTORY` liegen Datenbank und PDFs unter diesem Datenverzeichnis
+als `ttc.db` beziehungsweise in `documents/`; dies ist auch der Desktop-Modus.
+`TTC_DOCUMENT_DIRECTORY` kann die PDF-Ablage unabhängig davon überschreiben.
 
 ## Tests
 
@@ -99,8 +102,9 @@ Eine Sicherung lässt sich auch manuell erstellen:
 ```
 
 Der Backup-Prozess prüft die Sicherung auf SQLite-Konsistenz und setzt für
-Backup-Ordner und -Dateien restriktive Rechte. Die PDF-Dateien im Ordner
-`rechnungen/` werden von diesem Backup-Skript nicht mitgesichert.
+Backup-Ordner und -Dateien restriktive Rechte. Die PDF-Dateien unter
+`rechnungen/` beziehungsweise `documents/` werden von diesem Backup-Skript nicht
+mitgesichert.
 
 ## Projektstruktur
 
@@ -203,7 +207,9 @@ curl http://127.0.0.1:8000/api/health
 ```
 
 The application creates its local database at `data/ttc.db` and stores
-generated invoice PDFs in `rechnungen/`.
+generated invoice PDFs in `rechnungen/` by default. With `TTC_DATA_DIRECTORY`,
+including desktop mode, it uses `ttc.db` and `documents/` inside that directory.
+`TTC_DOCUMENT_DIRECTORY` optionally overrides the PDF directory independently.
 
 ## Tests
 
@@ -232,7 +238,7 @@ Create a backup manually with:
 
 The backup process checks SQLite integrity and applies restrictive permissions
 to the backup directory and files. It does not include PDF files from
-`rechnungen/`.
+`rechnungen/` or `documents/`.
 
 ## Privacy and security
 
@@ -310,6 +316,7 @@ Standard ist `http://127.0.0.1:8000/`, zentral in `electron/config.cjs`.
 | `TTC_DESKTOP_PRODUCTION_URL` | Getrennte Adresse für Desktop-Produktion, EXE und `web:start`; ignoriert den Entwicklungswert |
 | `TTC_PYTHON` | Optionaler Interpreterpfad, vorzugsweise absolut |
 | `TTC_DATA_DIRECTORY` | Absolutes Verzeichnis für `ttc.db`; Desktop-Standard: Electron-`userData`, Web-Standard: `data/` im Projekt |
+| `TTC_DOCUMENT_DIRECTORY` | Optionales absolutes Dokumentenverzeichnis, unabhängig von SQLite; ohne Override `documents/` im Desktop-Datenverzeichnis bzw. `rechnungen/` im Webbetrieb ohne Datenpfad-Override |
 | `TTC_FRONTEND_DIRECTORY` | Frontend-Pfad beim direkten Uvicorn-Webstart; verwaltete Startmodi setzen ihn selbst |
 
 Zulässig sind nur HTTP-Origins mit `127.0.0.1` oder `[::1]`, optionalem Port,
@@ -414,8 +421,8 @@ Der Build enthält Frontend, Electron-Module, Backend-Quellcode,
 `scripts/run.cjs`, `scripts/managed_server.py` und `requirements.txt`.
 Vorhandene `.venv`-Ordner, Python-Pakete, Datenbanken und Rechnungen werden
 nicht eingepackt. Tests ausschließlich mit neu angelegten Testdaten durchführen:
-Die Desktop-Datenbank liegt außerhalb des Builds im Benutzerprofil; PDFs
-liegen bis Phase 3 weiterhin unter `resources/app/rechnungen/`. Ein
+Desktop-Datenbank und PDFs liegen außerhalb des Builds im Benutzerprofil
+als `ttc.db` beziehungsweise unter `documents/`. Ein
 vollständiges Paket mit eingebetteter Python-Laufzeit und Abhängigkeiten bleibt
 offen; dieser Testbuild ist noch nicht eigenständig verteilbar.
 
@@ -453,9 +460,359 @@ keine neue Kundentabelle, Benutzerkonten oder Cloud-Datenhaltung eingeführt.
 Geldbeträge bleiben ganzzahlige Centwerte; optionale Stunden und bestehende IDs,
 Fremdschlüssel und JSON-/BLOB-Snapshots bleiben erhalten.
 
-PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält ihre bisherige
-Dateizuordnung; die Umstellung der Dokumentenablage gehört zur nachfolgenden
-Phase 3. Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
+PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält weiterhin ihre
+Dateizuordnung; die Dokumentenpfade sind seit Phase 3 zentral aufgelöst.
+Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
+
+### Dokumentenverzeichnis (Phase 3, Schritt 1)
+
+Für die Desktop-App wird `documents/` unterhalb des bestehenden lokalen
+Datenverzeichnisses als Dokumentenablage festgelegt. Maßgeblich ist der von
+`backend/paths.py` ermittelte Datenordner: Electron übergibt standardmäßig
+`app.getPath('userData')`; ein absolutes `TTC_DATA_DIRECTORY` bestimmt bereits
+heute einen abweichenden Datenordner. Die seit Schritt 4 verwendeten Desktop-Pfade lauten:
+
+| Inhalt | Pfad relativ zum Datenverzeichnis |
+| --- | --- |
+| SQLite-Datenbank (bereits umgesetzt) | `ttc.db` |
+| Rechnungs-PDFs | `documents/` |
+| Weitere dateibasierte Anhänge (Zielablage, soweit vorhanden) | `documents/` |
+
+Unter Windows ist die Standard-Zielablage somit
+`%APPDATA%/ttc-rechnungsverwaltung/documents/`. Sie liegt außerhalb der
+Installation und bleibt bei unverändertem Benutzerprofil unabhängig von
+Installationspfad, Arbeitsverzeichnis und App-Version. Entwicklung und Produktion
+teilen wie bei der Datenbank dasselbe Profil; Tests verwenden temporäre
+Datenverzeichnisse. Logos und Rechnungssnapshots bleiben gemäß Phase 2 in SQLite.
+Eine konkrete Zuordnungs- oder Unterordnerstruktur für weitere Anhänge wird hier
+nicht eingeführt.
+
+Für den bisherigen Webbetrieb ohne `TTC_DATA_DIRECTORY` bleibt die Ablage
+`rechnungen/` im Projekt erhalten. Bei explizitem `TTC_DATA_DIRECTORY` verwendet
+auch der Webbetrieb dessen Unterordner `documents/`. Das Backend nutzt
+in beiden Startarten dieselbe Pfadauflösung. Ein unabhängig einstellbarer
+Dokumentenort ist seit Schritt 5 über `TTC_DOCUMENT_DIRECTORY` verfügbar.
+
+Schritt 1 hat ausschließlich diese Verzeichnisentscheidung dokumentiert. Die
+Anbindung an die Rechnungs-API und die schonende Übernahme der bisherigen
+Rechnungsdateien sind seit Schritt 4 umgesetzt und unten beschrieben.
+
+### Zentraler Dokumentendienst (Phase 3, Schritt 2)
+
+`backend/document_storage.py` stellt `DocumentStore` bereit. Er kennt weder
+SQLite noch FastAPI oder Rechnungsregeln. `save_new()` veröffentlicht Dateien
+exklusiv nach vollständigem Schreiben in eine temporäre Datei und `fsync`;
+vorhandene Dateien und symbolische Links werden nicht überschrieben. Bei einem
+Schreibfehler wird nur die temporäre Datei bereinigt. `get_file()` liefert
+nur vorhandene reguläre Dateien, keine symbolischen
+Links. Dokumentreferenzen müssen einfache Dateinamen sein; Verzeichnisbestandteile,
+absolute Pfade und Windows-Datenstromreferenzen werden abgelehnt. Dateisystemfehler
+werden an den Aufrufer weitergereicht.
+
+Ohne explizites Verzeichnis nutzt der Dienst `get_document_directory()` aus
+`backend/paths.py`: zuerst `TTC_DOCUMENT_DIRECTORY`, andernfalls mit
+`TTC_DATA_DIRECTORY` dessen Unterordner `documents/`, sonst das bisherige
+Webverzeichnis `rechnungen/`. Die Auflösung legt keine Ordner an;
+erst das Speichern oder Übernehmen erzeugt die Ablage. Der Pfad wird pro Dienstinstanz absolut
+aufgelöst und bleibt bei einem Wechsel des Arbeitsverzeichnisses stabil.
+
+Die Rechnungs-API nutzt den Dienst zum Schreiben und Auffinden von PDFs. Seit
+Schritt 4 erhält sie ihr Verzeichnis aus der zentralen Pfadauflösung; in Schritt 2
+wurde zunächst noch die bisherige Ablage übergeben.
+
+### Eindeutige Dokumentenzuordnung (Phase 3, Schritt 3)
+
+Die bestehende Zuordnung bleibt erhalten: Eine finale Rechnung besitzt über
+`invoices.pdf_path` den einfachen Dateinamen
+`Rechnung_TTC_YYYY-MM.pdf` ihres Abrechnungszeitraums. Die vorhandene Fachlogik
+erlaubt eine finale Rechnung pro Zeitraum. Vorschauen besitzen keine gespeicherte
+PDF-Zuordnung; ihre Rechnungsdaten und Positionen werden weiterhin in SQLite verwaltet.
+
+`backend/invoice_documents.py` prüft für den PDF-Abruf und vor dem Löschen einer
+Rechnung, ob der Dateiverweis zum Zeitraum gehört und ausschließlich dieser
+finalen Rechnung zugeordnet ist. Auch abweichende Groß-/Kleinschreibung in weiteren
+Verweisen gilt wegen der Windows-Dateisystemsemantik als Konflikt. Ein ungültiger
+oder mehrdeutiger Verweis erlaubt keinen PDF-Abruf und verhindert das Löschen der
+Rechnung. Es erfolgt keine automatische Reparatur oder Änderung des Altbestands.
+Eine Finalisierung lehnt bereits vergebene Dateiverweise innerhalb derselben
+SQLite-Transaktion ab, bevor Vorschau oder Nummernkreis geändert werden.
+
+Logos bleiben als `organizations.logo_data` der Organisation zugeordnet; finale
+Rechnungen behalten ihren eigenen `logo_snapshot` samt Medientyp. Eine Änderung
+des aktuellen Logos verändert diese Rechnungssnapshots nicht. Das bisherige
+`logo_path` wird beim Logo-Upload geleert und nicht als Dateianhang geöffnet.
+Weitere frei hochladbare Anhänge sind bisher nicht implementiert und werden in
+diesem Schritt nicht eingeführt. Dateinamen und Schemaversion bleiben unverändert;
+die zentrale Umstellung des Ablageverzeichnisses ist in Schritt 4 umgesetzt.
+
+### Zentrale Dokumentenpfade und Bestandsübernahme (Phase 3, Schritt 4)
+
+`backend/paths.py` legt sowohl das aktive Dokumentenverzeichnis als auch die
+bisherige Ablage `rechnungen/` der laufenden Installation fest. Die Rechnungs-API
+verwendet `get_document_directory()` für Erstellen, Abrufen und Löschen von PDFs.
+Es gibt keinen zusätzlichen Pfad im Electron-Renderer oder im PDF-Generator.
+
+Nach der Datenbankvorbereitung übernimmt `prepare_invoice_documents()` beim
+Backend-Start fehlende PDFs aus der bisherigen Ablage in das aktive Verzeichnis.
+Nur eindeutig zugeordnete finale Rechnungen mit passendem Dateinamen werden
+berücksichtigt. Vorschauen, ungültige oder mehrdeutige Verweise und nicht
+zugeordnete Dateien werden nicht übernommen. Fehlende Quelldateien bleiben
+fehlend; der PDF-Abruf meldet weiterhin HTTP 404. Im Webbetrieb ohne Override
+sind Quelle und Ziel identisch, sodass keine Kopie nötig ist.
+
+Vorhandene reguläre Zieldateien sind maßgeblich und werden weder überschrieben
+noch mit der Quelle zusammengeführt. Die Quelle wird ausschließlich gelesen und
+bleibt auch nach erfolgreicher Übernahme unverändert. `copy_missing_from()`
+erstellt eine temporäre Kopie im Zielverzeichnis und veröffentlicht sie erst
+vollständig per Hardlink ohne Überschreiben. Bei Schreibfehlern bleibt keine
+teilweise veröffentlichte PDF zurück. Auch ein zwischenzeitlich angelegtes Ziel
+bleibt erhalten. Symbolische Links werden nicht als Dokumentdateien übernommen.
+Bei Übernahmefehlern bricht der Backend-Start ab; nach Behebung kann erneut
+gestartet werden. Das Zieldateisystem muss Hardlinks unterstützen.
+
+Die Übernahme ändert weder Datenbankreferenzen noch Rechnungsinhalte. Nach der
+Übernahme funktionieren Neustart und Austausch der Installation mit demselben
+Datenverzeichnis auch ohne den alten Installationsordner. Einen alten Build
+erst entfernen, wenn die zugehörigen PDFs vollständig übernommen oder separat
+gesichert sind. Ein externer Datenbankimport allein überträgt weiterhin keine
+PDFs: Liegen sie außerhalb der bisherigen Ablage der laufenden Installation,
+müssen die zu dieser Datenbank gehörenden Dateien bewusst bereitgestellt werden.
+Es wird kein Dateiverzeichnis aus einem beliebigen Datenbankpfad abgeleitet.
+
+### Einstellbarer Dokumentenspeicherort (Phase 3, Schritt 5)
+
+`TTC_DOCUMENT_DIRECTORY` bestimmt einen eigenen absoluten Dokumentenordner für
+Desktop- und Webstart. Die SQLite-Datei bleibt am bisherigen Datenbankpfad.
+Leere, nur aus Leerzeichen bestehende oder relative Werte werden beim Start
+abgelehnt. Ohne diese Variable bleibt die Standardablage unverändert. Die
+Konfiguration nutzt wie die vorhandenen Startoptionen die Umgebung; es gibt
+hierfür keinen zusätzlichen Einstellungsdialog.
+
+Beispiel unter Windows in PowerShell, vor dem App-Start:
+
+```powershell
+$env:TTC_DOCUMENT_DIRECTORY = "D:\TTC Dokumente"
+npm run desktop:start
+```
+
+Unter Linux beispielsweise:
+
+```bash
+TTC_DOCUMENT_DIRECTORY="/absoluter/Pfad/TTC Dokumente" npm run desktop:start
+```
+
+Einen lokalen Ordner außerhalb der Installation wählen. Bei jedem Start muss
+dieselbe Konfiguration gelten; für EXE-Starts unter Windows kann die Variable
+dauerhaft als Windows-Benutzervariable eingerichtet werden. Die App danach
+vollständig neu starten. Die Einstellung wird nicht in SQLite geschrieben.
+
+Beim Start werden fehlende, eindeutig zugeordnete PDFs zuerst aus der bisherigen
+Standardablage (`documents/` im Datenverzeichnis beziehungsweise `rechnungen/`
+im Webbetrieb ohne Datenpfad-Override) übernommen. Anschließend wird die alte
+Installationsablage berücksichtigt. Bestehende Zieldateien haben Vorrang; alle
+Quellen bleiben unverändert. Es gelten die oben beschriebenen Regeln zur
+Übernahme einschließlich der Hardlink-Unterstützung im Ziel.
+
+Beim Wechsel von einem eigenen Ordner zu einem anderen oder zurück zum Standard
+App und Backend zuerst beenden. Die zu dieser Datenbank gehörenden PDFs aus dem
+bisher aktiven Ordner im gewünschten Ziel bereitstellen, vorhandene gleichnamige
+Dateien vorab prüfen und nicht ungeprüft überschreiben. Erst anschließend die
+Variable ändern beziehungsweise entfernen, neu starten und die PDFs prüfen.
+Eigene frühere Ordner werden nicht automatisch gesucht oder verschoben. Quellen
+erst nach vollständiger Prüfung beziehungsweise separater Sicherung entfernen.
+
+### PDF-Abläufe in Electron prüfen (Phase 3, Schritt 6)
+
+`tests/test_desktop_invoice.py` prüft die vorhandenen Abläufe mit echten
+Electron-Fenstern, Preload, Renderer und dem von Electron gestarteten Python-Backend.
+Der Test kopiert die App in temporäre Verzeichnisse und verwendet ausschließlich
+neue Testdaten und isolierte Profile. Seit Schritt 10 werden Entwicklung und
+Produktion jeweils mit Standardablage und eigenem Dokumentenordner geprüft;
+Produktion verwendet das gebaute Frontend.
+
+Geprüft werden die sichtbare HTML-Rechnungsvorschau, der Ausschluss geplanter und abgesagter
+Termine, die Finalisierung, PDF-Abruf mit passenden HTTP-Headern, der tatsächliche
+Electron-Download und der bytegleiche Inhalt der gespeicherten PDF. Eine neue
+Vorschau verändert die finale PDF nicht. Nach Neuladen wird die Rechnung über
+das Archiv geöffnet. Der Test prüft außerdem Sandbox, Context Isolation und die
+beschränkte Preload-Bridge. Browserübergaben werden ausschließlich im Test
+abgefangen; die produktive URL-Validierung bleibt aktiv.
+Bei einer blockierten Dokumentenablage wird die sichtbare Fehlermeldung geprüft;
+nach Beseitigung des Hindernisses muss das erneute Speichern erfolgreich sein.
+
+Voraussetzungen: installierte Projektabhängigkeiten, eine grafische Sitzung und
+eine Umgebung, die lokale Loopback-Verbindungen sowie Electron-Prozesse erlaubt.
+Die Tests werden ohne ausdrückliche Aktivierung übersprungen:
+
+```bash
+TTC_RUN_ELECTRON_TESTS=1 python -m pytest -q -s tests/test_desktop_invoice.py
+```
+
+PowerShell:
+
+```powershell
+$env:TTC_RUN_ELECTRON_TESTS = "1"
+python -m pytest -q -s tests/test_desktop_invoice.py
+```
+
+Die ausgegebenen temporären Artefaktverzeichnisse enthalten Vorschau-Screenshot,
+Test-PDF und Download. Unter Linux wurden beide Modi ohne Abschalten der
+Electron-Sandbox geprüft. Die HTML-Vorschau läuft im Electron-Fenster; finale
+PDFs werden gemäß bestehender Architektur an den Standardbrowser übergeben.
+Der Test ersetzt weder die native Windows-Abnahme noch die manuelle Kontrolle
+der PDF-Darstellung und des Druckdialogs im tatsächlichen Standardbrowser.
+
+Falls `node`/`npm` fehlen, die vorhandene Electron-Abhängigkeit aber installiert
+ist, kann ihre eingebettete Node-Laufzeit unter Linux für die JavaScript-Tests
+verwendet werden:
+
+```bash
+ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/electron --test --test-isolation=none electron/*.test.cjs scripts/*.test.cjs
+```
+
+### Kontrollierte Dateioperationen (Phase 3, Schritt 7)
+
+Der Dokumentendienst bündelt Speichern, geprüften Lesezugriff, Umbenennen und
+Löschen innerhalb eines Dokumentenverzeichnisses. Alle Operationen akzeptieren
+einfache Dateinamen; Pfadbestandteile, Windows-Gerätenamen, Datenstromreferenzen,
+Steuerzeichen und unter Windows mehrdeutige abschließende Punkte/Leerzeichen
+werden abgelehnt.
+
+| Operation | Verhalten |
+| --- | --- |
+| `save_new()` | Vollständig schreiben, synchronisieren und ohne Ersetzen veröffentlichen; bei Fehlern kein teilweise veröffentlichtes Dokument |
+| `save_new_with_identity()` | Zusätzlich die Identität der gerade veröffentlichten Datei für eine spätere bedingte Bereinigung zurückgeben |
+| `get_file()` / `open_read()` | Vorhandene reguläre Datei ermitteln beziehungsweise lesend öffnen; `open_read()` prüft auch den tatsächlich geöffneten Dateideskriptor |
+| `rename()` | Innerhalb derselben Ablage einen neuen Namen ohne Zielersetzung anlegen, dann den geprüften alten Namen entfernen |
+| `delete()` | Reguläre Datei entfernen; mit `expected` nur bei passender vorher erfasster Dateiidentität, mit `missing_ok` fehlende Dateien tolerieren |
+
+Die Dateiidentität umfasst Dateisystem, Dateikennung, Größe und Änderungszeit.
+Sie wird beim Speichern nach Schließen des Schreibhandles und vor der
+Veröffentlichung erfasst. Die Rechnungs-API verwendet sie bei fehlgeschlagener
+Finalisierung zur Bereinigung der eigenen neuen PDF und beim Löschen einer
+Rechnung. Eine dabei als geändert erkannte Datei wird erhalten. War eine PDF
+schon vor dem Löschen der Rechnung nicht vorhanden, wird anschließend keine
+zwischenzeitlich entstandene Datei unter demselben Namen entfernt.
+
+Publizieren und Umbenennen benötigen ein Dateisystem mit Hardlink-Unterstützung.
+Scheitert beim Umbenennen das Entfernen des alten Namens, bleiben beide Namen
+erhalten und der Aufrufer erhält den Fehler. Die Umbenennung ist daher keine
+gemeinsame atomare Operation aus zwei Namensänderungen. Dateisystemoperationen
+und SQLite bleiben ebenfalls getrennt; nach einem Fehler beim Entfernen der PDF
+kann wie bisher eine bereits gelöschte Rechnung mit zurückgebliebener PDF
+vorliegen. Die API meldet diesen Zustand ausdrücklich.
+
+`rename()` steht auf Ebene des Dateidienstes bereit. Finale Rechnungsoriginale
+behalten ihre verbindlichen Namen `Rechnung_TTC_YYYY-MM.pdf` und ihre bestehenden
+Datenbankreferenzen. Frei gewählte Namen für exportierte Kopien bleiben über
+den vorhandenen Download-/Speicherdialog möglich. Electron erhält weiterhin
+ausschließlich die bisherige begrenzte Bridge und validierte PDF-URLs.
+
+### Dateifehler behandeln (Phase 3, Schritt 8)
+
+`backend/document_errors.py` ordnet Dateifehler festen Meldungen mit einer
+Handlungsanweisung zu. Die Übersetzung erfolgt gezielt an den Grenzen der
+Dokumentenoperationen; bestehende Datenbankfehler bleiben separat behandelt.
+Die lokale API behält das Fehlerformat `{"detail": "…"}` bei, das die vorhandene
+Oberfläche bereits anzeigt. Meldungen und Dokumenten-Fehlerprotokolle enthalten
+keine internen Dateipfade oder rohen Betriebssystemtexte.
+
+| Fall | API-Verhalten |
+| --- | --- |
+| Gespeicherte PDF fehlt | HTTP 404 mit Hinweis auf Dokumentenordner und Sicherung; Rechnung bleibt erhalten |
+| Dateiname bereits vorhanden oder Datei zwischenzeitlich geändert | HTTP 409; vorhandene beziehungsweise geänderte Datei bleibt erhalten |
+| Zugriffsrechte, geöffnete/gesperrte Datei, schreibgeschützte Ablage | HTTP 503 mit Hinweis auf Rechte und andere Programme |
+| Speicherplatz oder Kontingent erschöpft | HTTP 503 mit Hinweis auf freien Speicher |
+| Ungültiger Ordner oder ungeeignetes Dateisystem | HTTP 503 mit Hinweis auf gültigen lokalen Ordner beziehungsweise Hardlinks |
+| Sonstiger Dateisystemfehler | HTTP 503 mit Hinweis auf Erreichbarkeit und erneuten Versuch |
+
+Die Meldung unterscheidet, ob eine Rechnung nicht gespeichert oder nicht gelöscht
+wurde, ob eine neue PDF nach einem Speicherfehler nicht bereinigt werden konnte
+oder ob die Rechnung bereits gelöscht wurde und die PDF zurückblieb. In diesen
+Fällen den Dateibestand prüfen, bevor erneut gespeichert wird. Fehlgeschlagene
+PDF-Schreibvorgänge verändern weder die gespeicherte Vorschau noch den Nummernkreis.
+
+Beim Start meldet das Backend ausschließlich einen begrenzten Fehlercode über
+`TTC_DOCUMENT_ERROR`. Der Starter erkennt auch aufgeteilte Ausgabeblöcke;
+Electron zeigt eine feste passende Meldung statt eines allgemeinen Backend- oder
+Python-Fehlers. Dies gilt auch beim Ausfall eines Entwicklungs-Reload-Workers.
+
+`DocumentPDFResponse` verwendet weiterhin die vorhandene Dateiantwort samt
+Download- und Bereichsabruf-Headern. Erfolgsheader werden erst mit dem Beginn
+der eigentlichen Antwort übertragen. Scheitert vorher das Öffnen oder erste
+Lesen, erhält der Aufrufer eine nachvollziehbare JSON-Fehlermeldung. Verschwindet
+eine Datei erst unmittelbar vor der Übertragung, kann dies als vorübergehender
+Lesefehler mit HTTP 503 gemeldet werden. Bricht das Lesen nach bereits übertragenen
+PDF-Daten ab, wird die Übertragung beendet; dann ist ein neuer Abruf erforderlich,
+weil Status und Header nicht mehr geändert werden können.
+
+### Fremde Dokumente beim Rechnungslöschen schützen (Phase 3, Schritt 9)
+
+Vor dem Löschen prüft die API weiterhin den verbindlichen Dateinamen, die
+eindeutige Rechnungszuordnung und die Identität der vorhandenen regulären Datei.
+`delete_final_invoice()` vergleicht die ausgewählte Rechnung innerhalb seiner
+SQLite-Schreibtransaktion erneut mit dem aktuellen Datensatz. Auch zwischenzeitlich
+hinzugekommene weitere Dateiverweise werden geprüft, einschließlich abweichender
+Groß-/Kleinschreibung. Bei einem Konflikt bleiben Rechnung und Dateien erhalten;
+die API fordert mit HTTP 409 zum erneuten Laden und Prüfen auf.
+
+Nach dem Löschen des Datensatzes prüft `invoice_document_deletion_guard()` vor
+der PDF-Bereinigung erneut, dass keine Rechnung mehr auf die Datei verweist.
+Die SQLite-Schreibsperre bleibt während der bedingten Dateioperation bestehen.
+Damit können parallele Datenbank-Schreibvorgänge die Zuordnung nicht zwischen
+dieser Prüfung und der Bereinigung ändern. Eine bereits anderweitig zugeordnete
+oder anhand der gespeicherten Identität als ersetzt erkannte Datei wird erhalten.
+Kann die Zuordnung nicht geprüft werden, bleibt die PDF ebenfalls erhalten und
+die API weist auf den bereits gelöschten Datensatz und die notwendige Kontrolle hin.
+
+Fehlt ein gespeicherter Dateiverweis, wird kein Dateiname zum Löschen hergeleitet.
+War die PDF schon bei der Auswahl nicht vorhanden, entfernt die API keine später
+unter diesem Namen erschienene Datei. Es gibt keine rekursive Löschung oder Suche
+nach ähnlichen Dateinamen. Andere Rechnungs-PDFs, nicht zugeordnete Dateien und
+Kopien in alten Ablagen bleiben erhalten. Wiederholtes Löschen einer nicht mehr
+vorhandenen Rechnung meldet HTTP 404 und führt keine Dateioperation aus.
+
+Datenbanklöschung und Dateientfernung bleiben zwei getrennte Schritte. Bei einem
+Fehler nach der Datenbanklöschung kann die PDF zurückbleiben; diese bestehende
+Einschränkung wird ausdrücklich gemeldet. Eine gemeinsame atomare Transaktion
+über SQLite und Dateisystem wird nicht zugesichert.
+
+### Rechnungs- und Vorschauabläufe prüfen (Phase 3, Schritt 10)
+
+Die Regression kombiniert folgende Prüfungen, ohne produktive Nutzerdaten zu
+verwenden:
+
+| Tests | Abgedeckte Abläufe |
+| --- | --- |
+| `tests/test_api.py` | Abrechenbare Termine, manuelle und Wochenplan-Leistungen, Pauschalen, Rundung, Vorschauaktualisierung, finale Snapshots samt Logos, Nummernkreis, Archiv, Konflikte und sichere Lösch-/Fehlerfälle |
+| `tests/test_invoice.py` | PDF-Erzeugung, Rechnungsdaten, Positionen, Kontaktdaten, Logo, Summen und Layoutgrenzen |
+| `tests/test_document_storage.py`, `tests/test_document_errors.py`, `tests/test_invoice_documents.py` | Dateioperationen, Zuordnung, unveränderte Bestände bei Fehlern, Konkurrenzschutz und PDF-Bereichsabrufe |
+| `tests/test_storage_paths.py`, `tests/test_storage_update.py`, `tests/test_storage_lifecycle.py` | Speicherorte, Bestandsübernahme, Installationsaustausch und echte Backend-Neustarts mit beiden Ablagen und mit/ohne Reload |
+| `tests/test_desktop_invoice.py` | Durchgehender Electron-Ablauf in allen vier Kombinationen aus Entwicklung/Produktion und Standard-/eigener Ablage, jeweils mit anschließendem vollständigem App-Neustart |
+
+Der Electron-Test aktualisiert eine Vorschau nach einer Terminänderung,
+finalisiert sie und prüft den Download. Nach einer weiteren Terminänderung
+muss die neue Vorschau vom weiterhin unveränderten finalen PDF abweichen.
+Ein erneuter Finalisierungsversuch vor dem Löschen wird abgelehnt. Im Archiv
+werden Abbrechen und Bestätigen der Löschabfrage mit kontrollierten Antworten
+geprüft; eine zweite Rechnung bleibt erhalten. Anschließend wird die aktuelle
+Vorschau mit neuer Rechnungsnummer finalisiert. Nach vollständigem Beenden und
+Neustarten der App müssen beide Rechnungen, PDFs und der Nummernkreis erhalten
+sein und das PDF aus dem Archiv wieder geöffnet werden können.
+
+Alle Python-Prüfungen einschließlich der GUI-Fälle unter Linux:
+
+```bash
+TTC_RUN_ELECTRON_TESTS=1 python -m pytest -q
+```
+
+Die JavaScript-Prüfungen laufen zusätzlich mit `npm run desktop:check`
+beziehungsweise mit der oben beschriebenen eingebetteten Node-Laufzeit.
+Die automatisierten Prüfungen unter Linux ersetzen weiterhin keine native
+Windows-Abnahme. Browserübergaben werden abgefangen, Downloads automatisch
+gespeichert und Bestätigungen kontrolliert beantwortet. Die tatsächliche
+PDF-Darstellung, das Drucken und manuelle Betriebssystemdialoge sind separat
+abzunehmen.
 
 ### Schemaänderungen
 
@@ -505,9 +862,9 @@ Nummernkreis, Preis-/Logo-/Rechnungssnapshots und Dateizuordnungen bleiben erhal
 Eine beschädigte, fremde oder von einer neueren App erzeugte Datenbank wird
 abgelehnt. Bei Fehlern bleibt das Ziel unveröffentlicht. Alte und neue App vor
 einem bewussten manuellen Import beenden; nicht gleichzeitig an beiden Beständen
-weiterarbeiten. Die Dokumentenablage bleibt bis Phase 3 separat: Der Datenbankimport
-verschiebt oder löscht keine PDFs, und vorhandene Rechnungsdateien müssen weiter
-im bisherigen Rechnungsverzeichnis verfügbar sein.
+weiterarbeiten. Der Datenbankimport selbst verschiebt oder löscht keine PDFs.
+Beim Backend-Start übernimmt die oben beschriebene Dokumentenvorbereitung fehlende,
+eindeutig zugeordnete PDFs aus der bisherigen Ablage der laufenden Installation.
 
 Für einen Altbestand außerhalb der aktuellen Installation kann einmalig ein
 expliziter Import ausgeführt werden (Ziel darf noch nicht existieren):
@@ -554,8 +911,8 @@ Organisation/Empfänger, Wochenplan, Termine, Nummernkreis und Rechnungssnapshot
 Der Datenpfad hängt weder vom Arbeitsverzeichnis noch vom Installationspfad ab.
 Ein explizit geänderter Profilpfad ist ein anderer Datenbestand. Auch beim
 Austausch der App keine alten Datenquellen oder Rechnungsverzeichnisse löschen.
-Installer, Deinstallation und Updates der PDF-Ablage werden in ihren späteren
-Phasen separat umgesetzt und auf Windows geprüft.
+Die übernommene PDF-Ablage bleibt wie die Datenbank außerhalb der Installation.
+Installer, Deinstallation und die native Windows-Abnahme folgen separat.
 
 Beim manuellen Datenbank-Backup für den Desktop dasselbe `TTC_DATA_DIRECTORY`
 setzen oder `--database` mit dem absoluten Desktop-Datenbankpfad angeben. Der

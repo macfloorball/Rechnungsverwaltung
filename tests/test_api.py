@@ -61,6 +61,403 @@ def test_health_and_request_validation(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize("kind", ["shared", "shared-case", "preview", "wrong-period", "valid"])
+def test_pdf_access_requires_unique_invoice_association(client: TestClient, kind):
+    from backend.database import create_record
+
+    path = client.app.state.test_database_path
+    reference = "Rechnung_TTC_2026-11.pdf"
+    invoice = {
+        "year": 2026, "month": 11, "invoice_date": "2026-11-30",
+        "total_amount_cents": 0, "pdf_path": reference,
+        "is_preview": int(kind == "preview"),
+    }
+    if kind == "wrong-period":
+        invoice["pdf_path"] = "Rechnung_TTC_2026-12.pdf"
+    invoice_id = create_record("invoices", invoice, path)
+    if kind.startswith("shared"):
+        create_record("invoices", invoice | {
+            "month": 12,
+            "pdf_path": reference.lower() if kind == "shared-case" else reference,
+        }, path)
+    directory = client.app.state.test_invoice_directory
+    directory.mkdir()
+    pdf = directory / reference
+    pdf.write_bytes(b"%PDF-original")
+    before = path.read_bytes()
+    response = client.get(f"/api/invoices/{invoice_id}/pdf")
+    assert response.status_code == (200 if kind == "valid" else 404)
+    if kind == "valid":
+        assert response.content == pdf.read_bytes()
+    else:
+        assert client.delete(f"/api/invoices/{invoice_id}").status_code == (
+            409 if kind == "preview" else 500
+        )
+    assert path.read_bytes() == before
+    assert pdf.read_bytes() == b"%PDF-original"
+
+
+def test_finalization_does_not_reuse_another_invoices_reference(client: TestClient):
+    from backend.database import create_record, get_organization, list_records
+
+    path = client.app.state.test_database_path
+    activity = client.put("/api/settings", json={"activities": [
+        {"name": "Training", "hourly_rate_cents": 1500},
+    ]}).json()["activities"][0]
+    client.post("/api/trainings", json={
+        "training_date": "2026-11-12", "activity_type_id": activity["id"],
+        "hours": 1, "status": "completed",
+    })
+    create_record("invoices", {
+        "year": 2026, "month": 12, "invoice_date": "2026-12-31",
+        "total_amount_cents": 0, "pdf_path": "Rechnung_TTC_2026-11.pdf",
+    }, path)
+    before = list_records("invoices", database_path=path)
+    sequence = get_organization(path)["next_invoice_number"]
+    response = client.post("/api/invoices", json={"year": 2026, "month": 11})
+    assert response.status_code == 409
+    assert list_records("invoices", database_path=path) == before
+    assert get_organization(path)["next_invoice_number"] == sequence
+    assert not (client.app.state.test_invoice_directory / "Rechnung_TTC_2026-11.pdf").exists()
+
+
+@pytest.mark.parametrize("replaced", [False, True])
+def test_finalization_rollback_only_removes_its_own_file(client, monkeypatch, replaced):
+    import backend.main as main
+    from backend.database import get_organization, list_records
+
+    activity = client.put("/api/settings", json={"activities": [
+        {"name": "Training", "hourly_rate_cents": 1500},
+    ]}).json()["activities"][0]
+    assert client.post("/api/trainings", json={
+        "training_date": "2026-11-12", "activity_type_id": activity["id"],
+        "hours": 1, "status": "completed",
+    }).status_code == 201
+    database = client.app.state.test_database_path
+    pdf = client.app.state.test_invoice_directory / "Rechnung_TTC_2026-11.pdf"
+    sequence = get_organization(database)["next_invoice_number"]
+
+    def fail_database_write(*args, **kwargs):
+        assert pdf.read_bytes().startswith(b"%PDF-")
+        if replaced:
+            replacement = pdf.with_name("replacement.pdf")
+            replacement.write_bytes(b"another document")
+            replacement.replace(pdf)
+        raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert")
+
+    monkeypatch.setattr(main, "create_invoice_with_items", fail_database_write)
+    if replaced:
+        response = client.post("/api/invoices", json={"year": 2026, "month": 11})
+        assert response.status_code == 409
+        assert "bereinigt" in response.json()["detail"]
+        assert "geändert" in response.json()["detail"]
+        assert pdf.read_bytes() == b"another document"
+    else:
+        assert client.post("/api/invoices", json={"year": 2026, "month": 11}).status_code == 409
+        assert not pdf.exists()
+    assert list_records("invoices", database_path=database) == []
+    assert get_organization(database)["next_invoice_number"] == sequence
+
+
+@pytest.fixture
+def billable_file_error_period(client):
+    from backend.database import get_organization, list_records
+
+    activity = client.put("/api/settings", json={"activities": [
+        {"name": "Training", "hourly_rate_cents": 1500},
+    ]}).json()["activities"][0]
+    assert client.post("/api/trainings", json={
+        "training_date": "2026-11-12", "activity_type_id": activity["id"],
+        "hours": 1, "status": "completed",
+    }).status_code == 201
+    assert client.post("/api/invoices/preview", json={"year": 2026, "month": 11}).status_code == 200
+    database = client.app.state.test_database_path
+    preview = list_records("invoices", {"year": 2026, "month": 11, "is_preview": 1}, database)[0]
+    return preview["id"], get_invoice(preview["id"], database), get_organization(database)["next_invoice_number"]
+
+
+@pytest.mark.parametrize("failure,word", [
+    (PermissionError("private-path"), "Zugriffsrechte"),
+    (OSError(28, "private-path"), "Speicherplatz"),
+    (NotADirectoryError("private-path"), "ungültig"),
+    (NotImplementedError("private-path"), "Hardlink"),
+])
+def test_pdf_write_errors_preserve_preview_and_sequence(client, monkeypatch, billable_file_error_period, failure, word):
+    from backend.database import get_organization
+    from backend.document_storage import DocumentStore
+
+    def fail_write(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(DocumentStore, "save_new_with_identity", fail_write)
+    response = client.post("/api/invoices", json={"year": 2026, "month": 11})
+    assert response.status_code == 503
+    assert word in response.json()["detail"]
+    assert "nicht gespeichert" in response.json()["detail"]
+    assert "private-path" not in response.text
+    invoice_id, preview, sequence = billable_file_error_period
+    database = client.app.state.test_database_path
+    assert get_invoice(invoice_id, database) == preview
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert not (client.app.state.test_invoice_directory / "Rechnung_TTC_2026-11.pdf").exists()
+
+
+def test_failed_pdf_cleanup_is_reported_without_losing_the_file(client, monkeypatch, billable_file_error_period):
+    import backend.main as main
+    from backend.database import get_organization
+    from backend.document_storage import DocumentStore
+
+    def fail_database(*args, **kwargs):
+        raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert")
+
+    def fail_cleanup(*args, **kwargs):
+        raise PermissionError("private-path")
+
+    monkeypatch.setattr(main, "create_invoice_with_items", fail_database)
+    monkeypatch.setattr(DocumentStore, "delete", fail_cleanup)
+    response = client.post("/api/invoices", json={"year": 2026, "month": 11})
+    assert response.status_code == 503
+    assert "nicht bereinigt" in response.json()["detail"]
+    assert "private-path" not in response.text
+    invoice_id, preview, sequence = billable_file_error_period
+    database = client.app.state.test_database_path
+    assert get_invoice(invoice_id, database) == preview
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert (client.app.state.test_invoice_directory / "Rechnung_TTC_2026-11.pdf").read_bytes().startswith(b"%PDF-")
+
+
+@pytest.fixture
+def stored_file_error_invoice(client):
+    from backend.database import create_record
+    from backend.document_storage import DocumentStore
+
+    reference = "Rechnung_TTC_2026-11.pdf"
+    invoice_id = create_record("invoices", {
+        "year": 2026, "month": 11, "invoice_date": "2026-11-30",
+        "total_amount_cents": 0, "pdf_path": reference,
+    }, client.app.state.test_database_path)
+    file = DocumentStore(client.app.state.test_invoice_directory).save_new(reference, b"%PDF-original")
+    return invoice_id, file
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_missing_or_unreadable_pdf_preserves_invoice(client, monkeypatch, stored_file_error_invoice, missing):
+    from backend.document_storage import DocumentStore
+
+    invoice_id, file = stored_file_error_invoice
+    before = get_invoice(invoice_id, client.app.state.test_database_path)
+    if missing:
+        file.unlink()
+    else:
+        def deny_read(*args, **kwargs):
+            raise PermissionError("private-path")
+        monkeypatch.setattr(DocumentStore, "get_file", deny_read)
+    response = client.get(f"/api/invoices/{invoice_id}/pdf")
+    assert response.status_code == (404 if missing else 503)
+    assert ("fehlt" if missing else "Zugriffsrechte") in response.json()["detail"]
+    assert "private-path" not in response.text
+    assert get_invoice(invoice_id, client.app.state.test_database_path) == before
+    if missing:
+        assert not file.exists()
+    else:
+        assert file.read_bytes() == b"%PDF-original"
+
+
+@pytest.mark.parametrize("after_database", [False, True])
+def test_delete_error_reports_whether_invoice_was_already_deleted(client, monkeypatch, stored_file_error_invoice, after_database):
+    from backend.document_storage import DocumentStore
+
+    invoice_id, file = stored_file_error_invoice
+    before = get_invoice(invoice_id, client.app.state.test_database_path)
+
+    def deny_operation(*args, **kwargs):
+        raise PermissionError("private-path")
+
+    monkeypatch.setattr(DocumentStore, "delete" if after_database else "get_identity", deny_operation)
+    response = client.delete(f"/api/invoices/{invoice_id}")
+    assert response.status_code == 503
+    assert ("wurde gelöscht" if after_database else "nicht gelöscht") in response.json()["detail"]
+    assert "private-path" not in response.text
+    assert get_invoice(invoice_id, client.app.state.test_database_path) == (None if after_database else before)
+    assert file.read_bytes() == b"%PDF-original"
+
+
+@pytest.fixture
+def deletion_documents(client, stored_file_error_invoice):
+    from backend.database import create_record
+
+    invoice_id, selected = stored_file_error_invoice
+    other_id = create_record("invoices", {
+        "year": 2026, "month": 12, "invoice_date": "2026-12-31",
+        "total_amount_cents": 0, "pdf_path": "Rechnung_TTC_2026-12.pdf",
+    }, client.app.state.test_database_path)
+    legacy = selected.parent / "old-installation"
+    legacy.mkdir()
+    other_files = {
+        selected.with_name("Rechnung_TTC_2026-12.pdf"): b"other invoice",
+        selected.with_name("unassigned.pdf"): b"unassigned document",
+        selected.parent.parent / "outside.pdf": b"outside document",
+        legacy / selected.name: b"legacy original",
+    }
+    for file, content in other_files.items():
+        file.write_bytes(content)
+    return invoice_id, selected, other_id, other_files
+
+
+def _assert_other_documents_unchanged(files):
+    for file, content in files.items():
+        assert file.read_bytes() == content
+
+
+def test_deletion_removes_only_the_selected_active_pdf(client, deletion_documents):
+    invoice_id, selected, other_id, files = deletion_documents
+    other = get_invoice(other_id, client.app.state.test_database_path)
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 204
+    assert not selected.exists()
+    assert get_invoice(invoice_id, client.app.state.test_database_path) is None
+    assert get_invoice(other_id, client.app.state.test_database_path) == other
+    _assert_other_documents_unchanged(files)
+    selected.write_bytes(b"later unrelated document")
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 404
+    assert selected.read_bytes() == b"later unrelated document"
+
+
+@pytest.mark.parametrize("reference", [None, ""])
+def test_missing_database_reference_does_not_infer_a_file_to_delete(client, deletion_documents, reference):
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    database = client.app.state.test_database_path
+    update_record("invoices", invoice_id, {"pdf_path": reference}, database)
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 204
+    assert get_invoice(invoice_id, database) is None
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("reference", ["../outside.pdf", "absolute", "..\\outside.pdf", "Rechnung_TTC_2026-12.pdf", "Rechnung_TTC_2026-11.pdf "])
+def test_unsafe_invoice_reference_never_deletes_files(client, deletion_documents, reference):
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    if reference == "absolute":
+        reference = str(selected.parent.parent / "outside.pdf")
+    database = client.app.state.test_database_path
+    update_record("invoices", invoice_id, {"pdf_path": reference}, database)
+    before = database.read_bytes()
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 500
+    assert database.read_bytes() == before
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("kind", ["symlink", "directory"])
+def test_non_regular_invoice_path_is_preserved_before_database_deletion(client, deletion_documents, kind):
+    invoice_id, selected, other_id, files = deletion_documents
+    selected.unlink()
+    if kind == "symlink":
+        selected.symlink_to(selected.parent.parent / "outside.pdf")
+    else:
+        selected.mkdir()
+        (selected / "foreign.pdf").write_bytes(b"foreign")
+    database = client.app.state.test_database_path
+    before = database.read_bytes()
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 503
+    assert database.read_bytes() == before
+    if kind == "symlink":
+        assert selected.is_symlink()
+    else:
+        assert (selected / "foreign.pdf").read_bytes() == b"foreign"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("change", ["invoice", "shared", "shared-case"])
+def test_changed_database_selection_prevents_deletion(client, monkeypatch, deletion_documents, change):
+    import backend.main as main
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    database = client.app.state.test_database_path
+    original_delete = main.delete_final_invoice
+    expected = {}
+
+    def concurrent_change(*args, **kwargs):
+        if change == "invoice":
+            update_record("invoices", invoice_id, {"invoice_number": "RE-CHANGED"}, database)
+        else:
+            update_record("invoices", other_id, {
+                "pdf_path": selected.name.lower() if change == "shared-case" else selected.name,
+            }, database)
+        expected["selected"] = get_invoice(invoice_id, database)
+        expected["other"] = get_invoice(other_id, database)
+        return original_delete(*args, **kwargs)
+
+    monkeypatch.setattr(main, "delete_final_invoice", concurrent_change)
+    response = client.delete(f"/api/invoices/{invoice_id}")
+    assert response.status_code == 409
+    assert "nicht gelöscht" in response.json()["detail"]
+    assert get_invoice(invoice_id, database) == expected["selected"]
+    assert get_invoice(other_id, database) == expected["other"]
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("change", ["replacement", "reassigned", "reassigned-case", "appeared"])
+def test_cleanup_preserves_replaced_new_or_reassigned_documents(client, monkeypatch, deletion_documents, change):
+    import backend.main as main
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    database = client.app.state.test_database_path
+    original_delete = main.delete_final_invoice
+    if change == "appeared":
+        selected.unlink()
+
+    def concurrent_change(*args, **kwargs):
+        result = original_delete(*args, **kwargs)
+        if change == "replacement":
+            replacement = selected.with_name("replacement.pdf")
+            replacement.write_bytes(b"foreign replacement")
+            replacement.replace(selected)
+        elif change == "appeared":
+            selected.write_bytes(b"new foreign document")
+        else:
+            update_record("invoices", other_id, {
+                "pdf_path": selected.name.lower() if change == "reassigned-case" else selected.name,
+            }, database)
+        return result
+
+    monkeypatch.setattr(main, "delete_final_invoice", concurrent_change)
+    response = client.delete(f"/api/invoices/{invoice_id}")
+    assert response.status_code == (204 if change == "appeared" else 409)
+    assert get_invoice(invoice_id, database) is None
+    assert get_invoice(other_id, database) is not None
+    expected = {"replacement": b"foreign replacement", "appeared": b"new foreign document"}.get(change, b"%PDF-original")
+    assert selected.read_bytes() == expected
+    _assert_other_documents_unchanged(files)
+
+
+def test_failed_cleanup_ownership_check_keeps_pdf(client, monkeypatch, deletion_documents):
+    from contextlib import contextmanager
+    import backend.main as main
+    from backend.storage_errors import DatabaseAccessError
+
+    invoice_id, selected, other_id, files = deletion_documents
+
+    @contextmanager
+    def unavailable(*args, **kwargs):
+        raise DatabaseAccessError("locked")
+        yield
+
+    monkeypatch.setattr(main, "invoice_document_deletion_guard", unavailable)
+    response = client.delete(f"/api/invoices/{invoice_id}")
+    assert response.status_code == 503
+    assert "PDF blieb erhalten" in response.json()["detail"]
+    assert get_invoice(invoice_id, client.app.state.test_database_path) is None
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
 def test_hour_inputs_reject_fractional_and_comma_values(client: TestClient) -> None:
     settings = client.put(
         "/api/settings",

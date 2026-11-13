@@ -18,3 +18,23 @@ def get_data_directory() -> Path:
 
 def get_database_path() -> Path:
     return get_data_directory() / "ttc.db"
+
+
+def get_document_directory() -> Path:
+    configured = os.environ.get("TTC_DOCUMENT_DIRECTORY")
+    if configured is not None:
+        directory = Path(configured)
+        if not configured.strip() or not directory.is_absolute():
+            raise ValueError("TTC_DOCUMENT_DIRECTORY muss ein absolutes Verzeichnis sein")
+        return directory
+    return get_default_document_directory()
+
+
+def get_default_document_directory() -> Path:
+    if "TTC_DATA_DIRECTORY" not in os.environ:
+        return get_legacy_document_directory()
+    return get_data_directory() / "documents"
+
+
+def get_legacy_document_directory() -> Path:
+    return PROJECT_ROOT / "rechnungen"
