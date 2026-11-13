@@ -92,3 +92,44 @@ def test_publication_failure_leaves_no_partial_backup(inventory, monkeypatch):
     with pytest.raises(OSError):
         create_backup(*inventory)
     assert list(inventory[2].iterdir()) == []
+
+
+def test_online_backup_preserves_wal_and_blocks_concurrent_writes(inventory, monkeypatch):
+    import backend.backup_service as service
+    database, documents, destination = inventory
+    original_copy = service.shutil.copyfileobj
+    attempts = []
+    def copy_under_lock(source, target, *args):
+        if args:
+            return original_copy(source, target, *args)
+        with sqlite3.connect(database, timeout=0.01) as writer:
+            with pytest.raises(sqlite3.OperationalError, match='locked'):
+                writer.execute('BEGIN IMMEDIATE')
+            attempts.append(True)
+        return original_copy(source, target)
+    monkeypatch.setattr(service.shutil, 'copyfileobj', copy_under_lock)
+    with sqlite3.connect(database) as live:
+        live.execute('PRAGMA journal_mode=WAL')
+        live.execute("UPDATE organizations SET name='WAL bestätigt' WHERE id=1")
+        live.commit()
+        assert Path(str(database) + '-wal').stat().st_size > 0
+        archive_path = create_backup(*inventory)
+    assert attempts
+    with zipfile.ZipFile(archive_path) as archive:
+        restored = destination / 'checked.db'
+        restored.write_bytes(archive.read('database/ttc.db'))
+    with sqlite3.connect(restored) as copy:
+        assert copy.execute('SELECT name FROM organizations WHERE id=1').fetchone() == ('WAL bestätigt',)
+        assert copy.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+
+
+def test_document_changed_during_copy_aborts(inventory, monkeypatch):
+    import backend.backup_service as service
+    original = service.shutil.copyfileobj
+    def change(source, target):
+        original(source, target)
+        (inventory[1] / 'Beleg.pdf').write_bytes(b'changed')
+    monkeypatch.setattr(service.shutil, 'copyfileobj', change)
+    with pytest.raises(ValueError, match='geändert'):
+        create_backup(*inventory)
+    assert not list(inventory[2].glob('*.zip'))

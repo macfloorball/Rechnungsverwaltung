@@ -11,7 +11,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend.document_storage import DocumentStore
+from backend.document_storage import DocumentIdentity, DocumentStore
 from backend.storage_import import validate_database
 
 
@@ -49,12 +49,20 @@ def create_backup(database: Path, documents: Path, destination: Path) -> Path:
                 store = DocumentStore(documents)
                 if documents.exists():
                     names = sorted(documents.iterdir())
+                    portable_names = set()
                     for entry in names:
                         if entry.name.startswith('.ttc-document-write-') and entry.is_dir() and not entry.is_symlink():
                             continue  # Uncommitted staging data, never a document.
+                        folded = entry.name.casefold()
+                        if folded in portable_names:
+                            raise ValueError('Dokumentnamen sind unter Windows nicht eindeutig.')
+                        portable_names.add(folded)
                         with store.open_read(entry.name) as stream:
+                            before = DocumentIdentity.from_stat(os.fstat(stream.fileno()))
                             with (stage / 'documents' / entry.name).open('xb') as output:
                                 shutil.copyfileobj(stream, output)
+                            if before != DocumentIdentity.from_stat(os.fstat(stream.fileno())) or before != store.get_identity(entry.name):
+                                raise ValueError('Dokument wurde während der Sicherung geändert; erneut versuchen.')
                 with closing(sqlite3.connect(stage / 'database/ttc.db')) as copy:
                     for (reference,) in copy.execute("SELECT pdf_path FROM invoices WHERE pdf_path IS NOT NULL AND pdf_path != ''"):
                         store._path(reference)
