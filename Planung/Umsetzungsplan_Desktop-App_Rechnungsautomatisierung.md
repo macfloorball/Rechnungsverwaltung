@@ -414,8 +414,13 @@ Internet und ohne Anmeldung unterstützen.
     Echte Prozessabbrüche prüfen SQLite-Rollback, PDF-Veröffentlichung vor
     Datenbank-Commit sowie Electron-Absturz mit Backend-Beendigung und Wiederanlauf.
     Die bestehende Grenze zwischen Dateisystem und SQLite ist dokumentiert.
--   [ ] Bestehende automatisierte Tests ausführen und bei Bedarf
+-   [x] Bestehende automatisierte Tests ausführen und bei Bedarf
     erweitern.
+    Abschließende Linux-Prüfung: 355 Python-Tests einschließlich aller vier
+    Offline-Electron-Varianten mit Absturzwiederanlauf ohne Überspringen bestanden;
+    46 JavaScript-Tests, elf Starter-/Build-Syntaxprüfungen und Syntaxprüfung des
+    Electron-Testtreibers bestanden. Paketvorbereitung und lokale Abhängigkeiten
+    zusätzlich geprüft. Die Windows-Abnahme gemäß Definition of Done bleibt offen.
 
 ## Bewertung der Netzwerkabhängigkeiten (Schritt 2)
 
