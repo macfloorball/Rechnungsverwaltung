@@ -282,17 +282,18 @@ verwaltet.
     unveränderten Dateizugriff: [README.md](../README.md#dokumentenverzeichnis-phase-3-schritt-1).
 -   [x] Einen zentralen Dienst für Dateiablage und Dateizugriff
     einrichten. `backend/document_storage.py` bündelt das exklusive Schreiben
-    und Auffinden von Dokumenten; die Rechnungs-API verwendet den Dienst
-    zunächst mit dem bisherigen Verzeichnis. Der Wechsel der Bestandsablage
-    bleibt bis zur abgesicherten Dateizuordnung offen.
+    und Auffinden von Dokumenten. Die Rechnungs-API nutzt seit Schritt 4
+    die zentrale Pfadauflösung einschließlich der Bestandsübernahme.
 -   [x] Rechnungs-PDFs und weitere Anhänge eindeutig zuordnen.
     `backend/invoice_documents.py` prüft finale Rechnung, Zeitraum und
     eindeutigen Dateiverweis; Mehrfachzuordnungen werden auch bei
     unterschiedlicher Groß-/Kleinschreibung abgelehnt. Bestehende Logos und
     Logo-Snapshots bleiben ihren SQLite-Datensätzen zugeordnet; eine allgemeine
     Anhangsfunktion ist im bisherigen Funktionsumfang nicht vorhanden.
--   [ ] Dateipfade nicht an verschiedenen Stellen im Programm fest
-    verdrahten.
+-   [x] Dateipfade nicht an verschiedenen Stellen im Programm fest
+    verdrahten. `backend/paths.py` bestimmt Ziel- und bisherige Ablage;
+    die Rechnungs-API nutzt diese Auflösung. Eindeutig zugeordnete Bestands-PDFs
+    werden beim Start ohne Überschreiben oder Löschen der Quellen übernommen.
 -   [ ] Einen einstellbaren Speicherort vorsehen, sofern dies mit
     vertretbarem Aufwand möglich ist.
 -   [ ] Prüfen, ob vorhandene PDF-Erstellung und PDF-Vorschau in

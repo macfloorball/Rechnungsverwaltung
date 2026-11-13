@@ -16,11 +16,6 @@ import pytest
 @contextmanager
 def backend_process(tmp_path, *, damaged=False, reload=False):
     root = Path(__file__).resolve().parent.parent
-    (tmp_path / "isolated_app.py").write_text(
-        "import os\nfrom pathlib import Path\n"
-        "from backend.main import app, get_invoice_directory\n"
-        "app.dependency_overrides[get_invoice_directory] = lambda: Path(os.environ['TEST_INVOICES'])\n"
-    )
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
@@ -28,9 +23,8 @@ def backend_process(tmp_path, *, damaged=False, reload=False):
         "PYTHONPATH": os.pathsep.join([str(tmp_path), str(root)]),
         "TTC_DATA_DIRECTORY": str(tmp_path / "User Data"),
         "TTC_LEGACY_DATABASE": str(tmp_path / "no-legacy.db"),
-        "TEST_INVOICES": str(tmp_path / "invoices"),
     }
-    args = [sys.executable, "-m", "scripts.managed_server", "isolated_app:app", "--host", "127.0.0.1", "--port", str(port)]
+    args = [sys.executable, "-m", "scripts.managed_server", "backend.main:app", "--host", "127.0.0.1", "--port", str(port)]
     if reload:
         args += ["--reload", "--reload-dir", str(tmp_path)]
     with (tmp_path / "process.log").open("w+") as log:
@@ -86,6 +80,7 @@ def test_restart_preserves_recipient_plan_status_invoice_and_pdf(tmp_path, reloa
         invoice = request("POST", "/api/invoices", {"year": 2020, "month": 1}, 201)
         pdf = request("GET", f"/api/invoices/{invoice['id']}/pdf")
         assert pdf.startswith(b"%PDF-")
+        assert (tmp_path / "User Data" / "documents" / invoice["pdf_path"]).read_bytes() == pdf
         request("PUT", "/api/settings", {"activities": [{"id": activity["id"], "name": "Changed", "hourly_rate_cents": 9999}]})
     with backend_process(tmp_path, reload=reload) as request:
         organization = request("GET", "/api/organization/settings")

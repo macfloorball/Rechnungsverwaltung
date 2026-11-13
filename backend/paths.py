@@ -22,5 +22,9 @@ def get_database_path() -> Path:
 
 def get_document_directory() -> Path:
     if "TTC_DATA_DIRECTORY" not in os.environ:
-        return PROJECT_ROOT / "rechnungen"
+        return get_legacy_document_directory()
     return get_data_directory() / "documents"
+
+
+def get_legacy_document_directory() -> Path:
+    return PROJECT_ROOT / "rechnungen"

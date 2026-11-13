@@ -18,9 +18,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.paths import get_database_path as resolve_database_path
+from backend.paths import get_document_directory, get_legacy_document_directory
 from backend.document_storage import DocumentStore
 from backend.invoice_documents import (
     InvoiceDocumentAssociationError, get_owned_invoice_document, invoice_document_name,
+    prepare_invoice_documents,
 )
 from backend.storage_import import prepare_database
 from backend.storage_errors import MESSAGES, error_code
@@ -78,6 +80,15 @@ async def lifespan(_: FastAPI):
         code = error_code(error)
         print("TTC_DATABASE_ERROR:" + code, file=sys.stderr, flush=True)
         raise RuntimeError(MESSAGES[code]) from None
+    try:
+        directory = getattr(app.state, "test_invoice_directory", None) or get_invoice_directory()
+        prepare_invoice_documents(target, directory, get_legacy_document_directory())
+    except (OSError, ValueError):
+        raise RuntimeError(
+            "Die Dokumentenablage konnte nicht vorbereitet werden. "
+            "Altes Rechnungsverzeichnis, Datenverzeichnis, freien Speicher und Zugriffsrechte prüfen. "
+            "Vorhandene Dateien wurden nicht überschrieben."
+        ) from None
     yield
 
 
@@ -90,7 +101,7 @@ def get_database_path() -> Path:
 
 
 def get_invoice_directory() -> Path:
-    return PROJECT_ROOT / "rechnungen"
+    return get_document_directory()
 
 
 DatabasePath = Annotated[Path, Depends(get_database_path)]

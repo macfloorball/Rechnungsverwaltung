@@ -1,5 +1,8 @@
 """Local document access without invoice, database, or HTTP dependencies."""
+import os
+import shutil
 import stat
+import tempfile
 from pathlib import Path
 
 from backend.paths import get_document_directory
@@ -42,3 +45,25 @@ class DocumentStore:
         if not stat.S_ISREG(path.lstat().st_mode):
             raise FileNotFoundError("Dokument wurde nicht gefunden")
         return path
+
+    def copy_missing_from(self, source: "DocumentStore", name: str) -> Path:
+        """Adopt an old document without modifying source or replacing target."""
+        target = self._path(name)
+        if target.exists() or target.is_symlink():
+            return self.get_file(name)
+        original = source.get_file(name)
+        self.directory.mkdir(parents=True, exist_ok=True)
+        # Publish a complete copy only. A failed copy never exposes a partial
+        # document, and a concurrently created target always wins.
+        with tempfile.TemporaryDirectory(prefix=".ttc-document-import-", dir=self.directory) as temporary:
+            staged = Path(temporary) / "document"
+            with original.open("rb") as reader, staged.open("xb") as writer:
+                shutil.copyfileobj(reader, writer)
+                writer.flush()
+                os.fsync(writer.fileno())
+            staged.chmod(0o600)
+            try:
+                os.link(staged, target)
+            except FileExistsError:
+                return self.get_file(name)
+        return self.get_file(name)

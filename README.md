@@ -70,7 +70,9 @@ curl http://127.0.0.1:8000/api/health
 ```
 
 Die Anwendung legt die lokale Datenbank unter `data/ttc.db` an. Erstellte
-Rechnungs-PDFs werden unter `rechnungen/` gespeichert.
+Rechnungs-PDFs werden ohne Datenpfad-Override unter `rechnungen/` gespeichert.
+Mit `TTC_DATA_DIRECTORY` liegen Datenbank und PDFs unter diesem Datenverzeichnis
+als `ttc.db` beziehungsweise in `documents/`; dies ist auch der Desktop-Modus.
 
 ## Tests
 
@@ -99,8 +101,9 @@ Eine Sicherung lässt sich auch manuell erstellen:
 ```
 
 Der Backup-Prozess prüft die Sicherung auf SQLite-Konsistenz und setzt für
-Backup-Ordner und -Dateien restriktive Rechte. Die PDF-Dateien im Ordner
-`rechnungen/` werden von diesem Backup-Skript nicht mitgesichert.
+Backup-Ordner und -Dateien restriktive Rechte. Die PDF-Dateien unter
+`rechnungen/` beziehungsweise `documents/` werden von diesem Backup-Skript nicht
+mitgesichert.
 
 ## Projektstruktur
 
@@ -203,7 +206,8 @@ curl http://127.0.0.1:8000/api/health
 ```
 
 The application creates its local database at `data/ttc.db` and stores
-generated invoice PDFs in `rechnungen/`.
+generated invoice PDFs in `rechnungen/` by default. With `TTC_DATA_DIRECTORY`,
+including desktop mode, it uses `ttc.db` and `documents/` inside that directory.
 
 ## Tests
 
@@ -232,7 +236,7 @@ Create a backup manually with:
 
 The backup process checks SQLite integrity and applies restrictive permissions
 to the backup directory and files. It does not include PDF files from
-`rechnungen/`.
+`rechnungen/` or `documents/`.
 
 ## Privacy and security
 
@@ -414,8 +418,8 @@ Der Build enthält Frontend, Electron-Module, Backend-Quellcode,
 `scripts/run.cjs`, `scripts/managed_server.py` und `requirements.txt`.
 Vorhandene `.venv`-Ordner, Python-Pakete, Datenbanken und Rechnungen werden
 nicht eingepackt. Tests ausschließlich mit neu angelegten Testdaten durchführen:
-Die Desktop-Datenbank liegt außerhalb des Builds im Benutzerprofil; PDFs
-liegen bis Phase 3 weiterhin unter `resources/app/rechnungen/`. Ein
+Desktop-Datenbank und PDFs liegen außerhalb des Builds im Benutzerprofil
+als `ttc.db` beziehungsweise unter `documents/`. Ein
 vollständiges Paket mit eingebetteter Python-Laufzeit und Abhängigkeiten bleibt
 offen; dieser Testbuild ist noch nicht eigenständig verteilbar.
 
@@ -453,9 +457,9 @@ keine neue Kundentabelle, Benutzerkonten oder Cloud-Datenhaltung eingeführt.
 Geldbeträge bleiben ganzzahlige Centwerte; optionale Stunden und bestehende IDs,
 Fremdschlüssel und JSON-/BLOB-Snapshots bleiben erhalten.
 
-PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält ihre bisherige
-Dateizuordnung; die Umstellung der Dokumentenablage gehört zur nachfolgenden
-Phase 3. Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
+PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält weiterhin ihre
+Dateizuordnung; die Dokumentenpfade sind seit Phase 3 zentral aufgelöst.
+Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
 
 ### Dokumentenverzeichnis (Phase 3, Schritt 1)
 
@@ -463,12 +467,12 @@ Für die Desktop-App wird `documents/` unterhalb des bestehenden lokalen
 Datenverzeichnisses als Dokumentenablage festgelegt. Maßgeblich ist der von
 `backend/paths.py` ermittelte Datenordner: Electron übergibt standardmäßig
 `app.getPath('userData')`; ein absolutes `TTC_DATA_DIRECTORY` bestimmt bereits
-heute einen abweichenden Datenordner. Die geplanten Desktop-Pfade lauten damit:
+heute einen abweichenden Datenordner. Die seit Schritt 4 verwendeten Desktop-Pfade lauten:
 
 | Inhalt | Pfad relativ zum Datenverzeichnis |
 | --- | --- |
 | SQLite-Datenbank (bereits umgesetzt) | `ttc.db` |
-| Rechnungs-PDFs (Zielablage) | `documents/` |
+| Rechnungs-PDFs | `documents/` |
 | Weitere dateibasierte Anhänge (Zielablage, soweit vorhanden) | `documents/` |
 
 Unter Windows ist die Standard-Zielablage somit
@@ -481,20 +485,14 @@ Eine konkrete Zuordnungs- oder Unterordnerstruktur für weitere Anhänge wird hi
 nicht eingeführt.
 
 Für den bisherigen Webbetrieb ohne `TTC_DATA_DIRECTORY` bleibt die Ablage
-`rechnungen/` im Projekt erhalten. Bei explizitem `TTC_DATA_DIRECTORY` soll auch
-der Webbetrieb dessen Unterordner `documents/` verwenden. Damit kann das Backend
-in beiden Startarten dieselbe Pfadauflösung nutzen. Ein unabhängig einstellbarer
+`rechnungen/` im Projekt erhalten. Bei explizitem `TTC_DATA_DIRECTORY` verwendet
+auch der Webbetrieb dessen Unterordner `documents/`. Das Backend nutzt
+in beiden Startarten dieselbe Pfadauflösung. Ein unabhängig einstellbarer
 Dokumentenort wird erst im dafür vorgesehenen Phase-3-Schritt behandelt.
 
-Dies ist die Zielentscheidung, noch keine Umstellung der Dateioperationen:
-Aktuell verwendet `backend/main.py:get_invoice_directory()` weiterhin
-`PROJECT_ROOT / "rechnungen"`, im Testbuild also `resources/app/rechnungen/`.
-Der zentrale Dienst ist im folgenden Abschnitt beschrieben. Vorhandene
-PDFs dürfen beim Pfadwechsel nicht still verschoben, überschrieben oder gelöscht
-werden; ihre Übernahme und die bestehende Datenbankzuordnung müssen bei der
-Umstellung berücksichtigt werden. Bis dahin die bisherigen Rechnungsverzeichnisse
-unverändert erhalten. Dieser Schritt legt keine Ordner an und verändert weder
-Datenbank noch Dokumente.
+Schritt 1 hat ausschließlich diese Verzeichnisentscheidung dokumentiert. Die
+Anbindung an die Rechnungs-API und die schonende Übernahme der bisherigen
+Rechnungsdateien sind seit Schritt 4 umgesetzt und unten beschrieben.
 
 ### Zentraler Dokumentendienst (Phase 3, Schritt 2)
 
@@ -510,15 +508,12 @@ werden an den Aufrufer weitergereicht.
 Ohne explizites Verzeichnis nutzt der Dienst `get_document_directory()` aus
 `backend/paths.py`: mit `TTC_DATA_DIRECTORY` dessen Unterordner `documents/`, sonst
 das bisherige Webverzeichnis `rechnungen/`. Die Auflösung legt keine Ordner an;
-erst das Speichern erzeugt die Ablage. Der Pfad wird pro Dienstinstanz absolut
+erst das Speichern oder Übernehmen erzeugt die Ablage. Der Pfad wird pro Dienstinstanz absolut
 aufgelöst und bleibt bei einem Wechsel des Arbeitsverzeichnisses stabil.
 
-Die Rechnungs-API nutzt den Dienst zum Schreiben und Auffinden von PDFs zunächst
-mit ihrem explizit übergebenen bisherigen Rechnungsverzeichnis. Dadurch bleiben
-vorhandene Dateien ohne Migration erreichbar. Der automatische Wechsel auf die
-Zielablage folgt nach der Absicherung bestehender Dateizuordnungen. Schritt 2
-ändert weder Datenbankreferenzen noch Rechnungsnamen, Löschabläufe oder
-Electron-Bridge.
+Die Rechnungs-API nutzt den Dienst zum Schreiben und Auffinden von PDFs. Seit
+Schritt 4 erhält sie ihr Verzeichnis aus der zentralen Pfadauflösung; in Schritt 2
+wurde zunächst noch die bisherige Ablage übergeben.
 
 ### Eindeutige Dokumentenzuordnung (Phase 3, Schritt 3)
 
@@ -542,8 +537,42 @@ Rechnungen behalten ihren eigenen `logo_snapshot` samt Medientyp. Eine Änderung
 des aktuellen Logos verändert diese Rechnungssnapshots nicht. Das bisherige
 `logo_path` wird beim Logo-Upload geleert und nicht als Dateianhang geöffnet.
 Weitere frei hochladbare Anhänge sind bisher nicht implementiert und werden in
-diesem Schritt nicht eingeführt. Dateinamen, Schemaversion und Ablageverzeichnis
-bleiben unverändert; die zentrale Umstellung der verwendeten Pfade folgt separat.
+diesem Schritt nicht eingeführt. Dateinamen und Schemaversion bleiben unverändert;
+die zentrale Umstellung des Ablageverzeichnisses ist in Schritt 4 umgesetzt.
+
+### Zentrale Dokumentenpfade und Bestandsübernahme (Phase 3, Schritt 4)
+
+`backend/paths.py` legt sowohl das aktive Dokumentenverzeichnis als auch die
+bisherige Ablage `rechnungen/` der laufenden Installation fest. Die Rechnungs-API
+verwendet `get_document_directory()` für Erstellen, Abrufen und Löschen von PDFs.
+Es gibt keinen zusätzlichen Pfad im Electron-Renderer oder im PDF-Generator.
+
+Nach der Datenbankvorbereitung übernimmt `prepare_invoice_documents()` beim
+Backend-Start fehlende PDFs aus der bisherigen Ablage in das aktive Verzeichnis.
+Nur eindeutig zugeordnete finale Rechnungen mit passendem Dateinamen werden
+berücksichtigt. Vorschauen, ungültige oder mehrdeutige Verweise und nicht
+zugeordnete Dateien werden nicht übernommen. Fehlende Quelldateien bleiben
+fehlend; der PDF-Abruf meldet weiterhin HTTP 404. Im Webbetrieb ohne Override
+sind Quelle und Ziel identisch, sodass keine Kopie nötig ist.
+
+Vorhandene reguläre Zieldateien sind maßgeblich und werden weder überschrieben
+noch mit der Quelle zusammengeführt. Die Quelle wird ausschließlich gelesen und
+bleibt auch nach erfolgreicher Übernahme unverändert. `copy_missing_from()`
+erstellt eine temporäre Kopie im Zielverzeichnis und veröffentlicht sie erst
+vollständig per Hardlink ohne Überschreiben. Bei Schreibfehlern bleibt keine
+teilweise veröffentlichte PDF zurück. Auch ein zwischenzeitlich angelegtes Ziel
+bleibt erhalten. Symbolische Links werden nicht als Dokumentdateien übernommen.
+Bei Übernahmefehlern bricht der Backend-Start ab; nach Behebung kann erneut
+gestartet werden. Das Zieldateisystem muss Hardlinks unterstützen.
+
+Die Übernahme ändert weder Datenbankreferenzen noch Rechnungsinhalte. Nach der
+Übernahme funktionieren Neustart und Austausch der Installation mit demselben
+Datenverzeichnis auch ohne den alten Installationsordner. Einen alten Build
+erst entfernen, wenn die zugehörigen PDFs vollständig übernommen oder separat
+gesichert sind. Ein externer Datenbankimport allein überträgt weiterhin keine
+PDFs: Liegen sie außerhalb der bisherigen Ablage der laufenden Installation,
+müssen die zu dieser Datenbank gehörenden Dateien bewusst bereitgestellt werden.
+Es wird kein Dateiverzeichnis aus einem beliebigen Datenbankpfad abgeleitet.
 
 ### Schemaänderungen
 
@@ -593,9 +622,9 @@ Nummernkreis, Preis-/Logo-/Rechnungssnapshots und Dateizuordnungen bleiben erhal
 Eine beschädigte, fremde oder von einer neueren App erzeugte Datenbank wird
 abgelehnt. Bei Fehlern bleibt das Ziel unveröffentlicht. Alte und neue App vor
 einem bewussten manuellen Import beenden; nicht gleichzeitig an beiden Beständen
-weiterarbeiten. Die Dokumentenablage bleibt bis Phase 3 separat: Der Datenbankimport
-verschiebt oder löscht keine PDFs, und vorhandene Rechnungsdateien müssen weiter
-im bisherigen Rechnungsverzeichnis verfügbar sein.
+weiterarbeiten. Der Datenbankimport selbst verschiebt oder löscht keine PDFs.
+Beim Backend-Start übernimmt die oben beschriebene Dokumentenvorbereitung fehlende,
+eindeutig zugeordnete PDFs aus der bisherigen Ablage der laufenden Installation.
 
 Für einen Altbestand außerhalb der aktuellen Installation kann einmalig ein
 expliziter Import ausgeführt werden (Ziel darf noch nicht existieren):
@@ -642,8 +671,8 @@ Organisation/Empfänger, Wochenplan, Termine, Nummernkreis und Rechnungssnapshot
 Der Datenpfad hängt weder vom Arbeitsverzeichnis noch vom Installationspfad ab.
 Ein explizit geänderter Profilpfad ist ein anderer Datenbestand. Auch beim
 Austausch der App keine alten Datenquellen oder Rechnungsverzeichnisse löschen.
-Installer, Deinstallation und Updates der PDF-Ablage werden in ihren späteren
-Phasen separat umgesetzt und auf Windows geprüft.
+Die übernommene PDF-Ablage bleibt wie die Datenbank außerhalb der Installation.
+Installer, Deinstallation und die native Windows-Abnahme folgen separat.
 
 Beim manuellen Datenbank-Backup für den Desktop dasselbe `TTC_DATA_DIRECTORY`
 setzen oder `--database` mit dem absoluten Desktop-Datenbankpfad angeben. Der

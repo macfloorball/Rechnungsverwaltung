@@ -26,3 +26,12 @@ def test_web_path_and_invalid_overrides(monkeypatch):
         monkeypatch.setenv("TTC_DATA_DIRECTORY", value)
         with pytest.raises(ValueError, match="absolutes"):
             get_database_path()
+
+
+def test_invoice_api_uses_central_document_directory(monkeypatch, tmp_path):
+    from backend.main import get_invoice_directory
+
+    monkeypatch.delenv("TTC_DATA_DIRECTORY", raising=False)
+    assert get_invoice_directory() == PROJECT_ROOT / "rechnungen"
+    monkeypatch.setenv("TTC_DATA_DIRECTORY", str(tmp_path / "profile"))
+    assert get_invoice_directory() == tmp_path / "profile" / "documents"

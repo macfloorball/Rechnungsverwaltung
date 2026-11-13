@@ -2,7 +2,8 @@
 from pathlib import Path
 from typing import Any
 
-from backend.database import get_invoice_document_owners
+from backend.database import get_invoice_document_owners, list_records
+from backend.document_storage import DocumentStore
 from backend.invoice_generator import build_invoice_filename
 
 
@@ -24,3 +25,29 @@ def get_owned_invoice_document(
     if get_invoice_document_owners(reference, database_path) != [invoice["id"]]:
         raise InvoiceDocumentAssociationError
     return reference
+
+
+def prepare_invoice_documents(
+    database_path: Path, directory: Path, legacy_directory: Path,
+) -> None:
+    documents = DocumentStore(directory)
+    legacy = DocumentStore(legacy_directory)
+    if documents.directory == legacy.directory:
+        return
+    for invoice in list_records("invoices", {"is_preview": 0}, database_path):
+        try:
+            reference = get_owned_invoice_document(invoice, database_path)
+        except InvoiceDocumentAssociationError:
+            # Preserve inconsistent legacy records; normal API checks still
+            # reject them. Never infer ownership from directory contents.
+            continue
+        target = documents.directory / reference
+        if target.exists() or target.is_symlink():
+            documents.get_file(reference)
+            continue
+        try:
+            legacy.get_file(reference)
+        except FileNotFoundError:
+            # Missing PDFs remain missing and produce the existing API 404.
+            continue
+        documents.copy_missing_from(legacy, reference)
