@@ -351,8 +351,7 @@ Internet und ohne Anmeldung unterstützen.
 -   [x] Alle externen Netzwerkabhängigkeiten der Anwendung erfassen.
     Quellcodebasierte Bestandsaufnahme einschließlich lokaler HTTP-Kommunikation,
     externer FastAPI-Dokumentationsressourcen, Einrichtung und Build sowie
-    konfigurationsabhängiger Netzablagen:
-    [Phase_4_Netzwerkabhaengigkeiten.md](Phase_4_Netzwerkabhaengigkeiten.md).
+    konfigurationsabhängiger Netzablagen durchgeführt.
     Praktische Offline-Prüfung und Bewertung folgen in den nächsten Schritten.
 -   [ ] Prüfen, welche davon für den lokalen Betrieb zwingend notwendig
     sind.
