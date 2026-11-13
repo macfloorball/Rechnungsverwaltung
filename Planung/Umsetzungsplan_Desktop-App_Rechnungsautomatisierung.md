@@ -763,25 +763,36 @@ beliebiger Hardware-/Dateisystemschäden. Native Windows-Absturzabnahme bleibt o
 **Ziel:** Die lokal gespeicherten Daten sind vor versehentlichem Verlust
 geschützt.
 
+**Implementierung:** Alle zehn Entwicklungsschritte sind umgesetzt.
+Die Wiederherstellung erfolgt bewusst offline in einen neuen Datenordner;
+eine vollständige Sicherheitskopie des aktuellen Bestands ist verpflichtend.
+Bedienung, Format, Wiederherstellung und Einschränkungen:
+[README.md](../README.md#vollständige-sicherungen-phase-5).
+Die automatisierten Linux-Prüfungen umfassen echte Electron-Fenster in
+Entwicklung/Produktion mit Standard- und eigener Dokumentenablage.
+**Abnahme weiterhin offen:** native Windows-Ausführung und manuelle
+Betriebssystemdialoge. Phase 5 ist nach der allgemeinen Definition of Done
+noch nicht vollständig plattformübergreifend abgenommen.
+
 ## Entwicklungsschritte
 
--   [ ] Einen vollständigen Backup-Umfang definieren: Datenbank,
+-   [x] Einen vollständigen Backup-Umfang definieren: Datenbank,
     Rechnungs-PDFs, Anhänge und relevante Einstellungen.
--   [ ] Eine manuelle Backup-Funktion in der Anwendung ergänzen.
--   [ ] Einen frei wählbaren Zielordner für Backups ermöglichen.
--   [ ] Backups mit Zeitstempel und nachvollziehbarer Struktur
+-   [x] Eine manuelle Backup-Funktion in der Anwendung ergänzen.
+-   [x] Einen frei wählbaren Zielordner für Backups ermöglichen.
+-   [x] Backups mit Zeitstempel und nachvollziehbarer Struktur
     erstellen.
--   [ ] SQLite-Backups mit einem geeigneten Verfahren erstellen, statt
+-   [x] SQLite-Backups mit einem geeigneten Verfahren erstellen, statt
     die Datenbankdatei während laufender Schreibvorgänge unkontrolliert
     zu kopieren.
--   [ ] Eine Wiederherstellungsfunktion oder einen dokumentierten
+-   [x] Eine Wiederherstellungsfunktion oder einen dokumentierten
     Wiederherstellungsprozess vorsehen.
--   [ ] Vor dem Wiederherstellen eine Sicherheitskopie des aktuellen
+-   [x] Vor dem Wiederherstellen eine Sicherheitskopie des aktuellen
     Datenbestands erstellen.
--   [ ] Einen Export wichtiger Daten in geeigneten Formaten prüfen,
+-   [x] Einen Export wichtiger Daten in geeigneten Formaten prüfen,
     beispielsweise CSV für Tabellen und PDF für Rechnungen.
--   [ ] Backup und Wiederherstellung praktisch testen.
--   [ ] Hinweise zur regelmäßigen Datensicherung in der Anwendung oder
+-   [x] Backup und Wiederherstellung praktisch testen.
+-   [x] Hinweise zur regelmäßigen Datensicherung in der Anwendung oder
     Dokumentation ergänzen.
 
 ## Ergebnis / Abnahmekriterien

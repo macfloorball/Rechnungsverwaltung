@@ -593,6 +593,23 @@ async function run() {
   assert.equal(BrowserWindow.getAllWindows().length, 1);
   assert.equal(contents.getURL(), new URL('/', url).href);
   assert.deepEqual(errors, []);
+  expectedHTTPFailure = 503;
+  await js(`document.querySelector('#backup-directory').value='relative'; document.querySelector('#create-backup').click()`);
+  await until(() => js(`!document.querySelector('#create-backup').disabled && document.querySelector('#backup-message').textContent.includes('fehlgeschlagen')`), 'invalid backup target');
+  expectedHTTPFailure = null;
+  await js(`document.querySelector('#backup-directory').value=${JSON.stringify(path.join(output, 'backups'))}; document.querySelector('#create-backup').click()`);
+  await until(() => js(`!document.querySelector('#create-backup').disabled && document.querySelector('#backup-message').textContent.startsWith('Sicherung erstellt:')`), 'complete backup UI');
+  const exportDownload = new Promise((resolve, reject) => {
+    contents.session.once('will-download', (_event, item) => {
+      item.setSavePath(path.join(output, 'export.zip'));
+      item.once('done', (_done, state) => state === 'completed' ? resolve() : reject(new Error(state)));
+    });
+  });
+  await js(`document.querySelector('#export-data').click()`);
+  await exportDownload;
+  await until(() => js(`!document.querySelector('#export-data').disabled`), 'export UI');
+  assert.ok((await fs.stat(path.join(output, 'export.zip'))).size > 1000);
+  console.log('DESKTOP_BACKUP_CHECK saved');
   console.log('DESKTOP_FINAL_CHECK saved');
   console.log('DESKTOP_PDF_CHECK ' + JSON.stringify({previewRows:1,totalCents:4500,handoffs:2,
     pdfBytes:pdf.length,errorRecovery:true,lifecycle:true,refinalizedTotalCents:6000}));

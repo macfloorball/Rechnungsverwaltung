@@ -65,6 +65,7 @@ from backend.invoice_generator import (
     render_invoice_pdf,
 )
 from backend.models import (
+    BackupRequest,
     InvoiceCreate,
     InvoicePeriod,
     LogoUpload,
@@ -962,6 +963,33 @@ def get_invoice_pdf(
         filename=reference,
         content_disposition_type="inline",
     )
+
+
+@app.post("/api/backups")
+def backup_data(request: BackupRequest, database_path: DatabasePath, invoice_directory: InvoiceDirectory) -> dict:
+    from backend.backup_service import create_backup
+    try:
+        path = create_backup(database_path, invoice_directory, Path(request.directory) if request.directory else Path.home() / "ttc-rechnungsverwaltung-backups")
+        return {"path": str(path)}
+    except (OSError, sqlite3.Error, ValueError) as error:
+        logger.warning("Backup failed: %s", type(error).__name__)
+        raise HTTPException(503, "Sicherung fehlgeschlagen. Datenbestand, Zugriffsrechte und freien Speicher prüfen; vorhandene Daten bleiben erhalten.") from None
+
+
+@app.get("/api/exports/download")
+def export_data(database_path: DatabasePath, invoice_directory: InvoiceDirectory) -> FileResponse:
+    import shutil
+    import tempfile
+    from starlette.background import BackgroundTask
+    from backend.data_export import create_export
+    temporary = Path(tempfile.mkdtemp(prefix="ttc-export-"))
+    try:
+        path = create_export(database_path, invoice_directory, temporary)
+        return FileResponse(path, media_type="application/zip", filename="ttc-datenexport.zip",
+                            background=BackgroundTask(shutil.rmtree, temporary))
+    except (OSError, sqlite3.Error, ValueError):
+        shutil.rmtree(temporary)
+        raise HTTPException(503, "Export fehlgeschlagen. Dokumente, Datenbank, Zugriffsrechte und freien Speicher prüfen.") from None
 
 
 app.mount(

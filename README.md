@@ -972,3 +972,113 @@ Reload. Datenbank, Rechnungen und Testprotokolle liegen dabei in temporären
 Verzeichnissen. `npm run desktop:check` prüft zusätzlich Desktop-Datenpfad,
 Startfehler, IPC/Sandbox und den Ausschluss von Nutzerdaten aus dem Paket.
 Für Prozess- und HTTP-Tests muss die Testumgebung lokale Loopback-Sockets erlauben.
+
+### Vollständige Sicherungen (Phase 5)
+
+Eine vollständige Sicherung umfasst SQLite mit allen Tabellen, Nummernkreisen,
+Einstellungen, Logos und Rechnungssnapshots sowie sämtliche regulären Dateien
+im konfigurierten Dokumentenordner (auch nicht zugeordnete PDFs und Anhänge).
+Unterordner und symbolische Links werden sicherheitshalber abgelehnt, nicht
+unbemerkt ausgelassen. Installationsdateien, Cache, Protokolle, alte Sicherungen
+und Startumgebungsvariablen gehören nicht zum Nutzdatenbackup. Externe
+Logo-Quelldateien werden nicht benötigt: verwendete Logos liegen in SQLite.
+
+Format: ein privates, zeitgestempeltes ZIP mit `database/ttc.db`,
+`documents/<Dateiname>` und `manifest.json` (Formatversion, UTC-Zeitpunkt,
+Größe und SHA-256 jeder Nutzdatei). Absolute Quellpfade werden nicht gespeichert.
+Es gibt keine automatische Löschung vollständiger Sicherungen. Das bisherige
+`backup_database.py` samt Timer bleibt eine reine Datenbanksicherung.
+
+In der Anwendung unter **Datensicherung** auf **Sicherung erstellen** klicken.
+Ein leerer Zielpfad verwendet `ttc-rechnungsverwaltung-backups` im Benutzerordner.
+Alternativ einen absoluten lokalen Ordner eintragen, etwa `D:\Sicherungen` oder
+`/home/name/Sicherungen`. Die Erfolgsmeldung nennt die fertige ZIP-Datei.
+Jede Sicherung erhält UTC-Zeitstempel und Zufallskennung; bestehende Archive
+werden auch bei einer Namenskollision niemals ersetzt. Temporäre Dateien werden
+bei gewöhnlichen Fehlern entfernt; nach einem Stromausfall können versteckte
+`.ttc-backup-*`-Arbeitsordner verbleiben. Nur veröffentlichte ZIP-Dateien verwenden.
+
+#### Wiederherstellung bei beendeter App
+
+App und sämtliche zugehörigen Backend-Prozesse auf beiden Geräten beenden.
+Zuerst den aktuellen Bestand vollständig sichern. Das Originalprofil bleibt
+als Rückfallmöglichkeit erhalten. Anschließend mit lokal eingerichteter
+Python-Umgebung im Projekt-/App-Verzeichnis ausführen:
+
+```bash
+python -m backend.backup_restore --archive "/absolut/Sicherungen/ttc-backup-….zip" --target "/absolut/NeuesProfil" --current-database "/absolut/AktuellesProfil/ttc.db" --current-documents "/absolut/AktuelleDokumente" --safety-directory "/absolut/Sicherheitskopien" --confirm
+```
+
+Der Zielordner darf noch nicht existieren. Erst nach erfolgreicher Prüfung
+aller Prüfsummen, SQLite-Integrität, Fremdschlüssel und PDF-Verweise werden
+Dateien im neuen Profil veröffentlicht. ZIP-Pfade werden nicht blind extrahiert.
+Bei Platz-/Rechtefehlern während der Veröffentlichung kann ein unvollständiges
+neues Profil verbleiben: nicht verwenden, Originalprofil behalten und mit einem
+anderen neuen Ziel erneut versuchen. Bestehende Profile werden niemals ersetzt.
+
+Danach `TTC_DATA_DIRECTORY` auf den neuen absoluten Profilpfad setzen und die App
+starten. Ein bisheriges `TTC_DOCUMENT_DIRECTORY` entfernen oder ausdrücklich auf
+`<NeuesProfil>/documents` ändern, damit keine alten PDFs verwendet werden.
+Unter PowerShell etwa `$env:TTC_DATA_DIRECTORY = 'D:\TTC\NeuesProfil'` setzen;
+Pfade mit Leerzeichen in Anführungszeichen einschließen. Die Sicherung ist
+zwischen Windows und Linux übertragbar; Startumgebung und Python müssen auf dem
+Zielgerät eingerichtet sein. Das Wiederherstellungslimit beträgt 8 GiB und
+100.000 Archiveinträge. Es gibt keine Zusammenführung bestehender Datenbestände.
+
+Vor Veröffentlichung des neuen Profils erzeugt das Wiederherstellungswerkzeug
+zwingend eine vollständige Sicherheitskopie des aktuellen Bestands im angegebenen
+`--safety-directory`. Scheitert diese Sicherung, wird das neue Profil nicht
+veröffentlicht. `--current-database` und `--current-documents` ausdrücklich prüfen;
+ohne Angabe werden die normalen Pfade aus der Startumgebung verwendet. Auf einem
+neuen PC die App zunächst einmal mit einem eigenen leeren Profil starten und
+wieder schließen; dieses Profil als aktuellen Bestand angeben. Das Backup-ZIP
+anschließend in einen weiteren neuen Profilordner wiederherstellen. Es gibt
+keinen Schalter zum Umgehen der Sicherheitskopie.
+
+#### Datenexport
+
+**CSV und Dokumente exportieren** liefert ein ZIP mit sechs Tabellen
+(Organisation/Empfänger/Einstellungen, Tätigkeiten, Wochenplan, Termine,
+Rechnungen und Rechnungspositionen) sowie unveränderten PDFs/Anhängen.
+CSV verwendet UTF-8 mit BOM, Semikolon und Kopfzeilen; Geldbeträge bleiben Cent,
+Datumswerte ISO-Text und Binärwerte erhalten `base64:`. Formelfähige Textfelder
+werden mit einem Apostroph entschärft. Der Export verwendet denselben konsistenten
+Snapshot wie Backups. Er dient der Auswertung; CSV-Import und Zusammenführung
+sind nicht vorgesehen. Zur Wiederherstellung das vollständige Backup verwenden.
+
+
+#### Regelmäßig sichern und Sicherungen aufbewahren
+
+Nach wichtigen Änderungen und vor Updates eine vollständige Sicherung erstellen.
+Mindestens eine zusätzliche Kopie auf einem getrennten Datenträger aufbewahren;
+eine Sicherung auf derselben Platte schützt nicht vor deren Ausfall. Mehrere
+Generationen behalten und gelegentlich bei beendeter App in ein neues Profil
+wiederherstellen. Rechnungen, Termine, Einstellungen und PDFs dort kontrollieren,
+bevor alte Sicherungen oder Profile manuell entfernt werden. Vollständige
+Sicherungen werden nicht automatisch rotiert; der bisherige Linux-Timer sichert
+weiterhin ausschließlich SQLite und ersetzt diesen Ablauf nicht.
+
+ZIP-Backups und Exporte sind unverschlüsselt und enthalten personenbezogene
+Daten einschließlich Kontodaten. Sicherungsmedien und Zugriffsrechte entsprechend
+schützen. Unix-Dateien erhalten private Rechte; unter Windows gelten zusätzlich
+die Berechtigungen des Zielordners. Genügend freien Platz für Arbeitskopie und
+ZIP vorhalten. Ein lokales Dateisystem mit Hardlink-Unterstützung ist erforderlich.
+Auch die Backup-Erstellung lehnt Archive über dem Wiederherstellungslimit ab.
+Nicht alle Dateisysteme auf USB-Sticks unterstützen die benötigten Operationen.
+
+Während einer Sicherung werden App-Schreibvorgänge vorübergehend blockiert;
+größere Bestände möglichst ohne parallele Bearbeitung sichern. Temporäre
+`.ttc-document-write-*`-Unterordner sind unveröffentlichte Schreibvorgänge und
+werden nicht gesichert. Andere Unterordner, Links und unter Windows mehrdeutige
+Namen führen zum Abbruch. Ein bereits vor der Sicherung veröffentlichter, aber
+noch nicht in SQLite bestätigter PDF-Schreibvorgang kann als nicht zugeordnete
+Datei enthalten sein; solche Dateien werden erhalten, niemals automatisch gelöscht.
+Die App bietet weiterhin keine gemeinsame Transaktion über SQLite und Dateisystem.
+
+Die beschriebenen Bedienabläufe können unter Linux automatisiert mit
+`TTC_RUN_ELECTRON_TESTS=1 python -m pytest -q -s tests/test_desktop_invoice.py`
+geprüft werden. Der Test nutzt ausschließlich temporäre Profile und kontrollierte
+Downloadpfade. Native Windows-Bedienung, manuelle Speicherdialoge sowie reale
+Stromausfälle sind gesondert zu prüfen; ein Windows-Testbuild ersetzt diese
+Prüfungen nicht. Windows-Installer und eingebettete Python-Laufzeit bleiben den
+späteren Projektphasen zugeordnet.
