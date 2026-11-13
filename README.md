@@ -636,6 +636,8 @@ Vorschau verändert die finale PDF nicht. Nach Neuladen wird die Rechnung über
 das Archiv geöffnet. Der Test prüft außerdem Sandbox, Context Isolation und die
 beschränkte Preload-Bridge. Browserübergaben werden ausschließlich im Test
 abgefangen; die produktive URL-Validierung bleibt aktiv.
+Bei einer blockierten Dokumentenablage wird die sichtbare Fehlermeldung geprüft;
+nach Beseitigung des Hindernisses muss das erneute Speichern erfolgreich sein.
 
 Voraussetzungen: installierte Projektabhängigkeiten, eine grafische Sitzung und
 eine Umgebung, die lokale Loopback-Verbindungen sowie Electron-Prozesse erlaubt.
@@ -704,6 +706,44 @@ behalten ihre verbindlichen Namen `Rechnung_TTC_YYYY-MM.pdf` und ihre bestehende
 Datenbankreferenzen. Frei gewählte Namen für exportierte Kopien bleiben über
 den vorhandenen Download-/Speicherdialog möglich. Electron erhält weiterhin
 ausschließlich die bisherige begrenzte Bridge und validierte PDF-URLs.
+
+### Dateifehler behandeln (Phase 3, Schritt 8)
+
+`backend/document_errors.py` ordnet Dateifehler festen Meldungen mit einer
+Handlungsanweisung zu. Die Übersetzung erfolgt gezielt an den Grenzen der
+Dokumentenoperationen; bestehende Datenbankfehler bleiben separat behandelt.
+Die lokale API behält das Fehlerformat `{"detail": "…"}` bei, das die vorhandene
+Oberfläche bereits anzeigt. Meldungen und Dokumenten-Fehlerprotokolle enthalten
+keine internen Dateipfade oder rohen Betriebssystemtexte.
+
+| Fall | API-Verhalten |
+| --- | --- |
+| Gespeicherte PDF fehlt | HTTP 404 mit Hinweis auf Dokumentenordner und Sicherung; Rechnung bleibt erhalten |
+| Dateiname bereits vorhanden oder Datei zwischenzeitlich geändert | HTTP 409; vorhandene beziehungsweise geänderte Datei bleibt erhalten |
+| Zugriffsrechte, geöffnete/gesperrte Datei, schreibgeschützte Ablage | HTTP 503 mit Hinweis auf Rechte und andere Programme |
+| Speicherplatz oder Kontingent erschöpft | HTTP 503 mit Hinweis auf freien Speicher |
+| Ungültiger Ordner oder ungeeignetes Dateisystem | HTTP 503 mit Hinweis auf gültigen lokalen Ordner beziehungsweise Hardlinks |
+| Sonstiger Dateisystemfehler | HTTP 503 mit Hinweis auf Erreichbarkeit und erneuten Versuch |
+
+Die Meldung unterscheidet, ob eine Rechnung nicht gespeichert oder nicht gelöscht
+wurde, ob eine neue PDF nach einem Speicherfehler nicht bereinigt werden konnte
+oder ob die Rechnung bereits gelöscht wurde und die PDF zurückblieb. In diesen
+Fällen den Dateibestand prüfen, bevor erneut gespeichert wird. Fehlgeschlagene
+PDF-Schreibvorgänge verändern weder die gespeicherte Vorschau noch den Nummernkreis.
+
+Beim Start meldet das Backend ausschließlich einen begrenzten Fehlercode über
+`TTC_DOCUMENT_ERROR`. Der Starter erkennt auch aufgeteilte Ausgabeblöcke;
+Electron zeigt eine feste passende Meldung statt eines allgemeinen Backend- oder
+Python-Fehlers. Dies gilt auch beim Ausfall eines Entwicklungs-Reload-Workers.
+
+`DocumentPDFResponse` verwendet weiterhin die vorhandene Dateiantwort samt
+Download- und Bereichsabruf-Headern. Erfolgsheader werden erst mit dem Beginn
+der eigentlichen Antwort übertragen. Scheitert vorher das Öffnen oder erste
+Lesen, erhält der Aufrufer eine nachvollziehbare JSON-Fehlermeldung. Verschwindet
+eine Datei erst unmittelbar vor der Übertragung, kann dies als vorübergehender
+Lesefehler mit HTTP 503 gemeldet werden. Bricht das Lesen nach bereits übertragenen
+PDF-Daten ab, wird die Übertragung beendet; dann ist ein neuer Abruf erforderlich,
+weil Status und Header nicht mehr geändert werden können.
 
 ### Schemaänderungen
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import BinaryIO, Iterator
 
 from backend.paths import get_document_directory
+from backend.document_errors import DocumentChangedError
 
 WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL"} | {
     prefix + suffix for prefix in ("COM", "LPT") for suffix in "123456789¹²³"
@@ -27,10 +28,6 @@ class DocumentIdentity:
         return cls(info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
 
 
-class DocumentChangedError(OSError):
-    """A document changed after the caller selected it for an operation."""
-
-
 @dataclass
 class _DocumentWrite:
     stream: BinaryIO
@@ -41,6 +38,8 @@ class DocumentStore:
     def __init__(self, directory: Path | None = None):
         # Resolve once so a later working-directory change cannot redirect access.
         self.directory = (directory if directory is not None else get_document_directory()).resolve()
+        if self.directory.exists() and not self.directory.is_dir():
+            raise NotADirectoryError("Die Dokumentenablage ist kein Verzeichnis")
 
     def _path(self, name: str) -> Path:
         # Database references are plain filenames, never paths or Windows streams.
@@ -59,7 +58,10 @@ class DocumentStore:
         target = self._path(name)
         if target.exists() or target.is_symlink():
             raise FileExistsError("Die Dokumentdatei existiert bereits")
-        self.directory.mkdir(parents=True, exist_ok=True)
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True)
+        except FileExistsError:
+            raise NotADirectoryError("Die Dokumentenablage ist kein Verzeichnis") from None
         with tempfile.TemporaryDirectory(prefix=".ttc-document-write-", dir=self.directory) as temporary:
             staged = Path(temporary) / "document"
             with staged.open("xb") as writer:

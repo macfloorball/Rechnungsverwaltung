@@ -65,6 +65,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
         assert evidence["previewRows"] == 1
         assert evidence["totalCents"] == 3000
         assert evidence["handoffs"] == 2
+        assert evidence["errorRecovery"] is True
         assert evidence["pdfBytes"] > 1000
         assert (output / "preview.png").stat().st_size > 1000
         assert (output / "download.pdf").read_bytes() == (output / "Rechnung_TTC_2020-01.pdf").read_bytes()

@@ -31,9 +31,9 @@ def prepare_invoice_documents(
     database_path: Path, directory: Path, legacy_directory: Path,
 ) -> None:
     documents = DocumentStore(directory)
-    legacy = DocumentStore(legacy_directory)
-    if documents.directory == legacy.directory:
+    if documents.directory == Path(legacy_directory).absolute():
         return
+    legacy = None
     for invoice in list_records("invoices", {"is_preview": 0}, database_path):
         try:
             reference = get_owned_invoice_document(invoice, database_path)
@@ -45,6 +45,12 @@ def prepare_invoice_documents(
         if target.exists() or target.is_symlink():
             documents.get_file(reference)
             continue
+        # An already complete target must remain usable even if an old source
+        # directory has become unavailable or no longer represents a directory.
+        if legacy is None:
+            legacy = DocumentStore(legacy_directory)
+        if documents.directory == legacy.directory:
+            return
         try:
             legacy.get_file(reference)
         except FileNotFoundError:

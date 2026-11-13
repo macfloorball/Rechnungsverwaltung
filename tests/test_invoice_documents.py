@@ -106,3 +106,18 @@ def test_empty_profile_and_unchanged_web_directory_need_no_copy(tmp_path):
     assert not target.exists()
     prepare_invoice_documents(path, target, target)
     assert not target.exists()
+
+
+def test_complete_target_remains_usable_without_a_valid_old_directory(tmp_path):
+    path = tmp_path / "ttc.db"
+    initialize_database(path)
+    create_invoice_with_items(invoice_values(), [], path)
+    target = DocumentStore(tmp_path / "documents")
+    pdf = target.save_new("Rechnung_TTC_2026-11.pdf", b"original")
+    old = tmp_path / "old"
+    old.write_bytes(b"not a directory")
+    before = path.read_bytes()
+    prepare_invoice_documents(path, target.directory, old)
+    assert pdf.read_bytes() == b"original"
+    assert old.read_bytes() == b"not a directory"
+    assert path.read_bytes() == before

@@ -66,3 +66,22 @@ test('reload worker database errors remain actionable when its supervisor stays 
   await assert.rejects(start, /Datenbank.*beschädigt/);
   await f.backend.stop();
 });
+
+test('Dokumentenfehler liefern beim Start und nach Reload feste Handlungsanweisungen', async () => {
+  for (const code of ['missing', 'access', 'space', 'exists', 'changed', 'invalid', 'unsupported', 'io']) {
+    for (const reload of [false, true]) {
+      const f = fixture({delayReady:true});
+      const start = f.backend.start();
+      await new Promise(setImmediate);
+      f.child.documentError = code;
+      if (reload) f.timeout();
+      else f.child.emit('exit', 1);
+      await assert.rejects(start, error => {
+        assert.match(error.message, /Dokument|Datei/);
+        assert.doesNotMatch(error.message, /private|Traceback|Python-Pakete/);
+        return true;
+      });
+      await f.backend.stop();
+    }
+  }
+});

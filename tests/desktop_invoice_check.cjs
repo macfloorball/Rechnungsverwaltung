@@ -14,12 +14,14 @@ app.setPath('userData', process.env.TTC_DATA_DIRECTORY);
 app.setPath('sessionData', process.env.TTC_DATA_DIRECTORY);
 const handoffs = [];
 const errors = [];
+let expectedWriteFailure = false;
 // Exercise the real URL-validation/window-open handler, but keep test links out
 // of the user's browser. Native browser rendering/printing remains manual QA.
 shell.openExternal = async (url) => { handoffs.push(url); };
 dialog.showErrorBox = (_title, message) => { errors.push(message); };
 app.on('browser-window-created', (_event, window) => {
   window.webContents.on('console-message', (event) => {
+    if (expectedWriteFailure && /Failed to load resource.*503/.test(event.message)) return;
     if (event.level === 'error') errors.push(event.message);
   });
 });
@@ -79,6 +81,19 @@ async function run() {
   })()`);
   await fs.writeFile(path.join(output, 'preview.png'), (await contents.capturePage()).toPNG());
 
+  const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');
+  // A file in place of the document directory must produce a visible, useful
+  // error and allow retry after the obstruction is removed.
+  await fs.writeFile(directory, 'test obstruction');
+  expectedWriteFailure = true;
+  await js('document.querySelector("#create-invoice").click()');
+  await until(() => js(`!document.querySelector('#invoice-create-error').hidden &&
+    !document.querySelector('#create-invoice').disabled`), 'visible write error');
+  const failureText = await js('document.querySelector("#invoice-create-error").textContent');
+  assert.match(failureText, /nicht gespeichert.*ungültig/);
+  assert.equal(failureText.includes(directory), false);
+  await fs.unlink(directory);
+  expectedWriteFailure = false;
   await js('document.querySelector("#create-invoice").click()');
   await until(() => js('!document.querySelector("#open-invoice-pdf").hidden'), 'finalization');
   const url = await js('document.querySelector("#open-invoice-pdf").href');
@@ -90,7 +105,6 @@ async function run() {
   const pdf = Buffer.from(await response.arrayBuffer());
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
   const filename = 'Rechnung_TTC_2020-01.pdf';
-  const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');
   assert.deepEqual(await fs.readFile(path.join(directory, filename)), pdf);
   await fs.writeFile(path.join(output, filename), pdf);
 
@@ -132,7 +146,7 @@ async function run() {
   assert.equal(BrowserWindow.getAllWindows().length, 1);
   assert.equal(contents.getURL(), new URL('/', url).href);
   assert.deepEqual(errors, []);
-  console.log('DESKTOP_PDF_CHECK ' + JSON.stringify({previewRows:1,totalCents:3000,handoffs:2,pdfBytes:pdf.length}));
+  console.log('DESKTOP_PDF_CHECK ' + JSON.stringify({previewRows:1,totalCents:3000,handoffs:2,pdfBytes:pdf.length,errorRecovery:true}));
 }
 
 const watchdog = setTimeout(() => {

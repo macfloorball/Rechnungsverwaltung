@@ -21,7 +21,9 @@ from backend.paths import get_database_path as resolve_database_path
 from backend.paths import (
     get_document_directory, get_default_document_directory, get_legacy_document_directory,
 )
-from backend.document_storage import DocumentStore
+from backend.document_storage import DocumentIdentity, DocumentStore
+from backend.document_errors import DocumentOperationError, document_operation
+from backend.document_responses import DocumentPDFResponse, document_error_response
 from backend.invoice_documents import (
     InvoiceDocumentAssociationError, get_owned_invoice_document, invoice_document_name,
     prepare_invoice_documents,
@@ -83,15 +85,13 @@ async def lifespan(_: FastAPI):
         print("TTC_DATABASE_ERROR:" + code, file=sys.stderr, flush=True)
         raise RuntimeError(MESSAGES[code]) from None
     try:
-        directory = getattr(app.state, "test_invoice_directory", None) or get_invoice_directory()
-        prepare_invoice_documents(target, directory, get_default_document_directory())
-        prepare_invoice_documents(target, directory, get_legacy_document_directory())
-    except (OSError, ValueError):
-        raise RuntimeError(
-            "Die Dokumentenablage konnte nicht vorbereitet werden. "
-            "Altes Rechnungsverzeichnis, Datenverzeichnis, freien Speicher und Zugriffsrechte prüfen. "
-            "Vorhandene Dateien wurden nicht überschrieben."
-        ) from None
+        with document_operation("prepare"):
+            directory = getattr(app.state, "test_invoice_directory", None) or get_invoice_directory()
+            prepare_invoice_documents(target, directory, get_default_document_directory())
+            prepare_invoice_documents(target, directory, get_legacy_document_directory())
+    except DocumentOperationError as error:
+        print("TTC_DOCUMENT_ERROR:" + error.code, file=sys.stderr, flush=True)
+        raise RuntimeError(error.detail) from None
     yield
 
 
@@ -104,7 +104,13 @@ def get_database_path() -> Path:
 
 
 def get_invoice_directory() -> Path:
-    return get_document_directory()
+    with document_operation("configure"):
+        return get_document_directory()
+
+
+def _cleanup_invoice_pdf(documents: DocumentStore, name: str, identity: DocumentIdentity) -> None:
+    with document_operation("cleanup"):
+        documents.delete(name, expected=identity, missing_ok=True)
 
 
 DatabasePath = Annotated[Path, Depends(get_database_path)]
@@ -209,6 +215,11 @@ async def handle_integrity_error(_, _error: sqlite3.IntegrityError) -> JSONRespo
         status_code=status.HTTP_409_CONFLICT,
         content={"detail": "Die Änderung verletzt eine Datenbankregel"},
     )
+
+
+@app.exception_handler(DocumentOperationError)
+async def handle_document_error(_, error: DocumentOperationError) -> JSONResponse:
+    return document_error_response(error)
 
 
 @app.exception_handler(sqlite3.DatabaseError)
@@ -739,7 +750,8 @@ def post_invoice(
     )
 
     filename = build_invoice_filename(payload.year, payload.month)
-    documents = DocumentStore(invoice_directory)
+    with document_operation("write"):
+        documents = DocumentStore(invoice_directory)
     pdf_content = render_invoice_pdf(
         payload.year,
         payload.month,
@@ -761,13 +773,8 @@ def post_invoice(
         total_amount_cents,
         pdf_details,
     )
-    try:
+    with document_operation("write"):
         _, pdf_identity = documents.save_new_with_identity(filename, pdf_content)
-    except FileExistsError as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Die PDF-Datei für diesen Monat existiert bereits",
-        ) from error
     try:
         invoice_id = create_invoice_with_items(
             {
@@ -804,19 +811,19 @@ def post_invoice(
             updated_next_invoice_number=sequence + 1,
         )
     except InvoiceAlreadyExistsError as error:
-        documents.delete(filename, expected=pdf_identity, missing_ok=True)
+        _cleanup_invoice_pdf(documents, filename, pdf_identity)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
         ) from error
     except InvoiceDocumentConflictError as error:
-        documents.delete(filename, expected=pdf_identity, missing_ok=True)
+        _cleanup_invoice_pdf(documents, filename, pdf_identity)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Die PDF-Datei ist bereits einer anderen Rechnung zugeordnet",
         ) from error
     except ValueError as error:
-        documents.delete(filename, expected=pdf_identity, missing_ok=True)
+        _cleanup_invoice_pdf(documents, filename, pdf_identity)
         if "rechnungsnummernkreis" in str(error).lower():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -824,7 +831,7 @@ def post_invoice(
             ) from error
         raise
     except Exception:
-        documents.delete(filename, expected=pdf_identity, missing_ok=True)
+        _cleanup_invoice_pdf(documents, filename, pdf_identity)
         raise
 
     invoice = get_invoice(invoice_id, database_path)
@@ -863,18 +870,14 @@ def delete_invoice(
             detail="Die zugehörige PDF-Datei konnte nicht sicher zugeordnet werden",
         ) from error
 
-    documents = DocumentStore(invoice_directory)
     pdf_identity = None
-    if existing_invoice["pdf_path"]:
-        try:
-            pdf_identity = documents.get_identity(existing_invoice["pdf_path"])
-        except FileNotFoundError:
-            pass
-        except (OSError, ValueError) as error:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Die zugehörige PDF-Datei konnte nicht sicher geöffnet werden; die Rechnung wurde nicht gelöscht",
-            ) from error
+    with document_operation("inspect"):
+        documents = DocumentStore(invoice_directory)
+        if existing_invoice["pdf_path"]:
+            try:
+                pdf_identity = documents.get_identity(existing_invoice["pdf_path"])
+            except FileNotFoundError:
+                pass
 
     try:
         invoice = delete_final_invoice(invoice_id, database_path)
@@ -898,13 +901,8 @@ def delete_invoice(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Rechnung wurde gelöscht, die PDF-Datei konnte nicht sicher zugeordnet werden",
             ) from error
-        try:
+        with document_operation("delete"):
             documents.delete(expected_filename, expected=pdf_identity, missing_ok=True)
-        except (OSError, ValueError) as error:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Rechnung wurde gelöscht, die zugehörige PDF-Datei konnte jedoch nicht entfernt werden",
-            ) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -928,14 +926,9 @@ def get_invoice_pdf(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
         ) from error
-    try:
+    with document_operation("read"):
         pdf_path = DocumentStore(invoice_directory).get_file(reference)
-    except (ValueError, FileNotFoundError) as error:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
-        ) from error
-    return FileResponse(
+    return DocumentPDFResponse(
         pdf_path,
         media_type="application/pdf",
         filename=reference,

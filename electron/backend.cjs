@@ -12,6 +12,21 @@ const databaseErrors = {
   schema: 'Der Datenbankstand wird nicht unterstützt. Passende App-Version verwenden; Datenbank nicht löschen.',
 };
 
+const documentErrors = {
+  missing: 'Die Dokumentdatei fehlt. Dokumentenordner prüfen oder die Datei aus einer Sicherung wiederherstellen.',
+  access: 'Die Dokumentenablage ist nicht zugänglich oder beschreibbar. Zugriffsrechte prüfen und die Datei in anderen Programmen schließen.',
+  space: 'Für die Dokumentdatei ist nicht genügend Speicherplatz verfügbar. Freien Speicher im Dokumentenordner prüfen.',
+  exists: 'Die Dokumentdatei existiert bereits. Vorhandene Dateien prüfen; es wird nichts überschrieben.',
+  changed: 'Die Dokumentdatei wurde zwischenzeitlich geändert. Den aktuellen Dateibestand prüfen und den Vorgang erneut versuchen.',
+  invalid: 'Dokumentenpfad oder Dateiverweis ist ungültig. Einen absoluten Dokumentenordner und reguläre Dateien verwenden.',
+  unsupported: 'Das Dateisystem unterstützt die benötigte Dateioperation nicht. Einen lokalen Dokumentenordner mit Hardlink-Unterstützung verwenden.',
+  io: 'Die Dokumentdatei konnte nicht verarbeitet werden. Verfügbarkeit der Ablage prüfen und den Vorgang erneut versuchen.',
+};
+
+function storageFailure(child) {
+  return documentErrors[child.documentError] || databaseErrors[child.databaseError];
+}
+
 function createBackend({ config, root, env, onFailure }) {
   const launch = launchConfig(config.mode === 'production' ? 'desktop-production' : 'desktop-dev', {
     ...env, TTC_DESKTOP_URL: config.url, TTC_DESKTOP_PRODUCTION_URL: config.url,
@@ -42,14 +57,14 @@ function createBackend({ config, root, env, onFailure }) {
           }
           child.once('error', () => failure('Backend konnte nicht gestartet werden. Python-Pfad (TTC_PYTHON) und installierte Python-Pakete prüfen.'));
           child.once('exit', () => {
-            failure(databaseErrors[child.databaseError] || 'Der lokale Anwendungsserver wurde unerwartet beendet. Python-Pakete und Backend-Fehlerausgabe prüfen.');
+            failure(storageFailure(child) || 'Der lokale Anwendungsserver wurde unerwartet beendet. Python-Pakete und Backend-Fehlerausgabe prüfen.');
           });
         });
         try {
           await Promise.race([waitForFrontend(launch), failed]);
         } catch (error) {
           // A failed reload worker leaves its supervisor alive until shutdown.
-          if (databaseErrors[child.databaseError]) throw new Error(databaseErrors[child.databaseError]);
+          if (storageFailure(child)) throw new Error(storageFailure(child));
           throw error;
         }
         if (!stopping) ready = true;
