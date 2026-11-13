@@ -1082,3 +1082,18 @@ Downloadpfade. Native Windows-Bedienung, manuelle Speicherdialoge sowie reale
 Stromausfälle sind gesondert zu prüfen; ein Windows-Testbuild ersetzt diese
 Prüfungen nicht. Windows-Installer und eingebettete Python-Laufzeit bleiben den
 späteren Projektphasen zugeordnet.
+
+
+## Windows-Installation und Updates (Phase 6)
+
+Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
+Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
+NSIS-Installer für Windows x64, pro Benutzer ohne Administratorrechte. Ein fester
+Installationsort verhindert die Auswahl eines Daten- oder Dokumentenordners.
+Der Installer erhält keine Löschfunktion für persönliche Daten. Die eingebettete
+Python-Laufzeit wird mit ihren Paketen ausgeliefert; am Ziel-PC sind weder Python
+noch Node.js oder npm erforderlich. Linux-Entwicklungs- und Webstarts bleiben erhalten.
+
+Technische Grundlage: [NSIS-Konfiguration](https://www.electron.build/nsis/) und
+[Python Embedded Distribution](https://docs.python.org/3/using/windows.html#the-embeddable-package).
+Es gibt keinen automatischen Updateabruf und keine Veröffentlichung aus dem Build.
