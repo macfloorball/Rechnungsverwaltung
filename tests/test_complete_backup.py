@@ -299,3 +299,11 @@ def test_export_api_download_and_error_response(inventory, tmp_path, monkeypatch
         assert str(tmp_path) not in response.text
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_backup_never_publishes_archive_beyond_restore_limits(inventory, monkeypatch):
+    import backend.backup_service as service
+    monkeypatch.setattr(service, 'MAX_TOTAL_BYTES', 1)
+    with pytest.raises(ValueError, match='Wiederherstellungslimit'):
+        create_backup(*inventory)
+    assert list(inventory[2].iterdir()) == []

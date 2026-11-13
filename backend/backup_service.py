@@ -14,8 +14,11 @@ from pathlib import Path
 from backend.document_storage import DocumentIdentity, DocumentStore
 from backend.storage_import import validate_database
 
+MAX_TOTAL_BYTES = 8 * 1024**3
+MAX_ENTRIES = 100_000
 
-def _digest(path):
+
+def _digest(path: Path) -> dict:
     digest = hashlib.sha256()
     with path.open('rb') as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b''):
@@ -77,6 +80,10 @@ def create_backup(database: Path, documents: Path, destination: Path) -> Path:
             for name in files:
                 output.write(stage / name, name)
             output.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
+        with zipfile.ZipFile(archive) as check:
+            entries = check.infolist()
+            if len(entries) > MAX_ENTRIES or sum(entry.file_size for entry in entries) > MAX_TOTAL_BYTES:
+                raise ValueError('Sicherung überschreitet das Wiederherstellungslimit (8 GiB / 100.000 Einträge).')
         archive.chmod(0o600)
         with archive.open('rb') as stream:
             os.fsync(stream.fileno())

@@ -11,13 +11,10 @@ import zlib
 from contextlib import closing
 from pathlib import Path
 
-from backend.backup_service import _digest, create_backup
+from backend.backup_service import MAX_ENTRIES, MAX_TOTAL_BYTES, _digest, create_backup
 from backend.paths import get_database_path, get_document_directory
 from backend.document_storage import DocumentStore
 from backend.storage_import import validate_database
-
-MAX_TOTAL_BYTES = 8 * 1024**3
-MAX_ENTRIES = 100_000
 
 
 def stage_backup(archive_path: Path, stage: Path) -> None:
