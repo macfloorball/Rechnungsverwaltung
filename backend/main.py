@@ -487,7 +487,10 @@ def put_training(
             values["activity_type_id"],
             database_path,
         )
-        if activity is None or not activity["is_active"]:
+        if activity is None or (
+            not activity["is_active"]
+            and payload.activity_type_id != existing["activity_type_id"]
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Aktive Tätigkeitsart wurde nicht gefunden",

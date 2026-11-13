@@ -87,6 +87,14 @@ async function run() {
     const settings = await (await fetch(new URL('/api/organization/settings', origin))).json();
     for (const [key, value] of Object.entries(recipient)) assert.equal(settings[key], value);
     console.log('DESKTOP_RECIPIENT_CHECK restart');
+    const calendarState = JSON.parse(await fs.readFile(path.join(output, 'calendar-state.json'), 'utf8'));
+    assert.deepEqual(await (await fetch(new URL('/api/weekly-plan', origin))).json(), calendarState.plan);
+    const monthPath = `/api/calendar/${calendarState.year}/${calendarState.month}`;
+    assert.deepEqual(await (await fetch(new URL(monthPath, origin))).json(), calendarState.calendar);
+    await until(() => js('document.querySelectorAll(".weekly-plan-row").length === 1'), 'weekly plan after restart');
+    assert.equal(await js('document.querySelector("[data-plan-hours]").value'), '3');
+    assert.equal(await js('document.querySelector("[data-plan-active]").checked'), false);
+    console.log('DESKTOP_CALENDAR_CHECK restart');
     const invoices = await (await fetch(new URL('/api/invoices', origin))).json();
     assert.equal(invoices.length, 2);
     const january = invoices.find(invoice => invoice.year === 2020 && invoice.month === 1);
@@ -141,6 +149,84 @@ async function run() {
   await until(() => js(`JSON.stringify(${recipientValues}) === ${JSON.stringify(JSON.stringify(recipient))}`), 'recipient persisted in form');
   console.log('DESKTOP_RECIPIENT_CHECK saved');
 
+  // Exercise the existing plan form and appointment dialog, without status actions.
+  const calendarActivity = (await (await fetch(new URL('/api/settings', origin), {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({activities:[{name:'GUI Wochenplan',hourly_rate_cents:1200}]}),
+  })).json()).activities[0];
+  await new Promise(resolve => { contents.once('did-finish-load', resolve); contents.reload(); });
+  await until(() => js('document.querySelectorAll(".weekly-plan-day").length === 7 && document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), 'calendar and plan ready');
+  const firstDate = await js('document.querySelector("#calendar article[aria-label]").getAttribute("aria-label")');
+  const [year, month] = firstDate.split('-').map(Number);
+  const calendarURL = new URL(`/api/calendar/${year}/${month}`, origin);
+  async function savePlan() {
+    await js('document.querySelector("#weekly-plan-success").hidden = true; document.querySelector("#weekly-plan-form").requestSubmit()');
+    await until(() => js('!document.querySelector("#weekly-plan-success").hidden && !document.querySelector("#save-weekly-plan").disabled && document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), 'weekly plan saved');
+    assert.equal(await js('document.querySelector("#weekly-plan-error").hidden'), true);
+  }
+  await js(`for (const weekday of [0,6]) {
+    const day = document.querySelector('.weekly-plan-day[data-weekday="'+weekday+'"]');
+    day.querySelector('[data-add-plan-entry]').click();
+    day.querySelector('[data-plan-activity]').value = '${calendarActivity.id}';
+    day.querySelector('[data-plan-hours]').value = '2';
+  }`);
+  await savePlan();
+  const generatedCalendar = await (await fetch(calendarURL)).json();
+  const generatedIds = generatedCalendar.days.flatMap(day => day.trainings.map(training => training.id));
+  assert.ok(generatedIds.length >= 8);
+  await js('document.querySelector(\'.weekly-plan-day[data-weekday="0"] [data-plan-hours]\').value = "3"');
+  await savePlan();
+  assert.deepEqual(await (await fetch(calendarURL)).json(), generatedCalendar);
+  await js(`document.querySelector('.weekly-plan-day[data-weekday="0"] [data-plan-active]').checked = false;
+    document.querySelector('.weekly-plan-day[data-weekday="6"] [data-remove-plan-entry]').click();`);
+  await savePlan();
+  const plan = await (await fetch(new URL('/api/weekly-plan', origin))).json();
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].is_active, 0);
+  assert.equal(plan[0].hours, 3);
+  const retained = await (await fetch(calendarURL)).json();
+  assert.deepEqual(retained.days.flatMap(day => day.trainings.map(training => training.id)), generatedIds);
+
+  const openNew = async () => {
+    await js(`document.querySelector('[data-new-date="${firstDate}"]').click()`);
+    await until(() => js('document.querySelector("#training-dialog").open && !document.querySelector("#save-training-edit").disabled'), 'appointment dialog');
+  };
+  await openNew();
+  await js('document.querySelector("#training-note").value = "Nicht speichern"; document.querySelector("#cancel-training-edit").click()');
+  assert.deepEqual(await (await fetch(calendarURL)).json(), retained);
+  await openNew();
+  await js(`document.querySelector('#training-activity').value = '${calendarActivity.id}';
+    document.querySelector('#training-hours').value = '2';
+    document.querySelector('#training-note').value = 'GUI Kalendertermin';
+    document.querySelector('#training-form').requestSubmit();`);
+  await until(() => js('!document.querySelector("#training-dialog").open && document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), 'new appointment saved');
+  const manual = (await (await fetch(calendarURL)).json()).days.flatMap(day => day.trainings).find(training => training.note === 'GUI Kalendertermin');
+  assert.ok(manual);
+  assert.equal(manual.hours, 2);
+  const inactiveResponse = await fetch(new URL('/api/settings', origin), {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({activities:[{id:calendarActivity.id,name:calendarActivity.name,hourly_rate_cents:1200,is_active:false}]}),
+  });
+  assert.equal(inactiveResponse.status, 200);
+  await js(`Array.from(document.querySelectorAll('[data-training]')).find(button => JSON.parse(button.dataset.training).id === ${manual.id}).click()`);
+  await until(() => js('!document.querySelector("#save-training-edit").disabled'), 'appointment editor ready');
+  await js(`document.querySelector('#training-hours').value = '';
+    document.querySelector('#training-note').value = 'GUI Termin geändert';
+    document.querySelector('#training-form').requestSubmit();`);
+  await until(() => js('!document.querySelector("#training-dialog").open && document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), 'appointment edit saved');
+  const calendar = await (await fetch(calendarURL)).json();
+  const editedManual = calendar.days.flatMap(day => day.trainings).find(training => training.id === manual.id);
+  assert.equal(editedManual.hours, null);
+  assert.equal(editedManual.note, 'GUI Termin geändert');
+  assert.equal(editedManual.status, manual.status);
+  await js('document.querySelector("#next-month").click()');
+  await until(() => js(`document.querySelector('#calendar').getAttribute('aria-busy') === 'false' && document.querySelector('#calendar article[aria-label]').getAttribute('aria-label') !== '${firstDate}'`), 'next calendar month');
+  await js('document.querySelector("#previous-month").click()');
+  await until(() => js(`document.querySelector('#calendar').getAttribute('aria-busy') === 'false' && document.querySelector('#calendar article[aria-label]').getAttribute('aria-label') === '${firstDate}'`), 'return to calendar month');
+  assert.deepEqual(await (await fetch(calendarURL)).json(), calendar);
+  await fs.writeFile(path.join(output, 'calendar-state.json'), JSON.stringify({year,month,plan,calendar}));
+  console.log('DESKTOP_CALENDAR_CHECK saved');
+
   const seed = await js(`(async () => {
     async function request(url, body) {
       const response = await fetch(url, {method: url === '/api/settings' ? 'PUT' : 'POST',
@@ -149,15 +235,17 @@ async function run() {
       return response.json();
     }
     const settings = await request('/api/settings', {activities:[{name:'Electron Testtraining',hourly_rate_cents:1500}]});
+    const invoiceActivity = settings.activities.find(activity => activity.name === 'Electron Testtraining');
+    if (!invoiceActivity) throw Error('Invoice test activity missing');
     let completedId;
     for (const status of ['completed','planned','cancelled']) {
-      const training = await request('/api/trainings', {training_date:'2020-01-15',activity_type_id:settings.activities[0].id,hours:2,status});
+      const training = await request('/api/trainings', {training_date:'2020-01-15',activity_type_id:invoiceActivity.id,hours:2,status});
       if (status === 'completed') completedId = training.id;
     }
     const month = document.querySelector('#invoice-month');
     month.value='2020-01'; month.dispatchEvent(new Event('input',{bubbles:true}));
     document.querySelector('#invoice-preview-form').requestSubmit();
-    return {completedId,activityId:settings.activities[0].id};
+    return {completedId,activityId:invoiceActivity.id};
   })()`);
   const previewReady = `!document.querySelector('#invoice-preview').hidden &&
     document.querySelector('#invoice-preview-form').getAttribute('aria-busy') === 'false'`;

@@ -380,7 +380,11 @@ Internet und ohne Anmeldung unterstützen.
     Organisationseinstellungen, keine separate Kundenkartei. API- und echte
     Electron-Tests decken alle fünf Felder, Änderungen, Leeren, Validierung,
     Persistenz und unveränderte Empfänger-Snapshots finaler Rechnungen ab.
--   [ ] Wochenplan und Terminverwaltung vollständig testen.
+-   [x] Wochenplan und Terminverwaltung vollständig testen.
+    API- und echte Offline-Electron-Tests für Planpflege, Kalendernavigation,
+    Terminbearbeitung und Datenerhalt ergänzt. Zwei dabei gefundene Fehler
+    korrigiert: deaktivierte Planeinträge bleiben beim Laden deaktiviert;
+    bestehende Termine mit inzwischen inaktiver Tätigkeit bleiben bearbeitbar.
 -   [ ] Statusverwaltung für erledigte und nicht erledigte Termine
     testen.
 -   [ ] Rechnungsentwürfe und Rechnungsvorschauen testen.
@@ -516,6 +520,37 @@ sind nicht implementiert und wurden nicht neu eingeführt.
 Die Tests verwenden ausschließlich temporäre Daten. Es war keine Änderung
 am Produktcode erforderlich. Native Windows-Abnahme und tatsächliche
 PDF-Darstellung im Standardbrowser bleiben wie bisher separat offen.
+
+## Wochenplan und Terminverwaltung prüfen (Schritt 7)
+
+Die API-Prüfung ergänzt 24 Fälle für den bestehenden Funktionsumfang:
+
+- Alle sieben Wochentage, Jahreswechsel und Schaltjahr, keine automatische
+  Generierung in vergangenen Monaten und keine Duplikate bei erneutem Laden.
+- Planänderung, Deaktivierung und Entfernen ohne Verlust vorhandener Termine;
+  neue Monate verwenden die geänderten Planwerte. Ungültige Stapel werden
+  einschließlich vorheriger Änderungen vollständig zurückgerollt, auch bei
+  doppelten oder unbekannten IDs und unbekannten Tätigkeiten.
+- Manuelle Termine anlegen, auf einen anderen Tag verschieben, Tätigkeit und
+  Stunden ändern, Notiz oder Stunden leeren und gezielt löschen. Andere Termine
+  bleiben erhalten. Ungültige Daten, Datentypen, Überlängen und nicht mehr
+  vorhandene IDs werden ohne unbeabsichtigte Änderungen behandelt.
+- Inaktive Tätigkeiten erzeugen keine neuen Plantermine und sind für neue
+  Termine gesperrt. Eine bereits zugeordnete, inzwischen deaktivierte Tätigkeit
+  darf beim Bearbeiten eines bestehenden Termins beibehalten werden.
+
+Die echten Electron-Tests ergänzen das Wochenplanformular (Anlegen, Stunden
+ändern, Deaktivieren, Entfernen), Kalendernavigation und den Termindialog
+(Abbrechen, Anlegen, Ändern und Pauschale ohne Stunden). Der zuletzt bearbeitete
+Termin verwendet dabei eine inzwischen deaktivierte Tätigkeit. Plan und Termine
+werden nach einem vollständigen App-Neustart erneut mit den gespeicherten Werten
+verglichen, jeweils in Entwicklung/Produktion und Standard-/eigener Ablage.
+
+Dabei wurden zwei Produktfehler behoben: Das Planformular wertet SQLite-`0`
+nun korrekt als deaktiviert aus. Die Termin-API erlaubt das Beibehalten der
+bereits zugeordneten inaktiven Tätigkeit; neue Zuordnungen zu anderen inaktiven
+Tätigkeiten bleiben abgelehnt. Statuswechsel und Rechnungsregeln sind weiterhin
+Gegenstand der folgenden Schritte. Native Windows-Abnahme bleibt offen.
 
 ## Ergebnis / Abnahmekriterien
 

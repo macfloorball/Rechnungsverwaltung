@@ -1118,6 +1118,156 @@ def test_final_invoice_can_be_deleted_before_finalizing_current_preview(
         ]
 
 
+@pytest.fixture
+def calendar_activities(client, monkeypatch):
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2031, 12, 15)
+
+    monkeypatch.setattr("backend.main.date", FrozenDate)
+    monkeypatch.setattr("backend.database.date", FrozenDate)
+    return client.put("/api/settings", json={"activities": [
+        {"name": "Training", "hourly_rate_cents": 1500},
+        {"name": "Assistenz", "hourly_rate_cents": 2200},
+        {"name": "Inaktiv", "hourly_rate_cents": 1000, "is_active": False},
+    ]}).json()["activities"]
+
+
+def test_weekly_plan_covers_all_weekdays_and_leap_year_without_duplicates(client, calendar_activities):
+    activity = calendar_activities[0]
+    response = client.put("/api/weekly-plan", json=[
+        {"weekday": weekday, "activity_type_id": activity["id"], "hours": weekday + 1}
+        for weekday in range(7)
+    ])
+    assert response.status_code == 200
+    assert len(response.json()) == 7
+    assert all(not day["trainings"] for day in client.get("/api/calendar/2031/11").json()["days"])
+    for year, month, days in ((2031, 12, 31), (2032, 1, 31), (2032, 2, 29)):
+        calendar = client.get(f"/api/calendar/{year}/{month}").json()
+        assert len(calendar["days"]) == days
+        ids = []
+        for day in calendar["days"]:
+            assert len(day["trainings"]) == 1
+            training = day["trainings"][0]
+            assert training["hours"] == date.fromisoformat(day["date"]).weekday() + 1
+            assert training["activity_type_id"] == activity["id"]
+            ids.append(training["id"])
+        assert len(set(ids)) == days
+        assert client.get(f"/api/calendar/{year}/{month}").json() == calendar
+
+
+def test_plan_changes_deactivation_and_removal_preserve_existing_trainings(client, calendar_activities):
+    from backend.database import list_records
+
+    plan = client.put("/api/weekly-plan", json=[
+        {"weekday": 0, "activity_type_id": calendar_activities[0]["id"], "hours": 1},
+    ]).json()[0]
+    before = list_records("trainings", database_path=client.app.state.test_database_path)
+    changed = {"id": plan["id"], "weekday": 6, "activity_type_id": calendar_activities[1]["id"], "hours": 3}
+    assert client.put("/api/weekly-plan", json=[changed]).status_code == 200
+    for training in before:
+        assert client.put(f"/api/trainings/{training['id']}", json={}).json() == training
+    february = client.get("/api/calendar/2032/2").json()
+    generated = [training for day in february["days"] for training in day["trainings"]]
+    assert len(generated) == 5  # February 2032 has five Sundays.
+    assert all(training["hours"] == 3 and training["activity_type_id"] == calendar_activities[1]["id"] for training in generated)
+    assert client.put("/api/weekly-plan", json=[{**changed, "is_active": False}]).status_code == 200
+    assert all(not day["trainings"] for day in client.get("/api/calendar/2032/3").json()["days"])
+    assert client.put("/api/weekly-plan", json=[]).json() == []
+    remaining = list_records("trainings", database_path=client.app.state.test_database_path)
+    assert {training["id"] for training in before + generated} <= {training["id"] for training in remaining}
+    assert all(training["weekly_plan_id"] is None for training in remaining)
+
+
+@pytest.mark.parametrize("change,status", [
+    ({"weekday": -1}, 422), ({"weekday": 7}, 422),
+    ({"hours": 0}, 422), ({"hours": 1.5}, 422), ({"hours": "2"}, 422), ({"hours": None}, 422),
+    ({"activity_type_id": 99999}, 409), ({"id": 99999}, 404),
+    ({"extra": True}, 422), ({"duplicate": True}, 422),
+])
+def test_invalid_plan_batches_do_not_change_plan_or_occurrences(client, calendar_activities, change, status):
+    from backend.database import list_records
+
+    plan = client.put("/api/weekly-plan", json=[
+        {"weekday": 0, "activity_type_id": calendar_activities[0]["id"], "hours": 1},
+    ]).json()
+    before = list_records("trainings", database_path=client.app.state.test_database_path)
+    first = {key: plan[0][key] for key in ("id", "weekday", "activity_type_id", "is_active")}
+    first["hours"] = 2
+    second = {"weekday": 1, "activity_type_id": calendar_activities[1]["id"], "hours": 3, **change}
+    if change.get("duplicate"):
+        second = first
+    response = client.put("/api/weekly-plan", json=[first, second])
+    assert response.status_code == status
+    assert client.get("/api/weekly-plan").json() == plan
+    assert list_records("trainings", database_path=client.app.state.test_database_path) == before
+
+
+def test_manual_training_edit_move_and_delete_leave_other_appointments_unchanged(client, calendar_activities):
+    payload = {"training_date": "2032-02-28", "activity_type_id": calendar_activities[0]["id"], "hours": 2, "note": "Änderung <Termin>"}
+    first = client.post("/api/trainings", json=payload).json()
+    other = client.post("/api/trainings", json=payload).json()
+    assert first["id"] != other["id"]
+    response = client.put(f"/api/trainings/{first['id']}", json={
+        "training_date": "2032-02-29", "activity_type_id": calendar_activities[1]["id"],
+        "hours": None, "note": None,
+    })
+    assert response.status_code == 200
+    changed = response.json()
+    assert changed["hours"] is None and changed["note"] is None
+    assert changed["unit_rate_cents"] == 2200
+    assert changed["status"] == first["status"]
+    calendar = client.get("/api/calendar/2032/2").json()["days"]
+    assert [training["id"] for training in calendar[27]["trainings"]] == [other["id"]]
+    assert [training["id"] for training in calendar[28]["trainings"]] == [first["id"]]
+    assert client.delete(f"/api/trainings/{first['id']}").status_code == 204
+    assert client.delete(f"/api/trainings/{first['id']}").status_code == 404
+    assert client.put(f"/api/trainings/{first['id']}", json={"hours": 1}).status_code == 404
+    assert client.put(f"/api/trainings/{other['id']}", json={}).json() == other
+
+
+@pytest.mark.parametrize("change,status", [
+    ({"training_date": "2031-02-29"}, 422), ({"training_date": None}, 422),
+    ({"activity_type_id": None}, 422), ({"activity_type_id": 99999}, 404),
+    ({"hours": 0}, 422), ({"hours": 1.5}, 422), ({"hours": "2"}, 422),
+    ({"note": "a" * 1001}, 422), ({"extra": True}, 422),
+])
+def test_invalid_training_edits_preserve_appointment(client, calendar_activities, change, status):
+    original = client.post("/api/trainings", json={
+        "training_date": "2032-02-29", "activity_type_id": calendar_activities[0]["id"], "hours": 1,
+    }).json()
+    response = client.put(f"/api/trainings/{original['id']}", json={"note": "Nicht speichern", **change})
+    assert response.status_code == status
+    assert client.put(f"/api/trainings/{original['id']}", json={}).json() == original
+
+
+def test_existing_training_can_keep_its_now_inactive_activity_when_edited(client, calendar_activities):
+    activity = calendar_activities[0]
+    training = client.post("/api/trainings", json={
+        "training_date": "2032-02-29", "activity_type_id": activity["id"], "hours": 1,
+    }).json()
+    assert client.put("/api/settings", json={"activities": [{
+        "id": activity["id"], "name": activity["name"], "hourly_rate_cents": 1500, "is_active": False,
+    }]}).status_code == 200
+    response = client.put(f"/api/trainings/{training['id']}", json={
+        "activity_type_id": activity["id"], "hours": 2, "note": "Bestand bearbeiten",
+    })
+    assert response.status_code == 200
+    assert response.json()["activity_type_id"] == activity["id"]
+    assert response.json()["hours"] == 2
+    assert response.json()["note"] == "Bestand bearbeiten"
+    assert client.put(f"/api/trainings/{training['id']}", json={"activity_type_id": calendar_activities[2]["id"]}).status_code == 404
+    assert client.put(f"/api/trainings/{training['id']}", json={}).json() == response.json()
+
+
+def test_inactive_activities_do_not_generate_or_accept_new_appointments(client, calendar_activities):
+    inactive = calendar_activities[2]["id"]
+    assert client.post("/api/trainings", json={"training_date": "2032-02-29", "activity_type_id": inactive}).status_code == 404
+    assert client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": inactive, "hours": 1}]).status_code == 200
+    assert all(not day["trainings"] for day in client.get("/api/calendar/2032/2").json()["days"])
+
+
 def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
     response = client.put(
         "/api/settings",
