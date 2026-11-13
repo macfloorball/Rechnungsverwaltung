@@ -385,8 +385,12 @@ Internet und ohne Anmeldung unterstützen.
     Terminbearbeitung und Datenerhalt ergänzt. Zwei dabei gefundene Fehler
     korrigiert: deaktivierte Planeinträge bleiben beim Laden deaktiviert;
     bestehende Termine mit inzwischen inaktiver Tätigkeit bleiben bearbeitbar.
--   [ ] Statusverwaltung für erledigte und nicht erledigte Termine
+-   [x] Statusverwaltung für erledigte und nicht erledigte Termine
     testen.
+    Alle Statusübergänge für manuelle und generierte Termine, Validierung,
+    Wiederholung und Monatsaktion per API geprüft. Echte Offline-Electron-Tests
+    ergänzen Checkbox, „Nicht gemacht“, Dialogkorrektur, Speicherfehler und
+    Datenerhalt aller drei Statuswerte nach vollständigem App-Neustart.
 -   [ ] Rechnungsentwürfe und Rechnungsvorschauen testen.
 -   [ ] Finale Rechnungen, erneute Vorschauen und das Löschen finaler
     Rechnungen gemäß der vorgesehenen Geschäftslogik testen.
@@ -551,6 +555,36 @@ nun korrekt als deaktiviert aus. Die Termin-API erlaubt das Beibehalten der
 bereits zugeordneten inaktiven Tätigkeit; neue Zuordnungen zu anderen inaktiven
 Tätigkeiten bleiben abgelehnt. Statuswechsel und Rechnungsregeln sind weiterhin
 Gegenstand der folgenden Schritte. Native Windows-Abnahme bleibt offen.
+
+## Statusverwaltung prüfen (Schritt 8)
+
+Die ergänzten 31 API-Fälle prüfen alle neun Kombinationen aus `planned`,
+`completed` und `cancelled` jeweils für manuelle und generierte Termine,
+einschließlich unverändertem Status und Wiederholung. Andere Termindaten und
+andere Termine bleiben unverändert; erneute Initialisierung und Kalenderabruf
+erhalten den Status. Ungültige Werte einschließlich `null` und falscher
+Datentypen werden beim Anlegen und Ändern ohne Teiländerungen abgelehnt.
+
+Die Monatsaktion aktualisiert ausschließlich die berechtigten geplanten
+Wochenplanvorkommen im ausgewählten Monat. Bereits durchgeführte, ausgefallene,
+manuelle und verschobene Termine bleiben unverändert. Getrennte Monate,
+wiederholter Abschluss mit Änderungszahl null, ein Monat ohne vorhandene
+Termine und ungültige Zeiträume sind zusätzlich geprüft.
+
+Der echte Electron-Test bedient Durchgeführt-Checkbox und „Nicht gemacht“,
+prüft die gesperrten Schnellaktionen ausgefallener Termine und korrigiert einen
+ausgefallenen Termin über den Dialog zurück auf geplant. Eine vorübergehend
+nicht verfügbare Testdatenbank führt zu einer sichtbaren Fehlermeldung und
+zurückgesetzter Checkbox; nach Wiederherstellung gelingt der erneute Versuch.
+Abbruch, Bestätigung und Wiederholung der Monatsaktion werden mit kontrollierten
+Bestätigungsantworten geprüft. Der anschließende vollständige App-Neustart
+erhält alle drei Statuswerte und die übrigen Kalenderdaten.
+
+Geprüft wird in allen vier Offline-Varianten aus Entwicklung/Produktion und
+Standard-/eigener Dokumentenablage, ausschließlich mit temporären Daten.
+Am Produktcode war für diesen Schritt keine Änderung erforderlich. Die
+Abrechnungsfilter werden in den folgenden Schritten gesondert geprüft;
+native Windows-Abnahme und manuelle Betriebssystemdialoge bleiben offen.
 
 ## Ergebnis / Abnahmekriterien
 

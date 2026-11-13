@@ -1495,6 +1495,86 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
     assert january_training["status"] == "planned"
 
 
+@pytest.mark.parametrize("generated", [False, True])
+@pytest.mark.parametrize("before,after", [
+    (before, after) for before in ("planned", "completed", "cancelled")
+    for after in ("planned", "completed", "cancelled")
+])
+def test_all_status_transitions_preserve_appointment_data(client, calendar_activities, generated, before, after):
+    activity_id = calendar_activities[0]["id"]
+    if generated:
+        client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": activity_id, "hours": 2}])
+        training_id = client.get("/api/calendar/2031/12").json()["days"][0]["trainings"][0]["id"]
+    else:
+        training_id = client.post("/api/trainings", json={
+            "training_date": "2031-12-01", "activity_type_id": activity_id, "hours": 2,
+        }).json()["id"]
+    original = client.put(f"/api/trainings/{training_id}", json={"status": before, "note": "Statusprüfung"}).json()
+    other = client.post("/api/trainings", json={
+        "training_date": "2031-12-02", "activity_type_id": calendar_activities[1]["id"], "hours": 1,
+    }).json()
+    response = client.put(f"/api/trainings/{training_id}", json={"status": after})
+    assert response.status_code == 200
+    expected = {**original, "status": after}
+    assert response.json() == expected
+    assert client.put(f"/api/trainings/{training_id}", json={"status": after}).json() == expected
+    initialize_database(client.app.state.test_database_path)
+    calendar = client.get("/api/calendar/2031/12").json()
+    stored = next(training for day in calendar["days"] for training in day["trainings"] if training["id"] == training_id)
+    assert {key: stored[key] for key in expected} == expected
+    assert client.put(f"/api/trainings/{other['id']}", json={}).json() == other
+
+
+@pytest.mark.parametrize("status", [None, "", "done", "Completed", 0, True, [], {}])
+def test_invalid_status_values_do_not_create_or_change_appointments(client, calendar_activities, status):
+    from backend.database import list_records
+
+    payload = {"training_date": "2031-12-01", "activity_type_id": calendar_activities[0]["id"], "hours": 1}
+    original = client.post("/api/trainings", json=payload).json()
+    assert client.post("/api/trainings", json={**payload, "status": status}).status_code == 422
+    assert client.put(f"/api/trainings/{original['id']}", json={"status": status, "hours": 2}).status_code == 422
+    assert list_records("trainings", database_path=client.app.state.test_database_path) == [original]
+
+
+def test_month_completion_is_repeatable_and_excludes_moved_and_manual_appointments(client, calendar_activities):
+    from backend.database import list_records
+
+    activity_id = calendar_activities[0]["id"]
+    client.put("/api/weekly-plan", json=[{"weekday": day, "activity_type_id": activity_id, "hours": 1} for day in range(7)])
+    december = client.get("/api/calendar/2031/12").json()["days"]
+    completed_id = december[0]["trainings"][0]["id"]
+    cancelled_id = december[1]["trainings"][0]["id"]
+    moved_id = december[2]["trainings"][0]["id"]
+    client.put(f"/api/trainings/{completed_id}", json={"status": "completed"})
+    client.put(f"/api/trainings/{cancelled_id}", json={"status": "cancelled"})
+    client.put(f"/api/trainings/{moved_id}", json={"training_date": "2032-01-02"})
+    manual = client.post("/api/trainings", json={"training_date": "2031-12-01", "activity_type_id": activity_id}).json()
+    before = list_records("trainings", database_path=client.app.state.test_database_path)
+    assert client.post("/api/calendar/2031/12/complete").json() == {"updated_count": 28}
+    assert client.post("/api/calendar/2031/12/complete").json() == {"updated_count": 0}
+    assert client.put(f"/api/trainings/{cancelled_id}", json={}).json()["status"] == "cancelled"
+    assert client.put(f"/api/trainings/{manual['id']}", json={}).json() == manual
+    assert client.put(f"/api/trainings/{moved_id}", json={}).json()["status"] == "planned"
+    assert client.post("/api/calendar/2032/1/complete").json() == {"updated_count": 31}
+    assert client.put(f"/api/trainings/{moved_id}", json={}).json()["status"] == "planned"
+    after = {training["id"]: training for training in list_records("trainings", database_path=client.app.state.test_database_path)}
+    assert set(after) == {training["id"] for training in before}
+    for training in before:
+        assert {key: value for key, value in after[training["id"]].items() if key != "status"} == {
+            key: value for key, value in training.items() if key != "status"
+        }
+    assert client.post("/api/calendar/2032/2/complete").json() == {"updated_count": 0}
+
+
+@pytest.mark.parametrize("year,month", [(0, 1), (10000, 1), (2031, 0), (2031, 13)])
+def test_invalid_completion_periods_leave_appointments_unchanged(client, calendar_activities, year, month):
+    from backend.database import list_records
+
+    original = client.post("/api/trainings", json={"training_date": "2031-12-01", "activity_type_id": calendar_activities[0]["id"]}).json()
+    assert client.post(f"/api/calendar/{year}/{month}/complete").status_code == 422
+    assert list_records("trainings", database_path=client.app.state.test_database_path) == [original]
+
+
 def test_complete_month_only_updates_planned_weekly_plan_occurrences(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

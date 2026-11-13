@@ -95,6 +95,9 @@ async function run() {
     assert.equal(await js('document.querySelector("[data-plan-hours]").value'), '3');
     assert.equal(await js('document.querySelector("[data-plan-active]").checked'), false);
     console.log('DESKTOP_CALENDAR_CHECK restart');
+    assert.deepEqual(new Set(calendarState.calendar.days.flatMap(day => day.trainings.map(training => training.status))),
+      new Set(['planned','completed','cancelled']));
+    console.log('DESKTOP_STATUS_CHECK restart');
     const invoices = await (await fetch(new URL('/api/invoices', origin))).json();
     assert.equal(invoices.length, 2);
     const january = invoices.find(invoice => invoice.year === 2020 && invoice.month === 1);
@@ -224,7 +227,71 @@ async function run() {
   await js('document.querySelector("#previous-month").click()');
   await until(() => js(`document.querySelector('#calendar').getAttribute('aria-busy') === 'false' && document.querySelector('#calendar article[aria-label]').getAttribute('aria-label') === '${firstDate}'`), 'return to calendar month');
   assert.deepEqual(await (await fetch(calendarURL)).json(), calendar);
-  await fs.writeFile(path.join(output, 'calendar-state.json'), JSON.stringify({year,month,plan,calendar}));
+
+  const trainingButton = id => `Array.from(document.querySelectorAll('[data-training]')).find(button => JSON.parse(button.dataset.training).id === ${id})`;
+  const waitStatus = (id, status) => until(() => js(`(() => {
+    const button = ${trainingButton(id)};
+    return button && JSON.parse(button.dataset.training).status === '${status}'
+      && document.querySelector('#calendar').getAttribute('aria-busy') === 'false';
+  })()`), `appointment ${id}: ${status}`);
+  const clickCompletion = id => js(`${trainingButton(id)}.parentElement.querySelector('[data-training-completion]').click()`);
+  const clickCancelled = id => js(`${trainingButton(id)}.parentElement.querySelector('[data-training-cancelled]').click()`);
+  // Force a real API storage failure; only the disposable test database moves.
+  const database = path.join(process.env.TTC_DATA_DIRECTORY, 'ttc.db');
+  const heldDatabase = path.join(output, 'temporarily-unavailable.db');
+  expectedHTTPFailure = 503;
+  await fs.rename(database, heldDatabase);
+  try {
+    await clickCompletion(manual.id);
+    await until(() => js(`!document.querySelector('#calendar-error').hidden &&
+      !${trainingButton(manual.id)}.parentElement.querySelector('[data-training-completion]').disabled`), 'failed status save');
+    assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-completion]').checked`), false);
+  } finally {
+    await fs.rename(heldDatabase, database);
+    expectedHTTPFailure = null;
+  }
+  assert.deepEqual(await (await fetch(calendarURL)).json(), calendar);
+  await clickCompletion(manual.id);
+  await waitStatus(manual.id, 'completed');
+  assert.equal(await js('document.querySelector("#calendar-error").hidden'), true);
+  await clickCompletion(manual.id);
+  await waitStatus(manual.id, 'planned');
+  await clickCancelled(manual.id);
+  await waitStatus(manual.id, 'cancelled');
+  assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-completion]').disabled`), true);
+  assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-cancelled]').disabled`), true);
+  await js(`${trainingButton(manual.id)}.click()`);
+  await until(() => js('!document.querySelector("#save-training-edit").disabled'), 'cancelled appointment editor');
+  await js(`const status = document.querySelector('#training-status'); status.value = 'planned';
+    status.dispatchEvent(new Event('change', {bubbles:true})); document.querySelector('#training-form').requestSubmit();`);
+  await waitStatus(manual.id, 'planned');
+  await clickCancelled(manual.id);
+  await waitStatus(manual.id, 'cancelled');
+
+  const cancelledGenerated = calendar.days.flatMap(day => day.trainings).find(training => training.weekly_plan_id === plan[0].id);
+  await clickCancelled(cancelledGenerated.id);
+  await waitStatus(cancelledGenerated.id, 'cancelled');
+  const beforeCompletion = await (await fetch(calendarURL)).json();
+  await js('window.confirm = () => false; document.querySelector("#complete-month").click()');
+  assert.deepEqual(await (await fetch(calendarURL)).json(), beforeCompletion);
+  const eligible = beforeCompletion.days.flatMap(day => day.trainings)
+    .filter(training => training.weekly_plan_id === plan[0].id && training.status === 'planned');
+  assert.ok(eligible.length > 0);
+  async function completeMonth(count) {
+    await js('window.confirm = () => true; document.querySelector("#calendar-success").hidden = true; document.querySelector("#complete-month").click()');
+    await until(() => js('!document.querySelector("#calendar-success").hidden && !document.querySelector("#complete-month").disabled && document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), 'month completion');
+    assert.match(await js('document.querySelector("#calendar-success").textContent'), new RegExp(`^${count} Termin`));
+  }
+  await completeMonth(eligible.length);
+  await completeMonth(0);
+  const finalCalendar = await (await fetch(calendarURL)).json();
+  const eligibleIds = new Set(eligible.map(training => training.id));
+  for (const training of finalCalendar.days.flatMap(day => day.trainings)) {
+    const before = beforeCompletion.days.flatMap(day => day.trainings).find(item => item.id === training.id);
+    assert.deepEqual(training, {...before, status:eligibleIds.has(training.id) ? 'completed' : before.status});
+  }
+  console.log('DESKTOP_STATUS_CHECK saved');
+  await fs.writeFile(path.join(output, 'calendar-state.json'), JSON.stringify({year,month,plan,calendar:finalCalendar}));
   console.log('DESKTOP_CALENDAR_CHECK saved');
 
   const seed = await js(`(async () => {
