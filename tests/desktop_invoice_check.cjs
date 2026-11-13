@@ -117,6 +117,7 @@ async function run() {
     await js(`document.querySelector('#saved-invoices-rows a[href="/api/invoices/${january.id}/pdf"][target=_blank]').click()`);
     await until(() => handoffs.length === 1, 'PDF handoff after restart');
     assert.deepEqual(handoffs, [url]);
+    console.log('DESKTOP_FINAL_CHECK restart');
     console.log('DESKTOP_PDF_RESUME ' + JSON.stringify({invoices:2,totalCents:6000,handoffs:1}));
     return;
   }
@@ -454,6 +455,12 @@ async function run() {
   await js('document.querySelector("#download-invoice-pdf").click()');
   await downloaded;
   assert.deepEqual(await fs.readFile(path.join(output, 'download.pdf')), pdf);
+  assert.equal(await js('document.querySelector("#create-invoice").disabled'), true);
+  await loadPreview('2020-03');
+  assert.equal(await js('document.querySelector("#open-invoice-pdf").hidden && document.querySelector("#download-invoice-pdf").hidden'), true);
+  await loadPreview('2020-01');
+  assert.equal(await js('document.querySelector("#open-invoice-pdf").hidden && document.querySelector("#download-invoice-pdf").hidden'), true);
+  assert.deepEqual(Buffer.from(await (await fetch(url)).arrayBuffer()), pdf);
 
   // Change the source after finalization: only the new preview may change.
   await js(`(async () => {
@@ -501,10 +508,26 @@ async function run() {
     document.querySelector('[data-delete-invoice="${invoiceId}"]').click()`);
   assert.equal(await js('window.__confirmCount'), 1);
   assert.deepEqual(Buffer.from(await (await fetch(url)).arrayBuffer()), pdf);
+  const numberBeforeDelete = (await (await fetch(new URL('/api/organization/settings', origin))).json()).next_invoice_number;
+  expectedHTTPFailure = 503;
+  await fs.rename(database, heldDatabase);
+  try {
+    await js(`window.confirm = () => { window.__confirmCount++; return true; };
+      document.querySelector('[data-delete-invoice="${invoiceId}"]').click()`);
+    await until(() => js(`!document.querySelector('#saved-invoices-error').hidden &&
+      !document.querySelector('[data-delete-invoice="${invoiceId}"]').disabled`), 'failed invoice deletion');
+  } finally {
+    await fs.rename(heldDatabase, database);
+    expectedHTTPFailure = null;
+  }
+  assert.equal(await js('window.__confirmCount'), 2);
+  assert.deepEqual(Buffer.from(await (await fetch(url)).arrayBuffer()), pdf);
+  assert.equal((await (await fetch(new URL('/api/organization/settings', origin))).json()).next_invoice_number, numberBeforeDelete);
   await js(`window.confirm = () => { window.__confirmCount++; return true; };
     document.querySelector('[data-delete-invoice="${invoiceId}"]').click()`);
   await until(() => js(`!document.querySelector('[data-delete-invoice="${invoiceId}"]')`), 'confirmed invoice deletion');
-  assert.equal(await js('window.__confirmCount'), 2);
+  assert.equal(await js('window.__confirmCount'), 3);
+  assert.equal(await js('document.querySelector("#saved-invoices-error").hidden'), true);
   assert.equal((await fetch(url)).status, 404);
   await assert.rejects(fs.stat(path.join(directory, filename)), {code:'ENOENT'});
   assert.deepEqual(Buffer.from(await (await fetch(otherUrl)).arrayBuffer()), otherPDF);
@@ -534,6 +557,7 @@ async function run() {
   assert.equal(BrowserWindow.getAllWindows().length, 1);
   assert.equal(contents.getURL(), new URL('/', url).href);
   assert.deepEqual(errors, []);
+  console.log('DESKTOP_FINAL_CHECK saved');
   console.log('DESKTOP_PDF_CHECK ' + JSON.stringify({previewRows:1,totalCents:4500,handoffs:2,
     pdfBytes:pdf.length,errorRecovery:true,lifecycle:true,refinalizedTotalCents:6000}));
 }

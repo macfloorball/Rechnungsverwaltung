@@ -101,6 +101,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert "DESKTOP_CALENDAR_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_STATUS_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_PREVIEW_CHECK saved" in stdout, stdout + stderr
+    assert "DESKTOP_FINAL_CHECK saved" in stdout, stdout + stderr
     if offline_namespace:
         assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
@@ -136,6 +137,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert "DESKTOP_RECIPIENT_CHECK restart" in stdout, stdout + stderr
     assert "DESKTOP_CALENDAR_CHECK restart" in stdout, stdout + stderr
     assert "DESKTOP_STATUS_CHECK restart" in stdout, stdout + stderr
+    assert "DESKTOP_FINAL_CHECK restart" in stdout, stdout + stderr
     if offline_namespace:
         assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     resumed = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_RESUME ")), None)

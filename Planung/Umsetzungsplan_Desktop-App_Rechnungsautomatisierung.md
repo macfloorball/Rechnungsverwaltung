@@ -396,8 +396,12 @@ Internet und ohne Anmeldung unterstützen.
     Leeren, Transaktionsfehler, ungültige Zeiträume und Datenerhalt. Echte
     Offline-Electron-Tests prüfen Anzeige, Monatswahl, Lade-/Fehlerzustände und
     Wiederholen. Falsche Vorschau-Jahresanzeige für Jahre unter 100 korrigiert.
--   [ ] Finale Rechnungen, erneute Vorschauen und das Löschen finaler
+-   [x] Finale Rechnungen, erneute Vorschauen und das Löschen finaler
     Rechnungen gemäß der vorgesehenen Geschäftslogik testen.
+    Aktuelle Daten bei Finalisierung, unveränderte finale Snapshots/PDFs,
+    erneute Vorschauen, Transaktionsfehler und Neu-Finalisierung nach Löschen
+    ergänzt geprüft. Echte Offline-Electron-Tests sichern auch Monatswechsel,
+    Löschfehler, erneuten Versuch und Datenerhalt nach App-Neustart ab.
 -   [ ] Prüfen, dass nur abrechnungsfähige bzw. erledigte Leistungen in
     Rechnungen einfließen.
 -   [ ] Fehler- und Grenzfälle testen, etwa doppelte Aktionen, fehlende
@@ -623,6 +627,41 @@ Die Vorschau setzt das UTC-Jahr jetzt ausdrücklich und zeigt den angeforderten
 Zeitraum korrekt. Alle vier Offline-Varianten aus Entwicklung/Produktion und
 Standard-/eigener Ablage werden geprüft. Finale Rechnungsabläufe und vollständige
 Abrechnungsfilter folgen separat; native Windows-Abnahme bleibt offen.
+
+## Finale Rechnungsabläufe prüfen (Schritt 10)
+
+Fünf zusätzliche API-Fälle ergänzen die vorhandenen Rechnungs-, Datei- und
+Konkurrenztests um folgende zusammenhängende Abläufe:
+
+- Die Finalisierung berechnet aktuelle Termine neu, auch wenn der gespeicherte
+  Entwurf inzwischen veraltet ist. Der Entwurf wird zur finalen Rechnung,
+  Snapshots und PDF werden gespeichert und der Nummernkreis genau einmal erhöht.
+  Ein erneuter Finalisierungsversuch verändert diese Rechnung nicht.
+- Ein echter SQLite-Fehler beim Einfügen finaler Positionen rollt Entwurf,
+  Positionen und Nummernkreis zurück. Die gerade erzeugte PDF wird bereinigt;
+  andere Dokumente bleiben erhalten. Nach Fehlerbehebung gelingt die Finalisierung.
+- Das Löschen der Quelltermine verändert weder finalen Snapshot noch PDF.
+  Die gespeicherten Rechnungspositionen bleiben erhalten; lediglich ihre
+  Fremdschlüssel zu gelöschten Terminen werden wie vorgesehen auf `null` gesetzt.
+  Eine neue leere Vorschau ersetzt die finale Rechnung nicht.
+- Rechnungslöschen erhält einen neuen Entwurf, andere Monatsrechnungen, deren
+  PDFs, exportierte Kopien und den Nummernkreis. Danach kann der aktuelle
+  Entwurf unter neuer Rechnungsnummer finalisiert werden. Wiederholtes Löschen
+  und der Versuch, eine Vorschau als finale Rechnung zu löschen, sind abgesichert.
+- Ein SQLite-Fehler vor der Datenbanklöschung erhält die Rechnung samt PDF;
+  der anschließende erneute Löschversuch funktioniert.
+
+Die echten Electron-Tests ergänzen den bisherigen vollständigen Rechnungsablauf
+um Monatswechsel nach Finalisierung (keine veralteten PDF-Links in der neuen
+Vorschau) und einen fehlgeschlagenen Löschversuch im Archiv. Fehleranzeige,
+wieder freigegebener Löschbutton, unveränderte PDF und Nummernkreis sowie der
+erfolgreiche erneute Versuch werden geprüft. Löschabbruch, bestätigtes Löschen,
+Neu-Finalisierung und vollständiger App-Neustart bleiben Bestandteil aller vier
+Offline-Varianten aus Entwicklung/Produktion und Standard-/eigener Ablage.
+
+Am Produktcode war keine Änderung erforderlich. Die vollständige Prüfung der
+Abrechnungsfilter folgt in Schritt 11. Native Windows-Ausführung, echte
+Standardbrowser-Darstellung und manuelle Betriebssystemdialoge bleiben offen.
 
 ## Ergebnis / Abnahmekriterien
 

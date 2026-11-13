@@ -2015,6 +2015,145 @@ def test_invalid_preview_period_preserves_existing_draft(client, invoice_draft, 
     assert [row["id"] for row in list_records("invoices", database_path=database)] == [draft_id]
 
 
+def test_finalization_recalculates_stale_draft_and_freezes_snapshot(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 4})
+    assert get_invoice(draft_id, database)["total_amount_cents"] == 4500
+    sequence = get_organization(database)["next_invoice_number"]
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201
+    final = response.json()
+    assert final["id"] == draft_id and final["total_amount_cents"] == 7500
+    stored = get_invoice(draft_id, database)
+    snapshot = json.loads(stored["invoice_snapshot_json"])
+    assert [item["hours"] for item in snapshot["items"]] == [4, None]
+    assert stored["is_preview"] == 0 and stored["invoice_number"]
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    pdf = client.get(f"/api/invoices/{draft_id}/pdf").content
+    assert pdf.startswith(b"%PDF-")
+    assert client.post("/api/invoices", json=period).status_code == 409
+    assert get_invoice(draft_id, database) == stored
+    assert client.get(f"/api/invoices/{draft_id}/pdf").content == pdf
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+
+
+def test_failed_finalization_restores_draft_number_and_document_state(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    before = get_invoice(draft_id, database)
+    sequence = get_organization(database)["next_invoice_number"]
+    directory = client.app.state.test_invoice_directory
+    directory.mkdir(exist_ok=True)
+    unrelated = directory / "Andere-Datei.txt"
+    unrelated.write_bytes(b"erhalten")
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TRIGGER reject_final_item BEFORE INSERT ON invoice_items BEGIN SELECT RAISE(ABORT, 'Testfehler'); END")
+    try:
+        assert client.post("/api/invoices", json=period).status_code == 409
+        assert get_invoice(draft_id, database) == before
+        assert get_organization(database)["next_invoice_number"] == sequence
+        assert list(directory.iterdir()) == [unrelated]
+    finally:
+        with sqlite3.connect(database) as connection:
+            connection.execute("DROP TRIGGER reject_final_item")
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201 and response.json()["id"] == draft_id
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    assert unrelated.read_bytes() == b"erhalten"
+
+
+def test_final_snapshot_and_pdf_survive_deleted_source_trainings(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, _, trainings = invoice_draft
+    final = client.post("/api/invoices", json=period).json()
+    database = client.app.state.test_database_path
+    stored = get_invoice(final["id"], database)
+    pdf = client.get(f"/api/invoices/{final['id']}/pdf").content
+    sequence = get_organization(database)["next_invoice_number"]
+    for training in trainings:
+        assert client.delete(f"/api/trainings/{training['id']}").status_code == 204
+    response = client.post("/api/invoices/preview", json=period)
+    assert response.json() == {**period, "items": [], "total_amount_cents": 0}
+    after = get_invoice(final["id"], database)
+    assert after["invoice_snapshot_json"] == stored["invoice_snapshot_json"]
+    assert after["total_amount_cents"] == 4500
+    assert [item["training_id"] for item in after["items"]] == [None, None]
+    assert [item["amount_cents"] for item in after["items"]] == [3000, 1500]
+    assert client.get(f"/api/invoices/{final['id']}/pdf").content == pdf
+    assert client.post("/api/invoices", json=period).status_code == 400
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert [row["id"] for row in client.get("/api/invoices").json()] == [final["id"]]
+
+
+def test_deletion_and_refinalization_preserve_copies_draft_other_month_and_number(client, invoice_draft):
+    from backend.database import get_organization, list_records
+
+    period, _, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    original = client.post("/api/invoices", json=period).json()
+    directory = client.app.state.test_invoice_directory
+    pdf_path = directory / original["pdf_path"]
+    copy = directory / "Exportierte-Kopie.pdf"
+    copy.write_bytes(pdf_path.read_bytes())
+    client.post("/api/trainings", json={"training_date": "2030-02-01", "activity_type_id": trainings[0]["activity_type_id"], "hours": 1, "status": "completed"})
+    other = client.post("/api/invoices", json={"year": 2030, "month": 2}).json()
+    other_before = get_invoice(other["id"], database)
+    other_pdf = (directory / other["pdf_path"]).read_bytes()
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 4})
+    assert client.post("/api/invoices/preview", json=period).json()["total_amount_cents"] == 7500
+    preview = next(row for row in list_records("invoices", database_path=database) if row["is_preview"])
+    draft_before = get_invoice(preview["id"], database)
+    sequence = get_organization(database)["next_invoice_number"]
+    assert client.delete(f"/api/invoices/{original['id']}").status_code == 204
+    assert not pdf_path.exists()
+    assert copy.read_bytes().startswith(b"%PDF-")
+    assert get_invoice(preview["id"], database) == draft_before
+    assert get_invoice(other["id"], database) == other_before
+    assert (directory / other["pdf_path"]).read_bytes() == other_pdf
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert client.delete(f"/api/invoices/{original['id']}").status_code == 404
+    assert client.delete(f"/api/invoices/{preview['id']}").status_code == 409
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201
+    recreated = response.json()
+    assert recreated["id"] == preview["id"] and recreated["total_amount_cents"] == 7500
+    assert recreated["invoice_number"].endswith(f"-{sequence:04d}")
+    assert recreated["invoice_number"] != original["invoice_number"]
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    assert pdf_path.read_bytes() != copy.read_bytes()
+    assert (directory / other["pdf_path"]).read_bytes() == other_pdf
+
+
+def test_failed_final_invoice_deletion_preserves_database_and_pdf(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, _, _ = invoice_draft
+    final = client.post("/api/invoices", json=period).json()
+    database = client.app.state.test_database_path
+    stored = get_invoice(final["id"], database)
+    path = client.app.state.test_invoice_directory / final["pdf_path"]
+    pdf = path.read_bytes()
+    sequence = get_organization(database)["next_invoice_number"]
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TRIGGER reject_final_delete BEFORE DELETE ON invoices BEGIN SELECT RAISE(ABORT, 'Testfehler'); END")
+    try:
+        assert client.delete(f"/api/invoices/{final['id']}").status_code == 409
+        assert get_invoice(final["id"], database) == stored
+        assert path.read_bytes() == pdf
+        assert get_organization(database)["next_invoice_number"] == sequence
+    finally:
+        with sqlite3.connect(database) as connection:
+            connection.execute("DROP TRIGGER reject_final_delete")
+    assert client.delete(f"/api/invoices/{final['id']}").status_code == 204
+    assert not path.exists()
+
+
 def test_invoice_preview_matches_example_and_refreshes_saved_preview(
     client: TestClient,
 ) -> None:
