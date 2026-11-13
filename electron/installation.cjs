@@ -2,9 +2,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const { validateReleaseMetadata } = require('./version.cjs');
 
 const REQUIRED_FILES = [
-  'package.json', 'packaged-runtime.json', 'electron/bootstrap.cjs', 'electron/main.cjs', 'electron/installation.cjs',
+  'package.json', 'packaged-runtime.json', 'electron/bootstrap.cjs', 'electron/main.cjs', 'electron/installation.cjs', 'electron/version.cjs',
   'scripts/run.cjs', 'scripts/managed_server.py', 'backend/main.py',
   'dist/frontend/index.html', 'dist/frontend/desktop-build.json',
   'runtime/python/python.exe', 'runtime/python/python313.dll', 'runtime/python/python313._pth',
@@ -34,6 +35,7 @@ function validateInstallation(root, installed = false) {
     const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     if (metadata.ttcDistribution !== 'installer' || typeof metadata.desktopAppId !== 'string' ||
         !metadata.desktopAppId || metadata.main !== 'electron/bootstrap.cjs') throw Error();
+    validateReleaseMetadata(metadata.desktopRelease, metadata.version);
     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'installation-manifest.json'), 'utf8'));
     if (manifest.formatVersion !== 1 || !manifest.files || Array.isArray(manifest.files)) throw Error();
     for (const name of REQUIRED_FILES) if (!manifest.files[name]) throw Error();

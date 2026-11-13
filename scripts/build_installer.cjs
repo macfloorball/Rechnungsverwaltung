@@ -5,9 +5,12 @@ const { createHash } = require('node:crypto');
 const { packageWindows } = require('./package_windows.cjs');
 const { installerConfig } = require('./installer_config.cjs');
 const { createInstallationManifest, validateInstallation } = require('../electron/installation.cjs');
+const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
 
 async function buildInstaller(root = path.join(__dirname, '..')) {
   const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
+  const release = getDesktopRelease(root);
+  const config = installerConfig(root, metadata, release);
   const runtime = path.join(root, 'dist', 'python-windows');
   const manifest = JSON.parse(await fs.readFile(path.join(runtime, 'runtime-manifest.json'), 'utf8'));
   if (manifest.platform !== 'win32-x64' || !manifest.files['python.exe']) throw Error('Windows-Python-Laufzeit fehlt oder ist unvollständig.');
@@ -19,11 +22,12 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
   }
   const requirements = await fs.readFile(path.join(root, 'requirements-windows.txt'));
   if (createHash('sha256').update(requirements).digest('hex') !== manifest.requirementsSha256) throw Error('Windows-Python-Pakete sind veraltet. Laufzeit neu erstellen.');
-  const output = await packageWindows(root);
+  const output = await packageWindows(root, release);
   for (const destination of output) {
     await fs.cp(runtime, path.join(destination, 'resources', 'app', 'runtime', 'python'), { recursive: true });
     await fs.writeFile(path.join(destination, 'resources', 'app', 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
     const appRoot = path.join(destination, 'resources', 'app');
+    assertPackageRelease(appRoot, release);
     const appMetadata = JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8'));
     appMetadata.ttcDistribution = 'installer';
     appMetadata.main = 'electron/bootstrap.cjs';
@@ -32,7 +36,6 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     validateInstallation(appRoot, true);
   }
   const { build, Platform, Arch } = require('electron-builder');
-  const config = installerConfig(root, metadata);
   const destination = config.directories.output;
   const staging = await fs.mkdtemp(path.join(root, 'dist', '.installer-'));
   try {
@@ -47,8 +50,15 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     for (const file of installers) {
       const bytes = await fs.readFile(file);
       if (bytes[0] !== 0x4d || bytes[1] !== 0x5a || bytes.length < 1000000) throw Error('Installer-Datei fehlt oder ist unvollständig.');
-      await fs.writeFile(file + '.sha256', `${createHash('sha256').update(bytes).digest('hex')}  ${path.basename(file)}\n`);
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+      await fs.writeFile(file + '.sha256', `${sha256}  ${path.basename(file)}\n`);
+      // Unsigned build information, not an authorization to install an update.
+      await fs.writeFile(file + '.release.json', JSON.stringify({ ...release,
+        appId: metadata.desktopAppId, platform: 'win32', arch: 'x64', packageFormat: 'nsis',
+        fileName: path.basename(file), size: bytes.length, sha256,
+      }, null, 2) + '\n');
       checksums.push(file + '.sha256');
+      checksums.push(file + '.release.json');
     }
     await fs.mkdir(destination, { recursive: true });
     const published = [];

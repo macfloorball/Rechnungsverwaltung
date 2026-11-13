@@ -17,6 +17,7 @@ function fixture(t) {
   fs.mkdirSync(path.join(root, 'data'));
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
     ttcDistribution: 'installer', desktopAppId: 'de.mac-floorball.ttc-rechnungsverwaltung', main: 'electron/bootstrap.cjs',
+    version: '0.1.0', desktopRelease: { formatVersion: 1, version: '0.1.0', channel: 'development', tag: null, commit: null },
   }));
   fs.writeFileSync(path.join(root, 'data', 'ttc.db'), 'untouched user data');
   const manifest = createInstallationManifest(root);
@@ -68,4 +69,14 @@ test('development checkouts keep their existing startup behavior', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-development-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   assert.equal(validateInstallation(root), false);
+});
+
+test('inconsistent release versions fail even with a newly calculated file manifest', (t) => {
+  const { root } = fixture(t);
+  const file = path.join(root, 'package.json');
+  const metadata = JSON.parse(fs.readFileSync(file, 'utf8'));
+  metadata.desktopRelease.version = '0.2.0';
+  fs.writeFileSync(file, JSON.stringify(metadata));
+  fs.writeFileSync(path.join(root, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(root)));
+  assert.throws(() => validateInstallation(root, true), /beschädigt/);
 });

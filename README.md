@@ -1116,7 +1116,10 @@ Build erstellen. Das Python-Archiv ist auf Version 3.13.17 und SHA-256 fixiert,
 Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
 Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
 Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
-Ergebnis: `dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-setup.exe`.
+Ergebnis ohne Release-Tag:
+`dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-development-setup.exe`.
+Produktionsbuilds behalten den Dateinamen ohne `-development`; Einzelheiten zur
+Versionsprüfung stehen unter [Desktop-Release-Versionierung](#desktop-release-versionierung).
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
 ohne eingebettete Laufzeit. Nur `desktop:installer:win` erstellt das eigenständige
 Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
@@ -1136,6 +1139,52 @@ einen Startmenü-Eintrag **TTC Rechnungsverwaltung** an. Bei Neuinstallation
 beziehungsweise Update werden die Verknüpfungen bereitgestellt. Der Start
 benötigt weder ein Terminal noch einen separaten Backend-Aufruf. Die native
 Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
+
+### Desktop-Release-Versionierung
+
+`package.json` bleibt die einzige Versionsquelle für die Desktop-App; die
+beiden Wurzelversionen in `package-lock.json` müssen übereinstimmen. Die aktuelle
+Version bleibt **0.1.0**. Die Backend-/Web-Versionierung wird nicht geändert.
+Versionsänderungen immer gemeinsam in Paket und Lockfile pflegen.
+
+```sh
+npm run desktop:version
+npm run desktop:version -- --tag desktop-v0.1.0
+```
+
+Ohne Tag entsteht ein ausdrücklich als `development` gekennzeichneter Build.
+Für einen stabilen Build muss `TTC_DESKTOP_RELEASE_TAG=desktop-vX.Y.Z` gesetzt
+sein. Der passende Tag muss bereits existieren und auf den sauberen aktuellen
+Commit zeigen. Die Prüfung erstellt weder Tags noch Releases. Unter PowerShell
+die Variable beispielsweise mit `$env:TTC_DESKTOP_RELEASE_TAG = 'desktop-v0.1.0'`
+setzen. Diese Variable für Entwicklungsbuilds wieder entfernen.
+
+Erlaubt ist der stabile SemVer-Kern `X.Y.Z`, ohne führende Nullen oder Zusätze;
+jede Komponente liegt zwischen 0 und 65535, damit sie verlustfrei in die
+Windows-Dateiversion `X.Y.Z.0` passt. Prerelease- und Buildzusätze werden bewusst
+abgelehnt: Entwicklung wird über den Kanal gekennzeichnet, da die vorhandene
+NSIS-Vergleichslogik keine SemVer-Prereleaseordnung sicherstellt.
+
+Jeder andere vorhandene `desktop-v*`-Tag muss gültig und älter sein. Gleiche
+Versionen werden nur beim erneuten Prüfen desselben Tags akzeptiert;
+Veröffentlichung und Überschreiben sind dadurch nicht erlaubt. Haupt-, Neben-
+und Patchversionen dürfen steigen, aber nie auf einen kleineren oder gleichen
+Versionsstand wechseln. Der wiederverwendbare Updatevergleich prüft zusätzlich
+einen gespeicherten Versionshöchststand. Eine gleichversionige manuelle
+Installer-Reparatur bleibt möglich, die vorhandene NSIS-Downgrade-Sperre bleibt aktiv.
+
+Paketversion, Electron-/Windows-Version, Installer-Konfiguration und eingebettetes
+`desktopRelease` verwenden dieselbe geprüfte Version. Der Installer-Build schreibt
+zusätzlich `<Installer>.release.json` mit Kanal, Tag/Commit (bei stabilen Builds),
+Plattform, Größe und SHA-256. Diese Datei ist **unsignierte Buildinformation**,
+noch kein vertrauenswürdiges Update-Manifest und keine Installationsfreigabe.
+Ein `stable`-Kanal allein ersetzt keine Signaturprüfung.
+
+Release-Prüfungen benötigen vollständige lokale Git-Historie und sämtliche
+Desktop-Tags; CI muss diese später explizit abrufen. Die Prüfung des freigegebenen
+Entwicklungsbranches, Signierung und Veröffentlichung folgen erst in Schritt 4.
+Details und externe Voraussetzungen:
+[Updatearchitektur](Planung/Automatische_Desktop_Updates_Architektur.md).
 
 ### Persönliche Daten bei der Deinstallation
 

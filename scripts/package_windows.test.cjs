@@ -24,6 +24,7 @@ test('Windows package contains runtime source and build, but no user or developm
     'data/ttc.db':'PRIVATE', 'rechnungen/private.pdf':'PRIVATE', '.env':'PRIVATE', 'requirements.txt':'fastapi',
   };
   for (const [name, value] of Object.entries(files)) await fs.writeFile(path.join(root, name), value);
+  await fs.writeFile(path.join(root, 'package-lock.json'), JSON.stringify({ version: '0.1.0', packages: { '': { version: '0.1.0' } } }));
   await prepareWindowsSource(root, target);
   const entries = await fs.readdir(target, { recursive: true });
   for (const expected of ['electron/main.cjs', 'backend/main.py','backend/paths.py','backend/storage_import.py','backend/storage_errors.py','dist/frontend/index.html','dist/frontend/desktop-build.json','requirements.txt','scripts/run.cjs','scripts/managed_server.py']) {
@@ -36,4 +37,10 @@ test('Windows package contains runtime source and build, but no user or developm
   const packaged = JSON.parse(await fs.readFile(path.join(target, 'package.json'), 'utf8'));
   assert.equal(packaged.desktopAppId, 'de.mac-floorball.ttc-rechnungsverwaltung');
   assert.equal(packaged.author, 'mac-floorball');
+  assert.deepEqual(packaged.desktopRelease, { formatVersion: 1, version: packaged.version, channel: 'development', tag: null, commit: null });
+  const stable = { ...packaged.desktopRelease, channel: 'stable', tag: 'desktop-v0.1.0', commit: 'a'.repeat(40) };
+  const releaseTarget = path.join(fixture, 'release-package');
+  await prepareWindowsSource(root, releaseTarget, stable);
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(releaseTarget, 'package.json'), 'utf8')).desktopRelease, stable);
+  await assert.rejects(prepareWindowsSource(root, releaseTarget, { ...stable, version: '0.2.0' }), /stimmen/);
 });
