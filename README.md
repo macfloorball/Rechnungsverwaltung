@@ -1120,3 +1120,13 @@ Ergebnis: `dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-setup.exe`.
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
 ohne eingebettete Laufzeit. Nur `desktop:installer:win` erstellt das eigenständige
 Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
+
+### Produktidentität
+
+App-Name: **TTC Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
+Paketversion: **0.1.0** aus `package.json`. Das vorhandene TTC-Symbol wird
+für App, EXE und Installer verwendet. Der technische Profilname bleibt
+`ttc-rechnungsverwaltung`; eine Änderung der Herausgeberangabe verschiebt
+damit keine Bestandsdaten. AppUserModelID: `de.mac-floorball.ttc-rechnungsverwaltung`.
+Der Installer ist nicht digital signiert. Die Herausgeber-Metadaten ersetzen
+kein Zertifikat; eine SmartScreen-Anzeige eines unbekannten Herausgebers ist möglich.

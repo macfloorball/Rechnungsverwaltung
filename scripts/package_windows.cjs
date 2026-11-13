@@ -52,7 +52,8 @@ async function packageWindows(root = path.join(__dirname, '..')) {
       platform: 'win32', arch: 'x64', electronVersion: metadata.devDependencies.electron,
       electronZipDir: process.env.TTC_ELECTRON_ZIP_DIRECTORY,
       appVersion: metadata.version, icon: path.join(source, 'electron', 'assets', 'app-icon.ico'),
-      win32metadata: { ProductName: metadata.productName, FileDescription: metadata.productName },
+      win32metadata: { ProductName: metadata.productName, FileDescription: metadata.description || metadata.productName,
+        CompanyName: metadata.author || metadata.productName },
       asar: false, prune: false, overwrite: true,
     });
     for (const destination of output) console.log(`Windows-Testbuild: ${destination}`);

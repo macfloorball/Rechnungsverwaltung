@@ -5,7 +5,7 @@ const path = require('node:path');
 // NSIS consumes that directory rather than repackaging the development checkout.
 function installerConfig(root, metadata) {
   return {
-    appId: 'de.mac-floorball.ttc-rechnungsverwaltung',
+    appId: metadata.desktopAppId,
     productName: metadata.productName,
     electronVersion: metadata.devDependencies.electron,
     directories: { output: path.join(root, 'dist', 'installer') },
@@ -15,6 +15,7 @@ function installerConfig(root, metadata) {
     publish: null,
     toolsets: { wine: '1.0.1' },
     win: { target: [{ target: 'nsis', arch: ['x64'] }],
+      publisherName: metadata.author,
       icon: path.join(root, 'electron', 'assets', 'app-icon.ico'),
       signAndEditExecutable: false, requestedExecutionLevel: 'asInvoker' },
     nsis: { oneClick: false, perMachine: false,

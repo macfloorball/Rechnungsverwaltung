@@ -2,7 +2,7 @@
   "name": "ttc-rechnungsverwaltung",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron-Grundintegration der lokalen TTC-Webanwendung",
+  "description": "Lokale TTC Rechnungsverwaltung für Windows und Linux",
   "main": "electron/main.cjs",
   "scripts": {
     "desktop:dev": "node scripts/run.cjs desktop-dev",
@@ -22,5 +22,7 @@
     "electron": "45.3.1",
     "electron-builder": "26.18.0"
   },
-  "productName": "TTC Rechnungsverwaltung"
+  "productName": "TTC Rechnungsverwaltung",
+  "author": "mac-floorball",
+  "desktopAppId": "de.mac-floorball.ttc-rechnungsverwaltung"
 }

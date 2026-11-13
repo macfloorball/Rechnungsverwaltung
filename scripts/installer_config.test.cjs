@@ -8,6 +8,9 @@ const metadata = require('../package.json');
 test('NSIS installs per user without elevation or deleting user profiles', () => {
   const config = installerConfig('/project', metadata);
   assert.equal(config.appId, 'de.mac-floorball.ttc-rechnungsverwaltung');
+  assert.equal(config.win.publisherName, 'mac-floorball');
+  assert.equal(config.productName, 'TTC Rechnungsverwaltung');
+  assert.equal(metadata.version, '0.1.0');
   assert.equal(config.nsis.perMachine, false);
   assert.equal(config.nsis.allowElevation, false);
   assert.equal(config.nsis.deleteAppDataOnUninstall, false);
