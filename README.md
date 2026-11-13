@@ -668,6 +668,28 @@ PDFs werden gemäß bestehender Architektur an den Standardbrowser übergeben.
 Der Test ersetzt weder die native Windows-Abnahme noch die manuelle Kontrolle
 der PDF-Darstellung und des Druckdialogs im tatsächlichen Standardbrowser.
 
+Für einen praktischen Offline-Test unter Linux kann derselbe Electron-Test in
+einem eigenen Netzwerk-Namespace mit ausschließlich Loopback ausgeführt werden.
+Voraussetzungen sind `unshare`, `ip`, erlaubte Benutzer-/Netzwerk-Namespaces,
+die eingerichtete Python-/Electron-Umgebung und eine lokale grafische Sitzung.
+Aus dem Projektverzeichnis:
+
+```bash
+unshare --user --map-current-user --net --keep-caps sh -c 'ip link set lo up && exec env TTC_RUN_ELECTRON_TESTS=1 TTC_EXPECT_OFFLINE=1 .venv/bin/python -m pytest -q -s tests/test_desktop_invoice.py'
+```
+
+Die Isolation gilt nur für den Test und seine Kindprozesse; die übrige Sitzung
+bleibt online. `TTC_EXPECT_OFFLINE=1` allein trennt kein Netzwerk: Es fordert
+die Prüfung an, dass ausschließlich Loopback mit IPv4/IPv6 vorhanden ist und
+Verbindungen zu externen IPv4-/IPv6-Testadressen an fehlender Erreichbarkeit
+scheitern. Auch Electron prüft den geerbten Netzwerk-Namespace und die fehlende
+Erreichbarkeit bei jedem Start. Die Chromium-Sandbox bleibt aktiv.
+Alle vier Kombinationen aus Entwicklung/Produktion und Standard-/eigener
+Dokumentenablage laufen einschließlich vollständigem Neustart mit temporären
+Daten. PDF-Browserübergaben und Dialogantworten bleiben wie oben kontrolliert;
+native Windows-Ausführung, tatsächliche Standardbrowser-Anzeige und das
+physische Abschalten eines Netzwerkadapters werden dadurch nicht geprüft.
+
 Falls `node`/`npm` fehlen, die vorhandene Electron-Abhängigkeit aber installiert
 ist, kann ihre eingebettete Node-Laufzeit unter Linux für die JavaScript-Tests
 verwendet werden:

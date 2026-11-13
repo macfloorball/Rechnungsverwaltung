@@ -369,7 +369,12 @@ Internet und ohne Anmeldung unterstützen.
     Quellfrontend, vorhandener Produktions-Build und Paketvorbereitung in
     temporärer Kopie geprüft; Ressourcen und lokale Laufzeit verfügbar.
     Details und Verteilungsgrenzen siehe Ressourcenprüfung unten.
--   [ ] Die Anwendung mit deaktivierter Internetverbindung testen.
+-   [x] Die Anwendung mit deaktivierter Internetverbindung testen.
+    Vier echte Electron-Durchläufe unter Linux in einem eigenen Netzwerk-
+    Namespace ohne externe Netzverbindung bestanden: Entwicklung/Produktion
+    jeweils mit Standard-/eigener Dokumentenablage und vollständigem Neustart.
+    Nur Loopback aktiv; externe IPv4-/IPv6-Verbindungen scheitern nachweislich.
+    Reproduktion und Abgrenzung siehe README und Offline-Prüfung unten.
 -   [ ] Kundenverwaltung vollständig testen.
 -   [ ] Wochenplan und Terminverwaltung vollständig testen.
 -   [ ] Statusverwaltung für erledigte und nicht erledigte Termine
@@ -448,6 +453,40 @@ Laufzeit oder Python-Pakete. Diese müssen vor dem Offlinebetrieb lokal
 eingerichtet sein; eine eigenständig verteilbare Windows-Version oder native
 Windows-Ausführung wird durch diese Paketvorbereitung nicht nachgewiesen.
 Der Test mit tatsächlich deaktiviertem Internet bleibt Schritt 5.
+
+## Praktische Offline-Prüfung (Schritt 5)
+
+Am 13.11.2026 wurden alle vier Varianten aus `tests/test_desktop_invoice.py`
+mit echten Electron-Fenstern, unverändertem Produktcode, eigenem Backend und
+temporären Daten in einem isolierten Linux-Netzwerk-Namespace ausgeführt:
+**4 Tests bestanden**. Der Namespace enthält ausschließlich die aktive
+Loopback-Schnittstelle mit `127.0.0.1` und `::1`; Verbindungsversuche zu externen
+IPv4-/IPv6-Testadressen scheitern mit `ENETUNREACH`. Der Python-Test prüft diese
+Voraussetzung für jede Variante. Electron prüft bei Erststart und Neustart
+denselben geerbten Namespace sowie die fehlende externe Erreichbarkeit.
+Damit ist nicht nur eine Renderer-Anfrage blockiert: Auch Electron-Main und
+das von ihm gestartete Python-Backend haben keine externe Netzverbindung.
+Die Chromium-Sandbox bleibt eingeschaltet, die übrige Sitzung bleibt online.
+
+Geprüft wurden Entwicklung und Produktion jeweils mit Standardablage und
+eigenem Dokumentenordner. Der bestehende Test umfasst Start und lokale
+Ressourcen, Termin-Testdaten, Vorschau und Vorschauänderung, Finalisierung,
+PDF-Download, Archivöffnung, Löschabbruch/-bestätigung, erneute Finalisierung,
+Fehlerbehebung an der Dokumentenablage und Datenerhalt nach vollständigem
+App-Neustart. Alle vier Varianten liefen erfolgreich; die geprüften Beträge,
+Nummernkreise und PDF-Dateien blieben nach dem Neustart erhalten.
+Diese Offline-Durchläufe ersetzen nicht die noch folgenden vollständigen
+fachlichen Einzelprüfungen der Schritte 6–12.
+
+Der Aufruf mit `TTC_RUN_ELECTRON_TESTS=1` und `TTC_EXPECT_OFFLINE=1` innerhalb
+von `unshare --user --map-current-user --net --keep-caps` ist in der README
+dokumentiert. Das zweite Flag allein deaktiviert keine Verbindung, sondern
+fordert die überprüfte Offline-Testumgebung an. Es gibt keine produktive
+Netzwerkumschaltung und keine Änderung an Nutzerdaten oder Systemadaptern.
+Native Windows-Ausführung und das physische Abschalten eines Netzwerkadapters
+bleiben separat offen. Die PDF-Übergabe wird weiterhin abgefangen und Dialoge
+werden kontrolliert beantwortet; Anzeige/Druck im tatsächlichen Standardbrowser
+und manuelle Betriebssystemdialoge sind durch diesen Test nicht abgenommen.
 
 ## Ergebnis / Abnahmekriterien
 

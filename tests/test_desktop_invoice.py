@@ -1,4 +1,5 @@
 """Opt-in real Electron tests; every app file and all data live in tmp_path."""
+import errno
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,25 @@ import subprocess
 import sys
 
 import pytest
+
+
+def _check_offline_network():
+    """Require an isolated Linux network with only loopback, not a request mock."""
+    assert sys.platform == "linux", "Offline namespace check requires Linux"
+    links = json.loads(subprocess.check_output(["ip", "-j", "address", "show"], text=True))
+    assert len(links) == 1 and links[0]["ifname"] == "lo", links
+    addresses = {entry["local"] for entry in links[0]["addr_info"]}
+    assert {"127.0.0.1", "::1"} <= addresses, addresses
+    for family, destination in (
+        (socket.AF_INET, ("192.0.2.1", 443)),
+        (socket.AF_INET6, ("2001:db8::1", 443)),
+    ):
+        with socket.socket(family, socket.SOCK_STREAM) as probe:
+            probe.settimeout(1)
+            assert probe.connect_ex(destination) == errno.ENETUNREACH
+    namespace = os.readlink("/proc/self/ns/net")
+    print(f"Offline namespace verified: {namespace}, loopback only, IPv4/IPv6 unreachable")
+    return namespace
 
 
 def _run_electron(args, working_directory, environment):
@@ -30,6 +50,7 @@ def _run_electron(args, working_directory, environment):
 @pytest.mark.parametrize("mode", ["development", "production"])
 @pytest.mark.parametrize("custom_documents", [False, True])
 def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_documents):
+    offline_namespace = _check_offline_network() if os.environ.get("TTC_EXPECT_OFFLINE") == "1" else None
     root = Path(__file__).resolve().parent.parent
     executable = root / "node_modules" / "electron" / "dist" / (
         "electron.exe" if os.name == "nt" else "electron"
@@ -61,6 +82,8 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
         "TTC_DESKTOP_URL": f"http://127.0.0.1:{port}",
         "TTC_DESKTOP_PRODUCTION_URL": f"http://127.0.0.1:{port}",
     })
+    if offline_namespace:
+        environment["TTC_TEST_OFFLINE_NAMESPACE"] = offline_namespace
     if custom_documents:
         environment["TTC_DOCUMENT_DIRECTORY"] = str(tmp_path / "Custom Invoices")
     if mode == "production":
@@ -73,6 +96,8 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     if mode == "production":
         args.append("--desktop-production")
     stdout, stderr = _run_electron(args, tmp_path, environment)
+    if offline_namespace:
+        assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
     assert result is not None, stdout + stderr
     evidence = json.loads(result.removeprefix("DESKTOP_PDF_CHECK "))
@@ -88,6 +113,8 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     # A second complete Electron launch reuses the profile after the first
     # application's normal shutdown, including its managed Python backend.
     stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1"})
+    if offline_namespace:
+        assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     resumed = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_RESUME ")), None)
     assert resumed is not None, stdout + stderr
     assert json.loads(resumed.removeprefix("DESKTOP_PDF_RESUME ")) == {

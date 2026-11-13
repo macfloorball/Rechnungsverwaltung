@@ -5,6 +5,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const net = require('node:net');
 const { app, BrowserWindow, shell, dialog } = require('electron');
 
 const root = app.getAppPath();
@@ -40,6 +41,22 @@ async function until(check, description) {
 }
 
 async function run() {
+  if (process.env.TTC_TEST_OFFLINE_NAMESPACE) {
+    assert.equal(await fs.readlink('/proc/self/ns/net'), process.env.TTC_TEST_OFFLINE_NAMESPACE);
+    for (const host of ['192.0.2.1', '2001:db8::1']) {
+      await new Promise((resolve, reject) => {
+        const connection = net.connect({host, port:443});
+        connection.setTimeout(1000, () => connection.destroy(new Error('Offline probe timed out')));
+        connection.once('connect', () => connection.destroy(new Error('External network unexpectedly reachable')));
+        connection.once('error', error => {
+          connection.destroy();
+          try { assert.equal(error.code, 'ENETUNREACH'); resolve(); }
+          catch (failure) { reject(failure); }
+        });
+      });
+    }
+    console.log('DESKTOP_OFFLINE_CHECK ' + JSON.stringify({namespace:process.env.TTC_TEST_OFFLINE_NAMESPACE, ipv4:false, ipv6:false}));
+  }
   await app.whenReady();
   const window = await until(() => BrowserWindow.getAllWindows()[0], 'main window');
   const contents = window.webContents;
