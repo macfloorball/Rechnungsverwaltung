@@ -1,0 +1,54 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const { createHash } = require('node:crypto');
+
+const REQUIRED_FILES = [
+  'package.json', 'packaged-runtime.json', 'electron/bootstrap.cjs', 'electron/main.cjs', 'electron/installation.cjs',
+  'scripts/run.cjs', 'scripts/managed_server.py', 'backend/main.py',
+  'dist/frontend/index.html', 'dist/frontend/desktop-build.json',
+  'runtime/python/python.exe', 'runtime/python/python313.dll', 'runtime/python/python313._pth',
+  'runtime/python/Lib/site-packages/fastapi/__init__.py',
+];
+const SELECTION = ['package.json', 'packaged-runtime.json', 'electron', 'scripts', 'backend', 'dist/frontend', 'runtime/python'];
+function digest(file) { return createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
+
+function createInstallationManifest(root) {
+  const files = {};
+  function visit(name) {
+    const file = path.join(root, name);
+    const entry = fs.lstatSync(file);
+    if (entry.isDirectory()) {
+      for (const child of fs.readdirSync(file).sort()) visit(`${name}/${child}`);
+    } else if (entry.isFile()) files[name] = digest(file);
+    else throw Error('Installationspaket enthält einen nicht regulären Dateieintrag.');
+  }
+  SELECTION.forEach(visit);
+  for (const name of REQUIRED_FILES) if (!files[name]) throw Error('Installationspaket ist unvollständig.');
+  return { formatVersion: 1, files };
+}
+
+function validateInstallation(root, installed = false) {
+  if (!installed && !fs.existsSync(path.join(root, 'packaged-runtime.json'))) return false;
+  try {
+    const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    if (metadata.ttcDistribution !== 'installer' || typeof metadata.desktopAppId !== 'string' ||
+        !metadata.desktopAppId || metadata.main !== 'electron/bootstrap.cjs') throw Error();
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'installation-manifest.json'), 'utf8'));
+    if (manifest.formatVersion !== 1 || !manifest.files || Array.isArray(manifest.files)) throw Error();
+    for (const name of REQUIRED_FILES) if (!manifest.files[name]) throw Error();
+    const base = path.resolve(root) + path.sep;
+    for (const [name, hash] of Object.entries(manifest.files)) {
+      const file = path.resolve(root, name);
+      if (name.includes('\\') || !file.startsWith(base) || !/^[a-f0-9]{64}$/.test(hash) ||
+          !fs.lstatSync(file).isFile() || digest(file) !== hash) throw Error();
+    }
+    return true;
+  } catch (error) {
+    if (['EACCES', 'EPERM'].includes(error.code)) {
+      throw Error('Die Programmdateien sind nicht lesbar. Zugriffsrechte prüfen oder die Anwendung mit dem Installer reparieren. Persönliche Daten bleiben erhalten.');
+    }
+    throw Error('Die Installation ist unvollständig oder beschädigt. Anwendung mit dem vollständigen Installer reparieren. Persönliche Daten bleiben erhalten.');
+  }
+}
+module.exports = { REQUIRED_FILES, createInstallationManifest, validateInstallation };

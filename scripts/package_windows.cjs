@@ -10,6 +10,7 @@ async function prepareWindowsSource(root, target) {
   await fs.mkdir(target, { recursive: true });
   await fs.writeFile(path.join(target, 'package.json'), JSON.stringify({
     name: metadata.name, productName: metadata.productName, version: metadata.version,
+    desktopAppId: metadata.desktopAppId, description: metadata.description,
     main: metadata.main, author: metadata.author || metadata.productName, private: true,
   }, null, 2));
   // Positive selection: never copy runtime data, environments, Git, or node_modules.

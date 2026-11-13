@@ -5,10 +5,15 @@ const path = require('node:path');
 const { installerConfig } = require('./installer_config.cjs');
 const metadata = require('../package.json');
 
+test('installer options match the pinned electron-builder schema', async () => {
+  const { validateConfiguration } = require('app-builder-lib/out/util/config/config.js');
+  await validateConfiguration(installerConfig(path.join(__dirname, '..'), metadata), { isEnabled: false });
+});
+
 test('NSIS installs per user without elevation or deleting user profiles', () => {
   const config = installerConfig('/project', metadata);
   assert.equal(config.appId, 'de.mac-floorball.ttc-rechnungsverwaltung');
-  assert.equal(config.win.publisherName, 'mac-floorball');
+  assert.equal(metadata.author, 'mac-floorball');
   assert.equal(config.productName, 'TTC Rechnungsverwaltung');
   assert.equal(metadata.version, '0.1.0');
   assert.equal(config.nsis.perMachine, false);

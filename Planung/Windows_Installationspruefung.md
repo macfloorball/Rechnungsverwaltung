@@ -78,3 +78,32 @@ eingerichteten Umgebung reicht als Nachweis einer sauberen Installation nicht.
 Der nächste praktische Schritt ist die erste native Prüfung in der verfügbaren
 Windows-VM; danach folgt diese unabhängige zweite Umgebung. Bis beide Nachweise
 vorliegen, ist Phase 6 nach der allgemeinen Definition of Done nicht abgenommen.
+
+## Rechte und unvollständige Installation (Schritt 11)
+
+Diese nativen Fälle nur mit dem VM-Snapshot und Testdaten ausführen:
+
+- Dem Testbenutzer den Lesezugriff auf eine Programmdatei entziehen. Erwartung:
+  Installationsfehler mit Reparaturhinweis; kein Backend-Start mit Ersatzdatenbank.
+  Rechte danach wiederherstellen und denselben Installer zur Reparatur ausführen.
+- Eine Laufzeitdatei (`resources\app\runtime\python\python.exe`) vorübergehend
+  umbenennen oder eine Frontenddatei verändern. Erwartung: Integritätsprüfung
+  stoppt den Start, persönliche Daten bleiben unverändert. Reparatur prüfen.
+- Die Manifestdatei und in einem separaten Fall das Validierungsmodul entfernen.
+  Erwartung: auch diese unvollständige Installation startet kein Backend und
+  zeigt einen verständlichen Installationsfehler.
+- Dem Testdatenordner Schreibrechte entziehen. Erwartung: Datenbank-Zugriffsfehler,
+  keine neue leere Ersatzdatenbank und keine Änderung der vorhandenen Dateien.
+- In einem eigenen Testbenutzerkonto fehlende Schreibrechte am Programmziel
+  beziehungsweise fehlenden Speicherplatz simulieren. Erwartung: Installation
+  meldet den Fehler, fordert keine automatische Rechteerhöhung und verändert
+  den vorhandenen Datenbestand nicht. Nach Behebung Reparatur erneut versuchen.
+- Update bei noch geöffneter App abbrechen; danach normal schließen und erneut
+  installieren. Bestätigte Daten und vorhandene PDFs vergleichen.
+
+Die automatisierten Prüfungen decken beschädigte/fehlende/unlesbare Paketdateien,
+den Startabbruch vor Laden der Anwendung und den unbrauchbaren Datenpfad ab.
+Windows-ACLs, Installationsdialoge, Datenträgerfehler und SmartScreen müssen
+weiterhin nativ abgenommen werden. Die Programmdateien besitzen bei einem
+Stromausfall keinen garantierten automatischen Rollback; der Datenbestand liegt
+getrennt und der vollständige Installer dient zur Reparatur.

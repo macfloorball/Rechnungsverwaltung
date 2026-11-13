@@ -108,7 +108,7 @@ function validateFrontend(config) {
 
 function spawnBackend(config, root, env) {
   const child = spawn(config.python, config.args, {
-    cwd: root, env: { ...env, TTC_FRONTEND_DIRECTORY: config.frontend },
+    cwd: root, env: { ...env, PYTHONIOENCODING: 'utf-8', TTC_FRONTEND_DIRECTORY: config.frontend },
     stdio: ['pipe', 'inherit', 'pipe'], detached: true, windowsHide: true,
   });
   let errorOutput = '';

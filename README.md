@@ -1205,3 +1205,40 @@ einen erzwungenen Migrationsfehler, die vorherige Sicherung, erfolgreichen
 Wiederholungsversuch, unveränderten Neustart und Ablehnung eines neueren Schemas.
 Die Paketprüfung verwendet bewusst einen fremden Arbeitsordner; der Windows-
 Suchpfad in `python313._pth` verweist ausdrücklich auf den Anwendungscode.
+
+### Fehlerbehandlung und Plattformgrenzen
+
+Installierte Builds verwenden einen eigenen Startprüfer: Bevor Anwendungs- oder
+Backendmodule geladen werden, werden Paketmetadaten und das Datei-Manifest
+kontrolliert. Fehlende, veränderte oder unlesbare Programmdateien führen zu einem
+Installationsfehler mit Reparaturhinweis. Dabei wird keine Ersatzdatenbank angelegt.
+Das Manifest schützt gegen unvollständige oder beschädigte Kopien; es ist keine
+digitale Signatur. Datenprofile werden weder gehasht noch in das Paket aufgenommen.
+Windows-Backendausgaben werden für die Electron-Prozessschnittstelle als UTF-8
+übertragen, auch bei einer anderen Windows-Konsolencodierung.
+
+Der Installer unterstützt Windows 10/11 x64. Native Installations-, Rechte-,
+SmartScreen-, Verknüpfungs- und Deinstallationstests sowie der Versionswechsel
+sind noch in der Windows-VM abzunehmen. Die unabhängige zweite Windows-Umgebung
+bleibt ebenfalls offen. Der nächste praktische Schritt ist die
+[Windows-Abnahmeanleitung](Planung/Windows_Installationspruefung.md).
+
+Linux bleibt für Entwicklung, Webbetrieb und Tests unterstützt. Ein Windows-
+Crossbuild benötigt unter Linux zusätzlich ein funktionsfähiges Wine. Es kann
+über `USE_SYSTEM_WINE=true` aus dem Suchpfad oder über
+`ELECTRON_BUILDER_WINE_TOOLSET_DIR` aus einer geeigneten Toolset-Installation
+verwendet werden. Ein auf diesem Rechner fehlerhaftes mitgeliefertes Wine-Bundle
+wurde für den Build durch temporär entpackte Fedora-Wine-Werkzeuge ersetzt.
+Auf einem Windows-Build-Rechner ist Wine nicht nötig.
+Für einen vorhandenen offiziellen Electron-ZIP-Cache lässt sich
+`TTC_ELECTRON_ZIP_DIRECTORY` angeben. Der Build veröffentlicht fertige Installer
+erst nach erfolgreicher Erstellung und Prüfung; fehlgeschlagene Zwischenbuilds
+ersetzen keinen zuvor fertig erstellten Installer.
+
+Die zusätzlichen Paketprüfungen sind optional aktivierbar: `TTC_WINDOWS_PYTHON`
+verweist auf den ausgelieferten Interpreter. Unter Linux werden zusätzlich
+`TTC_WINE` und ein separates `TTC_WINE_PREFIX` gesetzt. Die Prüfungen verwenden
+ausschließlich temporäre Profile und ein fremdes Arbeitsverzeichnis.
+Die NSIS-Compilerprüfung benötigt `TTC_MAKENSIS` und `TTC_NSIS_PLUGINS`
+(das Verzeichnis der x86-unicode-Plugins). Mit Wine führt sie auch die
+Schutzprüfungen für Datenlöschung, Installationspfad und Downgrade aus.
