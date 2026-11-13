@@ -4,10 +4,12 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import socket
 import sqlite3
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -31,11 +33,11 @@ def _check_offline_network():
     return namespace
 
 
-def _run_electron(args, working_directory, environment):
+def _run_electron(args, working_directory, environment, *, expected_returncode=0):
     process = subprocess.Popen(args, cwd=working_directory, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     try:
         stdout, stderr = process.communicate(timeout=85)
-        assert process.returncode == 0, stdout + stderr
+        assert process.returncode == expected_returncode, stdout + stderr
         return stdout, stderr
     finally:
         if process.poll() is None:
@@ -103,6 +105,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert "DESKTOP_PREVIEW_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_FINAL_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_BILLABLE_CHECK saved" in stdout, stdout + stderr
+    assert "DESKTOP_EMPTY_CHECK saved" in stdout, stdout + stderr
     if offline_namespace:
         assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
@@ -159,4 +162,21 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     }
     assert stored_preview() == preview_before_restart
     assert billable_final_positions() == final_positions_before_restart
+    if sys.platform == "linux":
+        stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1", "TTC_TEST_CRASH": "1"},
+                                       expected_returncode=-signal.SIGKILL)
+        assert "DESKTOP_CRASH_READY" in stdout, stdout + stderr
+        deadline = time.monotonic() + 10
+        while True:
+            with socket.socket() as probe:
+                probe.settimeout(0.2)
+                if probe.connect_ex(("127.0.0.1", port)) != 0:
+                    break
+            assert time.monotonic() < deadline, "Backend blieb nach Electron-Absturz erreichbar"
+            time.sleep(0.05)
+        stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1"})
+        assert "DESKTOP_PDF_RESUME " in stdout, stdout + stderr
+        assert stored_preview() == preview_before_restart
+        assert billable_final_positions() == final_positions_before_restart
+        print(f"Hard crash recovery verified: {mode}, custom documents={custom_documents}")
     print(f"Electron {mode}, custom documents={custom_documents}: {output}")

@@ -408,8 +408,12 @@ Internet und ohne Anmeldung unterstützen.
     und Monats-/Jahresgrenzen ergänzt. Vorschau, finale Positionen, Snapshot und
     PDF-Erzeugung enthalten ausschließlich erledigte Termine des gewählten Monats;
     gespeicherte Preise bleiben auch nach Deaktivierung der Tätigkeit maßgeblich.
--   [ ] Fehler- und Grenzfälle testen, etwa doppelte Aktionen, fehlende
+-   [x] Fehler- und Grenzfälle testen, etwa doppelte Aktionen, fehlende
     Daten und Programmabstürze.
+    Gleichzeitige API-Aktionen, Doppelklick und leere Oberfläche ergänzt.
+    Echte Prozessabbrüche prüfen SQLite-Rollback, PDF-Veröffentlichung vor
+    Datenbank-Commit sowie Electron-Absturz mit Backend-Beendigung und Wiederanlauf.
+    Die bestehende Grenze zwischen Dateisystem und SQLite ist dokumentiert.
 -   [ ] Bestehende automatisierte Tests ausführen und bei Bedarf
     erweitern.
 
@@ -701,6 +705,41 @@ Standard-/eigener Ablage sind einbezogen.
 
 Am Produktcode war keine Änderung erforderlich. Native Windows-Abnahme und
 tatsächliche Darstellung der PDF im Standardbrowser bleiben separat offen.
+
+## Fehler, Grenzfälle und Abstürze prüfen (Schritt 12)
+
+Die bisherigen Tests für fehlende/beschädigte/gesperrte Datenbanken, Dateifehler,
+ungültige Eingaben, veränderte Zuordnungen, Portkonflikte und Prozessfehler bleiben
+Teil der Regression. Fünf neue automatisierte Fälle ergänzen:
+
+- Zwei gleichzeitige Vorschauanfragen erhalten einen Entwurf ohne doppelte
+  Positionen. Zwei gleichzeitige Finalisierungen erzeugen genau eine finale
+  Rechnung und PDF mit einmaligem Nummernverbrauch; die zweite Anfrage meldet
+  einen Konflikt. Gleichzeitiges Löschen entfernt die Rechnung genau einmal.
+- Ein eigener Schreibprozess wird während einer offenen SQLite-Transaktion mit
+  vorhandenem Rollback-Journal hart beendet. Unbestätigte Änderungen an Empfänger,
+  Nummernkreis und Terminen verschwinden beim Wiederöffnen; bestätigte Daten
+  bleiben erhalten. Integritäts- und Fremdschlüsselprüfung sind erfolgreich.
+- Ein eigener Prozess wird nach tatsächlicher PDF-Veröffentlichung und vor
+  Aufruf der Datenbank-Finalisierung hart beendet. Entwurf und Nummernkreis
+  bleiben erhalten. Die hinterlassene PDF wird bei Wiederholung nicht
+  überschrieben (HTTP 409); nach ausdrücklicher Bestandssicherung/Freigabe des
+  Dateinamens gelingt der erneute Versuch. Diese bestehende Grenze erfordert
+  im betroffenen Absturzfenster eine manuelle Dateiprüfung, keine automatische
+  Löschung möglicherweise fremder Dokumente. Hinweise stehen in der README.
+
+Die echten Electron-Tests prüfen zusätzlich den Dialog ohne Tätigkeitsdaten,
+ein leeres Archiv und den Doppelklick auf Finalisieren. Unter Linux folgt auf
+den normalen Rechnungsablauf und Neustart ein tatsächlicher `SIGKILL` des
+Test-Hauptprozesses. Das eigene Backend muss danach den lokalen Port freigeben.
+Ein weiterer Start prüft die gespeicherten Rechnungen/PDFs, Einstellungen,
+Kalenderdaten, Entwurf und Nummernkreis erneut. Alle vier Kombinationen aus
+Entwicklung/Produktion und Standard-/eigener Ablage werden offline einbezogen.
+
+Es werden ausschließlich temporäre Daten und eigene Testprozesse verwendet;
+Produktcode bleibt unverändert. Die Tests decken die genannten Abbruchpunkte
+ab, simulieren jedoch keinen Stromausfall und garantieren keine Wiederherstellung
+beliebiger Hardware-/Dateisystemschäden. Native Windows-Absturzabnahme bleibt offen.
 
 ## Ergebnis / Abnahmekriterien
 

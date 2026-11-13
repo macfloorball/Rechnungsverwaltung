@@ -118,9 +118,22 @@ async function run() {
     await until(() => handoffs.length === 1, 'PDF handoff after restart');
     assert.deepEqual(handoffs, [url]);
     console.log('DESKTOP_FINAL_CHECK restart');
+    if (process.env.TTC_TEST_CRASH === '1') {
+      process.stdout.write('DESKTOP_CRASH_READY\n', () => process.kill(process.pid, 'SIGKILL'));
+      await new Promise(() => {});
+    }
     console.log('DESKTOP_PDF_RESUME ' + JSON.stringify({invoices:2,totalCents:6000,handoffs:1}));
     return;
   }
+
+  await until(() => js('Boolean(document.querySelector("[data-new-date]"))'), 'empty calendar ready');
+  await js('document.querySelector("[data-new-date]").click()');
+  await until(() => js('document.querySelector("#training-dialog").open && !document.querySelector("#training-error").hidden'), 'missing activity message');
+  assert.match(await js('document.querySelector("#training-error").textContent'), /keine Tätigkeitsarten/);
+  assert.equal(await js('document.querySelector("#save-training-edit").disabled'), true);
+  await js('document.querySelector("#cancel-training-edit").click()');
+  await until(() => js('!document.querySelector("#saved-invoices-empty").hidden'), 'empty invoice archive');
+  console.log('DESKTOP_EMPTY_CHECK saved');
 
   const originalSettings = await (await fetch(new URL('/api/organization/settings', origin))).json();
   await js(`const form = document.querySelector('#organization-settings-form');
@@ -437,7 +450,10 @@ async function run() {
   assert.equal(failureText.includes(directory), false);
   await fs.unlink(directory);
   expectedHTTPFailure = null;
-  await js('document.querySelector("#create-invoice").click()');
+  await js(`(() => {
+    const button = document.querySelector('#create-invoice');
+    button.click(); button.click();
+  })()`);
   await until(() => js('!document.querySelector("#open-invoice-pdf").hidden'), 'finalization');
   const url = await js('document.querySelector("#open-invoice-pdf").href');
   assert.match(url, /\/api\/invoices\/[1-9]\d*\/pdf$/);

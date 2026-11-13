@@ -668,6 +668,12 @@ PDFs werden gemäß bestehender Architektur an den Standardbrowser übergeben.
 Der Test ersetzt weder die native Windows-Abnahme noch die manuelle Kontrolle
 der PDF-Darstellung und des Druckdialogs im tatsächlichen Standardbrowser.
 
+Unter Linux prüft jeder aktivierte Electron-Durchlauf außerdem einen absichtlichen
+`SIGKILL` des Test-Hauptprozesses nach bestätigten Schreibvorgängen. Das eigene
+Backend muss sich danach beenden; ein weiterer App-Start prüft Rechnungen, PDFs,
+Entwurf, Kalender und Nummernkreis erneut. Ausschließlich die temporäre Test-App
+und ihr eigenes Profil werden dafür verwendet.
+
 Für einen praktischen Offline-Test unter Linux kann derselbe Electron-Test in
 einem eigenen Netzwerk-Namespace mit ausschließlich Loopback ausgeführt werden.
 Voraussetzungen sind `unshare`, `ip`, erlaubte Benutzer-/Netzwerk-Namespaces,
@@ -729,6 +735,15 @@ gemeinsame atomare Operation aus zwei Namensänderungen. Dateisystemoperationen
 und SQLite bleiben ebenfalls getrennt; nach einem Fehler beim Entfernen der PDF
 kann wie bisher eine bereits gelöschte Rechnung mit zurückgebliebener PDF
 vorliegen. Die API meldet diesen Zustand ausdrücklich.
+
+Ein harter Absturz nach Veröffentlichung einer PDF und vor dem Datenbank-Commit
+kann umgekehrt eine PDF ohne finale Rechnung hinterlassen. Der erneute
+Finalisierungsversuch meldet HTTP 409 und überschreibt die Datei nicht.
+App und Backend vollständig beenden und Dateibestand sowie Rechnungszuordnung
+prüfen. Eine zweifelsfrei nicht zugeordnete PDF separat sichern und erhalten,
+bevor ihr ursprünglicher Dateiname für einen erneuten Versuch freigegeben wird.
+Es gibt keine automatische Löschung solcher Dateien; eine gemeinsame
+Absturztransaktion über SQLite und PDF-Ablage wird nicht zugesichert.
 
 `rename()` steht auf Ebene des Dateidienstes bereit. Finale Rechnungsoriginale
 behalten ihre verbindlichen Namen `Rechnung_TTC_YYYY-MM.pdf` und ihre bestehenden

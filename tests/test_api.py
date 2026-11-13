@@ -2,6 +2,9 @@ import base64
 import json
 import sqlite3
 import struct
+import subprocess
+import sys
+import time
 import zlib
 from datetime import date
 from pathlib import Path
@@ -2152,6 +2155,101 @@ def test_failed_final_invoice_deletion_preserves_database_and_pdf(client, invoic
             connection.execute("DROP TRIGGER reject_final_delete")
     assert client.delete(f"/api/invoices/{final['id']}").status_code == 204
     assert not path.exists()
+
+
+@pytest.mark.parametrize("action", ["preview", "finalize", "delete"])
+def test_concurrent_invoice_actions_do_not_duplicate_or_lose_data(client, invoice_draft, action):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from backend.database import get_organization, list_records
+
+    period, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    sequence = get_organization(database)["next_invoice_number"]
+    if action == "delete":
+        assert client.post("/api/invoices", json=period).status_code == 201
+    barrier = Barrier(2)
+    def request():
+        barrier.wait(timeout=5)
+        if action == "delete":
+            return client.delete(f"/api/invoices/{draft_id}")
+        return client.post("/api/invoices/preview" if action == "preview" else "/api/invoices", json=period)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _: request(), range(2)))
+    statuses = sorted(response.status_code for response in responses)
+    invoices = list_records("invoices", database_path=database)
+    if action == "preview":
+        assert statuses == [200, 200]
+        assert len(invoices) == 1 and invoices[0]["id"] == draft_id
+        assert len(get_invoice(draft_id, database)["items"]) == 2
+        assert get_organization(database)["next_invoice_number"] == sequence
+    elif action == "finalize":
+        assert statuses == [201, 409]
+        assert len(invoices) == 1 and invoices[0]["is_preview"] == 0
+        assert len(get_invoice(draft_id, database)["items"]) == 2
+        assert get_organization(database)["next_invoice_number"] == sequence + 1
+        assert [path.name for path in client.app.state.test_invoice_directory.iterdir()] == ["Rechnung_TTC_2030-01.pdf"]
+        assert client.get(f"/api/invoices/{draft_id}/pdf").content.startswith(b"%PDF-")
+    else:
+        assert statuses[0] == 204 and statuses[1] in (404, 409)
+        assert invoices == []
+        assert get_organization(database)["next_invoice_number"] == sequence + 1
+        assert not list(client.app.state.test_invoice_directory.iterdir())
+
+
+def test_crash_after_pdf_publication_preserves_draft_and_requires_explicit_file_check(client, invoice_draft, tmp_path):
+    from backend.database import get_organization
+
+    period, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    directory = client.app.state.test_invoice_directory
+    before = get_invoice(draft_id, database)
+    sequence = get_organization(database)["next_invoice_number"]
+    marker = tmp_path / "pdf-published"
+    script = '''
+from pathlib import Path
+import sys
+from backend import main
+from backend.models import InvoiceCreate
+def pause_before_commit(*args, **kwargs):
+    Path(sys.argv[3]).write_text('ready')
+    sys.stdin.read()
+main.create_invoice_with_items = pause_before_commit
+main.post_invoice(InvoiceCreate(year=2030, month=1), Path(sys.argv[1]), Path(sys.argv[2]))
+'''
+    process = subprocess.Popen([sys.executable, "-c", script, str(database), str(directory), str(marker)],
+                               cwd=Path(__file__).resolve().parent.parent,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        deadline = time.monotonic() + 10
+        while not marker.exists():
+            assert process.poll() is None, process.communicate()[1].decode()
+            assert time.monotonic() < deadline, "PDF-Veröffentlichung wurde nicht erreicht"
+            time.sleep(0.02)
+        process.kill()
+        process.communicate(timeout=5)
+        assert process.returncode != 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+    pdf = directory / "Rechnung_TTC_2030-01.pdf"
+    original_pdf = pdf.read_bytes()
+    assert original_pdf.startswith(b"%PDF-")
+    initialize_database(database)
+    assert get_invoice(draft_id, database) == before
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert client.post("/api/invoices", json=period).status_code == 409
+    assert pdf.read_bytes() == original_pdf
+    assert get_invoice(draft_id, database) == before
+    # Explicit recovery after inspecting the isolated test files: keep the
+    # candidate PDF under another name; never remove it automatically on start.
+    retained = directory / "Absturz-Kopie.pdf"
+    pdf.rename(retained)
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201 and response.json()["id"] == draft_id
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    assert retained.read_bytes() == original_pdf
 
 
 def test_invoice_preview_matches_example_and_refreshes_saved_preview(

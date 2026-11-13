@@ -1,4 +1,7 @@
 import sqlite3
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -401,6 +404,52 @@ def test_failed_migration_rolls_back_marker_and_schema(database_path, monkeypatc
         assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone() == (5,)
         assert connection.execute("SELECT name FROM sqlite_master WHERE name = 'incomplete_migration'").fetchall() == []
     assert list(database_path.parent.glob("*.before-migration-*.sqlite3"))
+
+
+def test_killed_writer_rolls_back_uncommitted_changes_and_keeps_confirmed_data(database_path, tmp_path):
+    from backend.database import get_organization
+
+    activity_id = create_record("activity_types", {"name": "Erhalten", "hourly_rate_cents": 1500}, database_path)
+    original_id = create_record("trainings", {"training_date": "2030-01-01", "activity_type_id": activity_id, "hours": 2, "status": "completed", "unit_rate_cents": 1500}, database_path)
+    before = get_record("trainings", original_id, database_path)
+    organization = get_organization(database_path)
+    marker = tmp_path / "transaction-ready"
+    script = '''
+from pathlib import Path
+import sys
+from backend.database import get_connection
+with get_connection(Path(sys.argv[1])) as connection:
+    connection.execute("PRAGMA cache_size = 1")
+    connection.execute("BEGIN IMMEDIATE")
+    connection.execute("UPDATE organizations SET recipient_name = 'Nicht bestätigt', next_invoice_number = 100")
+    for _ in range(30):
+        connection.execute("INSERT INTO trainings (training_date, activity_type_id, hours, status, note, unit_rate_cents) VALUES ('2030-01-02', ?, 1, 'planned', ?, 1500)", (int(sys.argv[3]), 'x' * 1000))
+    Path(sys.argv[2]).write_text('ready')
+    sys.stdin.read()
+'''
+    process = subprocess.Popen([sys.executable, "-c", script, str(database_path), str(marker), str(activity_id)],
+                               cwd=Path(__file__).resolve().parent.parent,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        deadline = time.monotonic() + 10
+        while not marker.exists():
+            assert process.poll() is None, process.communicate()[1].decode()
+            assert time.monotonic() < deadline, "Schreibtransaktion wurde nicht erreicht"
+            time.sleep(0.02)
+        assert Path(str(database_path) + "-journal").exists()
+        process.kill()
+        process.communicate(timeout=5)
+        assert process.returncode != 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+    initialize_database(database_path)
+    assert list_records("trainings", database_path=database_path) == [before]
+    assert get_organization(database_path) == organization
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def test_parallel_finalizations_commit_invoice_and_number_once(database_path):
