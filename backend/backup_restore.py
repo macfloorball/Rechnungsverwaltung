@@ -10,7 +10,8 @@ import zipfile
 from contextlib import closing
 from pathlib import Path
 
-from backend.backup_service import _digest
+from backend.backup_service import _digest, create_backup
+from backend.paths import get_database_path, get_document_directory
 from backend.document_storage import DocumentStore
 from backend.storage_import import validate_database
 
@@ -69,7 +70,10 @@ def stage_backup(archive_path: Path, stage: Path) -> None:
     (stage / 'documents').mkdir(exist_ok=True)
 
 
-def restore_backup(archive: Path, target: Path, *, confirmed: bool = False) -> Path:
+def restore_backup(
+    archive: Path, target: Path, *, current_database: Path,
+    current_documents: Path, safety_directory: Path, confirmed: bool = False,
+) -> Path:
     if not confirmed:
         raise ValueError('Wiederherstellung muss ausdrücklich bestätigt werden.')
     target = Path(target)
@@ -84,6 +88,9 @@ def restore_backup(archive: Path, target: Path, *, confirmed: bool = False) -> P
             stage_backup(archive, stage)
         except (KeyError, TypeError, zipfile.BadZipFile, json.JSONDecodeError) as error:
             raise ValueError('Ungültige oder beschädigte Sicherung.') from error
+        if target.resolve() == safety_directory.resolve() or target.resolve() in safety_directory.resolve().parents:
+            raise ValueError('Sicherheitskopie muss außerhalb des neuen Profils liegen.')
+        create_backup(current_database, current_documents, safety_directory)
         # Reserve an unused profile. Publish the DB last. If publication fails,
         # only a new, incomplete target may remain; originals are never touched.
         target.mkdir(mode=0o700)
@@ -99,9 +106,14 @@ def main():
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--target', type=Path, required=True)
     parser.add_argument('--confirm', action='store_true')
+    parser.add_argument('--current-database', type=Path, default=get_database_path())
+    parser.add_argument('--current-documents', type=Path, default=get_document_directory())
+    parser.add_argument('--safety-directory', type=Path, required=True)
     args = parser.parse_args()
     try:
-        restore_backup(args.archive, args.target, confirmed=args.confirm)
+        restore_backup(args.archive, args.target, confirmed=args.confirm,
+                       current_database=args.current_database, current_documents=args.current_documents,
+                       safety_directory=args.safety_directory)
     except (OSError, ValueError, sqlite3.Error) as error:
         parser.exit(1, f'Wiederherstellung abgebrochen: {error}\nOriginalbestand beibehalten; einen eventuell unvollständigen neuen Zielordner nicht verwenden.\n')
     print('Wiederherstellung geprüft und abgeschlossen. TTC_DATA_DIRECTORY auf den neuen Datenordner setzen.')

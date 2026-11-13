@@ -140,14 +140,14 @@ def test_restore_to_new_profile_and_no_overwrite(inventory, tmp_path):
     archive = create_backup(*inventory)
     target = tmp_path / 'anderer PC' / 'Profil'
     with pytest.raises(ValueError, match='bestätigt'):
-        restore_backup(archive, target)
+        restore_backup(archive, target, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
     assert not target.exists()
-    restore_backup(archive, target, confirmed=True)
+    restore_backup(archive, target, confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
     assert (target / 'documents/Beleg.pdf').read_bytes() == b'%PDF-test'
     with sqlite3.connect(target / 'ttc.db') as connection:
         assert connection.execute('PRAGMA integrity_check').fetchone() == ('ok',)
     with pytest.raises(FileExistsError):
-        restore_backup(archive, target, confirmed=True)
+        restore_backup(archive, target, confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
 
 
 @pytest.mark.parametrize('damage', ['hash', 'traversal', 'duplicate', 'version', 'database'])
@@ -178,6 +178,36 @@ def test_invalid_restore_never_publishes_target(inventory, tmp_path, damage):
                 output.writestr('manifest.json', files['manifest.json'])
     target = tmp_path / 'restored'
     with pytest.raises((ValueError, sqlite3.Error)):
-        restore_backup(broken, target, confirmed=True)
+        restore_backup(broken, target, confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
     assert not target.exists()
     assert (inventory[1] / 'Beleg.pdf').read_bytes() == b'%PDF-test'
+
+
+def test_restore_saves_current_state_first(inventory, tmp_path):
+    from backend.backup_restore import restore_backup
+    archive = create_backup(*inventory)
+    with sqlite3.connect(inventory[0]) as connection:
+        connection.execute("UPDATE organizations SET name='Aktueller Bestand' WHERE id=1")
+    (inventory[1] / 'Beleg.pdf').write_bytes(b'current PDF')
+    safety = tmp_path / 'safety'
+    target = tmp_path / 'restored'
+    restore_backup(archive, target, confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=safety)
+    assert (target / 'documents/Beleg.pdf').read_bytes() == b'%PDF-test'
+    with zipfile.ZipFile(next(safety.glob('*.zip'))) as copy:
+        assert copy.read('documents/Beleg.pdf') == b'current PDF'
+        db = tmp_path / 'safety.db'
+        db.write_bytes(copy.read('database/ttc.db'))
+    with sqlite3.connect(db) as connection:
+        assert connection.execute('SELECT name FROM organizations WHERE id=1').fetchone() == ('Aktueller Bestand',)
+
+
+def test_failed_safety_backup_prevents_restore(inventory, tmp_path, monkeypatch):
+    import backend.backup_restore as restore
+    archive = create_backup(*inventory)
+    def fail(*args):
+        raise OSError('disk full')
+    monkeypatch.setattr(restore, 'create_backup', fail)
+    target = tmp_path / 'restored'
+    with pytest.raises(OSError):
+        restore.restore_backup(archive, target, confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
+    assert not target.exists()

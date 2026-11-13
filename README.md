@@ -1006,7 +1006,7 @@ als Rückfallmöglichkeit erhalten. Anschließend mit lokal eingerichteter
 Python-Umgebung im Projekt-/App-Verzeichnis ausführen:
 
 ```bash
-python -m backend.backup_restore --archive "/absolut/Sicherungen/ttc-backup-….zip" --target "/absolut/NeuesProfil" --confirm
+python -m backend.backup_restore --archive "/absolut/Sicherungen/ttc-backup-….zip" --target "/absolut/NeuesProfil" --current-database "/absolut/AktuellesProfil/ttc.db" --current-documents "/absolut/AktuelleDokumente" --safety-directory "/absolut/Sicherheitskopien" --confirm
 ```
 
 Der Zielordner darf noch nicht existieren. Erst nach erfolgreicher Prüfung
@@ -1024,3 +1024,13 @@ Pfade mit Leerzeichen in Anführungszeichen einschließen. Die Sicherung ist
 zwischen Windows und Linux übertragbar; Startumgebung und Python müssen auf dem
 Zielgerät eingerichtet sein. Das Wiederherstellungslimit beträgt 8 GiB und
 100.000 Archiveinträge. Es gibt keine Zusammenführung bestehender Datenbestände.
+
+Vor Veröffentlichung des neuen Profils erzeugt das Wiederherstellungswerkzeug
+zwingend eine vollständige Sicherheitskopie des aktuellen Bestands im angegebenen
+`--safety-directory`. Scheitert diese Sicherung, wird das neue Profil nicht
+veröffentlicht. `--current-database` und `--current-documents` ausdrücklich prüfen;
+ohne Angabe werden die normalen Pfade aus der Startumgebung verwendet. Auf einem
+neuen PC die App zunächst einmal mit einem eigenen leeren Profil starten und
+wieder schließen; dieses Profil als aktuellen Bestand angeben. Das Backup-ZIP
+anschließend in einen weiteren neuen Profilordner wiederherstellen. Es gibt
+keinen Schalter zum Umgehen der Sicherheitskopie.
