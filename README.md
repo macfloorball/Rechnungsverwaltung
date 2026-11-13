@@ -1186,3 +1186,22 @@ Die vorhandenen Tests `tests/test_storage_update.py` prüfen den Wechsel zwische
 getrennten Installationsverzeichnissen bei unveränderter Datenbank, Einstellungen,
 Logo, Nummernkreis, Rechnungssnapshots und PDFs, einschließlich eigener Ablage.
 Diese Regression wird wiederverwendet; es gibt keine zweite Datenmigration.
+
+### Datenbankmigration beim Update
+
+Der Installer öffnet und verändert die Datenbank nicht. Nach Installation startet
+das vorhandene Backend mit demselben Benutzerprofil. Die Initialisierung prüft
+Integrität, Migrationsreihenfolge und unterstützte Schemaversion. Vor einer
+erforderlichen Migration entsteht eine SQLite-Sicherung `ttc.db.before-migration-*.sqlite3`
+im Datenprofil. Bereits aktuelle Datenbanken werden nur validiert. Fehlerhafte
+Migrationsschritte rollen ihre Transaktion zurück; die Sicherung bleibt erhalten.
+Ein neuerer oder lückenhafter Schemastand wird ohne Überschreiben abgelehnt.
+Die SQLite-Sicherung ergänzt das vollständige Backup vor Updates und ersetzt
+dessen Dokumentensicherung nicht.
+
+`tests/packaged_migration_check.py` lässt sich mit dem ausgelieferten Interpreter
+ausführen. Es prüft in einem eigenen temporären Profil den Import der Laufzeitpakete,
+einen erzwungenen Migrationsfehler, die vorherige Sicherung, erfolgreichen
+Wiederholungsversuch, unveränderten Neustart und Ablehnung eines neueren Schemas.
+Die Paketprüfung verwendet bewusst einen fremden Arbeitsordner; der Windows-
+Suchpfad in `python313._pth` verweist ausdrücklich auf den Anwendungscode.

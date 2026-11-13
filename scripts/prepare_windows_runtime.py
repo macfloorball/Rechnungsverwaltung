@@ -32,7 +32,7 @@ def extract_runtime(archive: Path, target: Path) -> None:
     # _pth is relative to python.exe, ignores PYTHONPATH and current directory.
     # Explicit application path supports -m scripts.managed_server from anywhere.
     (target / "python313._pth").write_text(
-        "python313.zip\n.\nLib/site-packages\n../..\n", encoding="utf-8"
+        "python313.zip\n.\nLib/site-packages\n..\\..\n", encoding="utf-8"
     )
 
 
