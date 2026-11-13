@@ -50,6 +50,7 @@ async function packageWindows(root = path.join(__dirname, '..')) {
       dir: source, out: path.join(root, 'dist', 'windows'),
       name: metadata.productName, executableName: metadata.productName,
       platform: 'win32', arch: 'x64', electronVersion: metadata.devDependencies.electron,
+      electronZipDir: process.env.TTC_ELECTRON_ZIP_DIRECTORY,
       appVersion: metadata.version, icon: path.join(source, 'electron', 'assets', 'app-icon.ico'),
       win32metadata: { ProductName: metadata.productName, FileDescription: metadata.productName },
       asar: false, prune: false, overwrite: true,

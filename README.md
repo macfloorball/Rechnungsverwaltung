@@ -1097,3 +1097,26 @@ noch Node.js oder npm erforderlich. Linux-Entwicklungs- und Webstarts bleiben er
 Technische Grundlage: [NSIS-Konfiguration](https://www.electron.build/nsis/) und
 [Python Embedded Distribution](https://docs.python.org/3/using/windows.html#the-embeddable-package).
 Es gibt keinen automatischen Updateabruf und keine Veröffentlichung aus dem Build.
+
+### Installer bauen
+
+Voraussetzungen auf dem Build-Rechner: Node.js gemäß `package.json`, eine
+lokale Python-Umgebung mit pip und Internetzugang für die Build-Werkzeuge.
+Aus dem Projektverzeichnis:
+
+```sh
+npm ci
+python scripts/prepare_windows_runtime.py dist/python-windows
+npm run desktop:installer:win
+```
+
+Unter Linux kann statt `python` der Interpreter `.venv/bin/python` verwendet
+werden. Das Laufzeitziel muss neu sein; bei Paketänderungen einen frischen
+Build erstellen. Das Python-Archiv ist auf Version 3.13.17 und SHA-256 fixiert,
+Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
+Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
+Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
+Ergebnis: `dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-setup.exe`.
+Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
+ohne eingebettete Laufzeit. Nur `desktop:installer:win` erstellt das eigenständige
+Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
