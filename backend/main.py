@@ -964,6 +964,17 @@ def get_invoice_pdf(
     )
 
 
+@app.post("/api/backups")
+def backup_data(database_path: DatabasePath, invoice_directory: InvoiceDirectory) -> dict:
+    from backend.backup_service import create_backup
+    try:
+        path = create_backup(database_path, invoice_directory, Path.home() / "ttc-rechnungsverwaltung-backups")
+        return {"path": str(path)}
+    except (OSError, sqlite3.Error, ValueError) as error:
+        logger.warning("Backup failed: %s", type(error).__name__)
+        raise HTTPException(503, "Sicherung fehlgeschlagen. Datenbestand, Zugriffsrechte und freien Speicher prüfen; vorhandene Daten bleiben erhalten.") from None
+
+
 app.mount(
     "/",
     StaticFiles(
