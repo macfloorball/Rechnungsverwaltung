@@ -1136,3 +1136,13 @@ einen Startmenü-Eintrag **TTC Rechnungsverwaltung** an. Bei Neuinstallation
 beziehungsweise Update werden die Verknüpfungen bereitgestellt. Der Start
 benötigt weder ein Terminal noch einen separaten Backend-Aufruf. Die native
 Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
+
+### Persönliche Daten bei der Deinstallation
+
+Die Deinstallation entfernt Programmdateien, Registrierung und Verknüpfungen.
+Das Datenprofil `%APPDATA%\ttc-rechnungsverwaltung` mit Datenbank und Standard-
+Dokumentenordner bleibt erhalten; ebenso eigene Dokumentenordner und externe
+Backups. Auch der versteckte NSIS-Schalter `--delete-app-data` wird vor der
+Deinstallation abgelehnt (Exitcode 2). Persönliche Daten lassen sich nur separat
+und bewusst nach eigener Prüfung und Sicherung entfernen. Für einen späteren
+Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.

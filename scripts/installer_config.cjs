@@ -21,6 +21,7 @@ function installerConfig(root, metadata) {
     nsis: { oneClick: false, perMachine: false,
       include: path.join(root, 'build', 'windows', 'installer.nsh'),
       allowElevation: false, allowToChangeInstallationDirectory: false,
+      packElevateHelper: false,
       deleteAppDataOnUninstall: false,
       createDesktopShortcut: 'always', createStartMenuShortcut: true,
       shortcutName: metadata.productName,
