@@ -64,3 +64,31 @@ def test_backup_api_custom_destination(inventory):
         assert client.post('/api/backups', json={'directory': 42}).status_code == 422
     finally:
         app.dependency_overrides.clear()
+
+
+def test_timestamp_structure_hashes_and_unique_publication(inventory):
+    import hashlib
+    import re
+    first = create_backup(*inventory)
+    original = first.read_bytes()
+    second = create_backup(*inventory)
+    assert first != second
+    assert first.read_bytes() == original
+    assert re.fullmatch(r'ttc-backup-\d{8}T\d{12}Z-[a-f0-9]{8}\.zip', first.name)
+    with zipfile.ZipFile(first) as archive:
+        manifest = json.loads(archive.read('manifest.json'))
+        for name, metadata in manifest['files'].items():
+            content = archive.read(name)
+            assert metadata == {'size': len(content), 'sha256': hashlib.sha256(content).hexdigest()}
+        assert set(archive.namelist()) == set(manifest['files']) | {'manifest.json'}
+        assert str(inventory[0].parent) not in archive.read('manifest.json').decode()
+
+
+def test_publication_failure_leaves_no_partial_backup(inventory, monkeypatch):
+    import backend.backup_service as service
+    def fail(*args):
+        raise OSError('publication failed')
+    monkeypatch.setattr(service.os, 'link', fail)
+    with pytest.raises(OSError):
+        create_backup(*inventory)
+    assert list(inventory[2].iterdir()) == []

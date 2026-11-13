@@ -988,3 +988,12 @@ Format: ein privates, zeitgestempeltes ZIP mit `database/ttc.db`,
 Größe und SHA-256 jeder Nutzdatei). Absolute Quellpfade werden nicht gespeichert.
 Es gibt keine automatische Löschung vollständiger Sicherungen. Das bisherige
 `backup_database.py` samt Timer bleibt eine reine Datenbanksicherung.
+
+In der Anwendung unter **Datensicherung** auf **Sicherung erstellen** klicken.
+Ein leerer Zielpfad verwendet `ttc-rechnungsverwaltung-backups` im Benutzerordner.
+Alternativ einen absoluten lokalen Ordner eintragen, etwa `D:\Sicherungen` oder
+`/home/name/Sicherungen`. Die Erfolgsmeldung nennt die fertige ZIP-Datei.
+Jede Sicherung erhält UTC-Zeitstempel und Zufallskennung; bestehende Archive
+werden auch bei einer Namenskollision niemals ersetzt. Temporäre Dateien werden
+bei gewöhnlichen Fehlern entfernt; nach einem Stromausfall können versteckte
+`.ttc-backup-*`-Arbeitsordner verbleiben. Nur veröffentlichte ZIP-Dateien verwenden.
