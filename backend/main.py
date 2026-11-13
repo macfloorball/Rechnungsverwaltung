@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.paths import get_database_path as resolve_database_path
+from backend.document_storage import DocumentStore
 from backend.storage_import import prepare_database
 from backend.storage_errors import MESSAGES, error_code
 
@@ -720,8 +721,7 @@ def post_invoice(
     )
 
     filename = build_invoice_filename(payload.year, payload.month)
-    pdf_path = invoice_directory / filename
-    invoice_directory.mkdir(parents=True, exist_ok=True)
+    documents = DocumentStore(invoice_directory)
     pdf_content = render_invoice_pdf(
         payload.year,
         payload.month,
@@ -744,17 +744,12 @@ def post_invoice(
         pdf_details,
     )
     try:
-        with pdf_path.open("xb") as pdf_file:
-            pdf_file.write(pdf_content)
+        pdf_path = documents.save_new(filename, pdf_content)
     except FileExistsError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Die PDF-Datei für diesen Monat existiert bereits",
         ) from error
-    except Exception:
-        pdf_path.unlink(missing_ok=True)
-        raise
-
     try:
         invoice_id = create_invoice_with_items(
             {
@@ -894,21 +889,18 @@ def get_invoice_pdf(
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
         )
 
-    stored_path = Path(invoice["pdf_path"])
-    pdf_path = (invoice_directory / stored_path).resolve()
-    invoice_directory = invoice_directory.resolve()
-    if (
-        stored_path.is_absolute()
-        or stored_path
-        != Path(build_invoice_filename(invoice["year"], invoice["month"]))
-        or not pdf_path.is_relative_to(invoice_directory)
-        or not pdf_path.is_file()
-        or pdf_path.suffix.lower() != ".pdf"
-    ):
+    if invoice["pdf_path"] != build_invoice_filename(invoice["year"], invoice["month"]):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
         )
+    try:
+        pdf_path = DocumentStore(invoice_directory).get_file(invoice["pdf_path"])
+    except (ValueError, FileNotFoundError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
+        ) from error
     return FileResponse(
         pdf_path,
         media_type="application/pdf",

@@ -489,12 +489,36 @@ Dokumentenort wird erst im dafür vorgesehenen Phase-3-Schritt behandelt.
 Dies ist die Zielentscheidung, noch keine Umstellung der Dateioperationen:
 Aktuell verwendet `backend/main.py:get_invoice_directory()` weiterhin
 `PROJECT_ROOT / "rechnungen"`, im Testbuild also `resources/app/rechnungen/`.
-Die Umsetzung der zentralen Ablage folgt im nächsten Arbeitsschritt. Vorhandene
+Der zentrale Dienst ist im folgenden Abschnitt beschrieben. Vorhandene
 PDFs dürfen beim Pfadwechsel nicht still verschoben, überschrieben oder gelöscht
 werden; ihre Übernahme und die bestehende Datenbankzuordnung müssen bei der
 Umstellung berücksichtigt werden. Bis dahin die bisherigen Rechnungsverzeichnisse
 unverändert erhalten. Dieser Schritt legt keine Ordner an und verändert weder
 Datenbank noch Dokumente.
+
+### Zentraler Dokumentendienst (Phase 3, Schritt 2)
+
+`backend/document_storage.py` stellt `DocumentStore` bereit. Er kennt weder
+SQLite noch FastAPI oder Rechnungsregeln. `save_new()` legt Dateien exklusiv an;
+vorhandene Dateien und symbolische Links werden nicht überschrieben. Bei einem
+Schreibfehler wird die neu angelegte unvollständige Datei nach dem Schließen
+entfernt. `get_file()` liefert nur vorhandene reguläre Dateien, keine symbolischen
+Links. Dokumentreferenzen müssen einfache Dateinamen sein; Verzeichnisbestandteile,
+absolute Pfade und Windows-Datenstromreferenzen werden abgelehnt. Dateisystemfehler
+werden an den Aufrufer weitergereicht.
+
+Ohne explizites Verzeichnis nutzt der Dienst `get_document_directory()` aus
+`backend/paths.py`: mit `TTC_DATA_DIRECTORY` dessen Unterordner `documents/`, sonst
+das bisherige Webverzeichnis `rechnungen/`. Die Auflösung legt keine Ordner an;
+erst das Speichern erzeugt die Ablage. Der Pfad wird pro Dienstinstanz absolut
+aufgelöst und bleibt bei einem Wechsel des Arbeitsverzeichnisses stabil.
+
+Die Rechnungs-API nutzt den Dienst zum Schreiben und Auffinden von PDFs zunächst
+mit ihrem explizit übergebenen bisherigen Rechnungsverzeichnis. Dadurch bleiben
+vorhandene Dateien ohne Migration erreichbar. Der automatische Wechsel auf die
+Zielablage wird erst zusammen mit der Absicherung bestehender Dateizuordnungen
+umgesetzt. Datenbankreferenzen, Rechnungsnamen, Löschabläufe und Electron-Bridge
+bleiben in diesem Schritt unverändert.
 
 ### Schemaänderungen
 

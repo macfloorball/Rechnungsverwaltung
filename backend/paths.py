@@ -18,3 +18,9 @@ def get_data_directory() -> Path:
 
 def get_database_path() -> Path:
     return get_data_directory() / "ttc.db"
+
+
+def get_document_directory() -> Path:
+    if "TTC_DATA_DIRECTORY" not in os.environ:
+        return PROJECT_ROOT / "rechnungen"
+    return get_data_directory() / "documents"

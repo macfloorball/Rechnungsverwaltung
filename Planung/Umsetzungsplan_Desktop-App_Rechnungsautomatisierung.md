@@ -280,8 +280,11 @@ verwaltet.
     Desktop-Datenverzeichnis außerhalb der Installation; Webbetrieb ohne
     Datenpfad-Override behält `rechnungen/`. Details und Abgrenzung zum noch
     unveränderten Dateizugriff: [README.md](../README.md#dokumentenverzeichnis-phase-3-schritt-1).
--   [ ] Einen zentralen Dienst für Dateiablage und Dateizugriff
-    einrichten.
+-   [x] Einen zentralen Dienst für Dateiablage und Dateizugriff
+    einrichten. `backend/document_storage.py` bündelt das exklusive Schreiben
+    und Auffinden von Dokumenten; die Rechnungs-API verwendet den Dienst
+    zunächst mit dem bisherigen Verzeichnis. Der Wechsel der Bestandsablage
+    bleibt bis zur abgesicherten Dateizuordnung offen.
 -   [ ] Rechnungs-PDFs und weitere Anhänge eindeutig zuordnen.
 -   [ ] Dateipfade nicht an verschiedenen Stellen im Programm fest
     verdrahten.
