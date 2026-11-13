@@ -285,7 +285,12 @@ verwaltet.
     und Auffinden von Dokumenten; die Rechnungs-API verwendet den Dienst
     zunächst mit dem bisherigen Verzeichnis. Der Wechsel der Bestandsablage
     bleibt bis zur abgesicherten Dateizuordnung offen.
--   [ ] Rechnungs-PDFs und weitere Anhänge eindeutig zuordnen.
+-   [x] Rechnungs-PDFs und weitere Anhänge eindeutig zuordnen.
+    `backend/invoice_documents.py` prüft finale Rechnung, Zeitraum und
+    eindeutigen Dateiverweis; Mehrfachzuordnungen werden auch bei
+    unterschiedlicher Groß-/Kleinschreibung abgelehnt. Bestehende Logos und
+    Logo-Snapshots bleiben ihren SQLite-Datensätzen zugeordnet; eine allgemeine
+    Anhangsfunktion ist im bisherigen Funktionsumfang nicht vorhanden.
 -   [ ] Dateipfade nicht an verschiedenen Stellen im Programm fest
     verdrahten.
 -   [ ] Einen einstellbaren Speicherort vorsehen, sofern dies mit

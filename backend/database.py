@@ -875,6 +875,12 @@ def create_invoice_with_items(
             raise InvoiceAlreadyExistsError
         preview_ids = [row[0] for row in existing]
 
+        if invoice.get("pdf_path") and connection.execute(
+            "SELECT 1 FROM invoices WHERE pdf_path = ? COLLATE NOCASE LIMIT 1",
+            (invoice["pdf_path"],),
+        ).fetchone():
+            raise InvoiceDocumentConflictError
+
         if expected_next_invoice_number is not None:
             organization_id = invoice.get("organization_id", 1)
             cursor = connection.execute(
@@ -934,6 +940,22 @@ def create_invoice_with_items(
 
 class InvoiceAlreadyExistsError(ValueError):
     """Raised when a finalized invoice already exists for the period."""
+
+
+class InvoiceDocumentConflictError(ValueError):
+    """Raised when a document reference is already assigned to an invoice."""
+
+
+def get_invoice_document_owners(
+    reference: str, database_path: Path | None = None,
+) -> list[int]:
+    with get_connection(database_path) as connection:
+        # Windows filenames are case-insensitive. Treat case variants as the
+        # same reference on every platform, including inconsistent legacy rows.
+        return [row[0] for row in connection.execute(
+            "SELECT id FROM invoices WHERE pdf_path = ? COLLATE NOCASE ORDER BY id",
+            (reference,),
+        )]
 
 
 class InvoicePreviewDeletionError(ValueError):

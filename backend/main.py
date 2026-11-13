@@ -19,6 +19,9 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.paths import get_database_path as resolve_database_path
 from backend.document_storage import DocumentStore
+from backend.invoice_documents import (
+    InvoiceDocumentAssociationError, get_owned_invoice_document, invoice_document_name,
+)
 from backend.storage_import import prepare_database
 from backend.storage_errors import MESSAGES, error_code
 
@@ -31,6 +34,7 @@ from backend.database import (
     InvalidRecordError,
     PROJECT_ROOT,
     InvoiceAlreadyExistsError,
+    InvoiceDocumentConflictError,
     InvoicePreviewDeletionError,
     create_invoice_with_items,
     create_record,
@@ -791,6 +795,12 @@ def post_invoice(
             status_code=status.HTTP_409_CONFLICT,
             detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
         ) from error
+    except InvoiceDocumentConflictError as error:
+        pdf_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Die PDF-Datei ist bereits einer anderen Rechnung zugeordnet",
+        ) from error
     except ValueError as error:
         pdf_path.unlink(missing_ok=True)
         if "rechnungsnummernkreis" in str(error):
@@ -830,17 +840,14 @@ def delete_invoice(
             status_code=status.HTTP_409_CONFLICT,
             detail="Rechnungsvorschauen können nicht gelöscht werden",
         )
-    if existing_invoice["pdf_path"] and (
-        existing_invoice["pdf_path"]
-        != build_invoice_filename(
-            existing_invoice["year"],
-            existing_invoice["month"],
-        )
-    ):
+    try:
+        if existing_invoice["pdf_path"]:
+            get_owned_invoice_document(existing_invoice, database_path)
+    except InvoiceDocumentAssociationError as error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Die zugehörige PDF-Datei konnte nicht sicher zugeordnet werden",
-        )
+        ) from error
 
     try:
         invoice = delete_final_invoice(invoice_id, database_path)
@@ -857,15 +864,13 @@ def delete_invoice(
 
     pdf_path = invoice["pdf_path"]
     if pdf_path:
-        expected_filename = build_invoice_filename(
-            invoice["year"],
-            invoice["month"],
-        )
-        if pdf_path != expected_filename:
+        try:
+            expected_filename = invoice_document_name(invoice)
+        except InvoiceDocumentAssociationError as error:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Rechnung wurde gelöscht, die PDF-Datei konnte nicht sicher zugeordnet werden",
-            )
+            ) from error
         try:
             (invoice_directory / expected_filename).unlink(missing_ok=True)
         except OSError as error:
@@ -889,13 +894,15 @@ def get_invoice_pdf(
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
         )
 
-    if invoice["pdf_path"] != build_invoice_filename(invoice["year"], invoice["month"]):
+    try:
+        reference = get_owned_invoice_document(invoice, database_path)
+    except InvoiceDocumentAssociationError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Gespeicherte PDF-Rechnung wurde nicht gefunden",
-        )
+        ) from error
     try:
-        pdf_path = DocumentStore(invoice_directory).get_file(invoice["pdf_path"])
+        pdf_path = DocumentStore(invoice_directory).get_file(reference)
     except (ValueError, FileNotFoundError) as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -904,7 +911,7 @@ def get_invoice_pdf(
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
-        filename=build_invoice_filename(invoice["year"], invoice["month"]),
+        filename=reference,
         content_disposition_type="inline",
     )
 

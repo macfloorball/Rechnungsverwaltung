@@ -61,6 +61,66 @@ def test_health_and_request_validation(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize("kind", ["shared", "shared-case", "preview", "wrong-period", "valid"])
+def test_pdf_access_requires_unique_invoice_association(client: TestClient, kind):
+    from backend.database import create_record
+
+    path = client.app.state.test_database_path
+    reference = "Rechnung_TTC_2026-11.pdf"
+    invoice = {
+        "year": 2026, "month": 11, "invoice_date": "2026-11-30",
+        "total_amount_cents": 0, "pdf_path": reference,
+        "is_preview": int(kind == "preview"),
+    }
+    if kind == "wrong-period":
+        invoice["pdf_path"] = "Rechnung_TTC_2026-12.pdf"
+    invoice_id = create_record("invoices", invoice, path)
+    if kind.startswith("shared"):
+        create_record("invoices", invoice | {
+            "month": 12,
+            "pdf_path": reference.lower() if kind == "shared-case" else reference,
+        }, path)
+    directory = client.app.state.test_invoice_directory
+    directory.mkdir()
+    pdf = directory / reference
+    pdf.write_bytes(b"%PDF-original")
+    before = path.read_bytes()
+    response = client.get(f"/api/invoices/{invoice_id}/pdf")
+    assert response.status_code == (200 if kind == "valid" else 404)
+    if kind == "valid":
+        assert response.content == pdf.read_bytes()
+    else:
+        assert client.delete(f"/api/invoices/{invoice_id}").status_code == (
+            409 if kind == "preview" else 500
+        )
+    assert path.read_bytes() == before
+    assert pdf.read_bytes() == b"%PDF-original"
+
+
+def test_finalization_does_not_reuse_another_invoices_reference(client: TestClient):
+    from backend.database import create_record, get_organization, list_records
+
+    path = client.app.state.test_database_path
+    activity = client.put("/api/settings", json={"activities": [
+        {"name": "Training", "hourly_rate_cents": 1500},
+    ]}).json()["activities"][0]
+    client.post("/api/trainings", json={
+        "training_date": "2026-11-12", "activity_type_id": activity["id"],
+        "hours": 1, "status": "completed",
+    })
+    create_record("invoices", {
+        "year": 2026, "month": 12, "invoice_date": "2026-12-31",
+        "total_amount_cents": 0, "pdf_path": "Rechnung_TTC_2026-11.pdf",
+    }, path)
+    before = list_records("invoices", database_path=path)
+    sequence = get_organization(path)["next_invoice_number"]
+    response = client.post("/api/invoices", json={"year": 2026, "month": 11})
+    assert response.status_code == 409
+    assert list_records("invoices", database_path=path) == before
+    assert get_organization(path)["next_invoice_number"] == sequence
+    assert not (client.app.state.test_invoice_directory / "Rechnung_TTC_2026-11.pdf").exists()
+
+
 def test_hour_inputs_reject_fractional_and_comma_values(client: TestClient) -> None:
     settings = client.put(
         "/api/settings",

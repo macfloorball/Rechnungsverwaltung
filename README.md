@@ -516,9 +516,34 @@ aufgelöst und bleibt bei einem Wechsel des Arbeitsverzeichnisses stabil.
 Die Rechnungs-API nutzt den Dienst zum Schreiben und Auffinden von PDFs zunächst
 mit ihrem explizit übergebenen bisherigen Rechnungsverzeichnis. Dadurch bleiben
 vorhandene Dateien ohne Migration erreichbar. Der automatische Wechsel auf die
-Zielablage wird erst zusammen mit der Absicherung bestehender Dateizuordnungen
-umgesetzt. Datenbankreferenzen, Rechnungsnamen, Löschabläufe und Electron-Bridge
-bleiben in diesem Schritt unverändert.
+Zielablage folgt nach der Absicherung bestehender Dateizuordnungen. Schritt 2
+ändert weder Datenbankreferenzen noch Rechnungsnamen, Löschabläufe oder
+Electron-Bridge.
+
+### Eindeutige Dokumentenzuordnung (Phase 3, Schritt 3)
+
+Die bestehende Zuordnung bleibt erhalten: Eine finale Rechnung besitzt über
+`invoices.pdf_path` den einfachen Dateinamen
+`Rechnung_TTC_YYYY-MM.pdf` ihres Abrechnungszeitraums. Die vorhandene Fachlogik
+erlaubt eine finale Rechnung pro Zeitraum. Vorschauen besitzen keine gespeicherte
+PDF-Zuordnung; ihre Rechnungsdaten und Positionen werden weiterhin in SQLite verwaltet.
+
+`backend/invoice_documents.py` prüft für den PDF-Abruf und vor dem Löschen einer
+Rechnung, ob der Dateiverweis zum Zeitraum gehört und ausschließlich dieser
+finalen Rechnung zugeordnet ist. Auch abweichende Groß-/Kleinschreibung in weiteren
+Verweisen gilt wegen der Windows-Dateisystemsemantik als Konflikt. Ein ungültiger
+oder mehrdeutiger Verweis erlaubt keinen PDF-Abruf und verhindert das Löschen der
+Rechnung. Es erfolgt keine automatische Reparatur oder Änderung des Altbestands.
+Eine Finalisierung lehnt bereits vergebene Dateiverweise innerhalb derselben
+SQLite-Transaktion ab, bevor Vorschau oder Nummernkreis geändert werden.
+
+Logos bleiben als `organizations.logo_data` der Organisation zugeordnet; finale
+Rechnungen behalten ihren eigenen `logo_snapshot` samt Medientyp. Eine Änderung
+des aktuellen Logos verändert diese Rechnungssnapshots nicht. Das bisherige
+`logo_path` wird beim Logo-Upload geleert und nicht als Dateianhang geöffnet.
+Weitere frei hochladbare Anhänge sind bisher nicht implementiert und werden in
+diesem Schritt nicht eingeführt. Dateinamen, Schemaversion und Ablageverzeichnis
+bleiben unverändert; die zentrale Umstellung der verwendeten Pfade folgt separat.
 
 ### Schemaänderungen
 
