@@ -42,7 +42,9 @@ function formatRequestError(detail) {
 }
 
 function renderPreview(data, elements) {
-  const period = new Date(Date.UTC(data.year, data.month - 1, 1));
+  // Date.UTC interprets years below 100 as 1900–1999.
+  const period = new Date(0);
+  period.setUTCFullYear(data.year, data.month - 1, 1);
   elements.periodTitle.textContent =
     `Rechnung für die Übungsleitung im Zeitraum ${monthFormatter.format(period)}`;
   elements.items.replaceChildren();

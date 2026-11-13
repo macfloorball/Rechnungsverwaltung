@@ -1904,6 +1904,117 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
     assert preview.json()["total_amount_cents"] == 500
 
 
+@pytest.fixture
+def invoice_draft(client):
+    activity = client.put("/api/settings", json={"activities": [{"name": "Entwurf <Training>", "hourly_rate_cents": 1500}]}).json()["activities"][0]
+    trainings = [client.post("/api/trainings", json={
+        "training_date": f"2030-01-{day}", "activity_type_id": activity["id"], "hours": hours, "status": "completed",
+    }).json() for day, hours in ((15, 2), (16, None))]
+    period = {"year": 2030, "month": 1}
+    assert client.post("/api/invoices/preview", json=period).status_code == 200
+    from backend.database import list_records
+    draft = list_records("invoices", {"is_preview": 1}, client.app.state.test_database_path)[0]
+    return period, draft["id"], trainings
+
+
+def test_preview_refresh_replaces_draft_without_pdf_archive_or_number(client, invoice_draft, monkeypatch):
+    from backend.database import get_organization, list_records
+    from backend import main
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    sequence = get_organization(database)["next_invoice_number"]
+    def no_pdf(*args, **kwargs):
+        raise AssertionError("Eine Vorschau darf keine PDF rendern")
+    monkeypatch.setattr(main, "render_invoice_pdf", no_pdf)
+    assert client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 4}).status_code == 200
+    assert client.delete(f"/api/trainings/{trainings[1]['id']}").status_code == 204
+    response = client.post("/api/invoices/preview", json=period)
+    assert response.status_code == 200
+    assert response.json()["total_amount_cents"] == 6000
+    assert [item["training_id"] for item in response.json()["items"]] == [trainings[0]["id"]]
+    for _ in range(2):
+        assert client.post("/api/invoices/preview", json=period).json() == response.json()
+    initialize_database(database)
+    stored = get_invoice(draft_id, database)
+    assert stored["is_preview"] == 1 and stored["total_amount_cents"] == 6000
+    assert len(stored["items"]) == 1 and stored["items"][0]["hours"] == 4
+    assert stored["invoice_number"] is None and stored["pdf_path"] is None
+    assert stored["invoice_snapshot_json"] is None
+    assert [row["id"] for row in list_records("invoices", database_path=database)] == [draft_id]
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert client.get("/api/invoices").json() == []
+    assert client.get(f"/api/invoices/{draft_id}/pdf").status_code == 404
+    assert not list(client.app.state.test_invoice_directory.glob("*"))
+
+
+def test_refreshing_empty_draft_clears_stale_items_and_preserves_other_period(client, invoice_draft):
+    from backend.database import list_records
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    assert client.post("/api/invoices/preview", json={"year": 2030, "month": 2}).status_code == 200
+    other = next(row for row in list_records("invoices", database_path=database) if row["month"] == 2)
+    other_before = get_invoice(other["id"], database)
+    for training in trainings:
+        assert client.delete(f"/api/trainings/{training['id']}").status_code == 204
+    response = client.post("/api/invoices/preview", json=period)
+    assert response.json() == {**period, "items": [], "total_amount_cents": 0}
+    initialize_database(database)
+    assert get_invoice(draft_id, database)["items"] == []
+    assert get_invoice(draft_id, database)["total_amount_cents"] == 0
+    assert get_invoice(other["id"], database) == other_before
+
+
+def test_zero_price_preview_keeps_its_position(client):
+    activity = client.put("/api/settings", json={"activities": [{"name": "Kostenfrei", "hourly_rate_cents": 0}]}).json()["activities"][0]
+    training = client.post("/api/trainings", json={"training_date": "2030-01-01", "activity_type_id": activity["id"], "status": "completed"}).json()
+    response = client.post("/api/invoices/preview", json={"year": 2030, "month": 1})
+    assert response.status_code == 200
+    assert response.json()["total_amount_cents"] == 0
+    assert len(response.json()["items"]) == 1
+    assert response.json()["items"][0]["training_id"] == training["id"]
+    assert response.json()["items"][0]["hours"] is None
+
+
+def test_failed_draft_refresh_rolls_back_items_and_can_be_retried(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    before = get_invoice(draft_id, database)
+    sequence = get_organization(database)["next_invoice_number"]
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 10})
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TRIGGER reject_draft_item BEFORE INSERT ON invoice_items BEGIN SELECT RAISE(ABORT, 'Testfehler'); END")
+    try:
+        assert client.post("/api/invoices/preview", json=period).status_code == 409
+        assert get_invoice(draft_id, database) == before
+        assert get_organization(database)["next_invoice_number"] == sequence
+    finally:
+        with sqlite3.connect(database) as connection:
+            connection.execute("DROP TRIGGER reject_draft_item")
+    assert client.post("/api/invoices/preview", json=period).json()["total_amount_cents"] == 16500
+
+
+@pytest.mark.parametrize("period", [
+    {"year": 0, "month": 1}, {"year": 10000, "month": 1},
+    {"year": 2030, "month": 0}, {"year": 2030, "month": 13},
+    {"year": None, "month": 1}, {"year": 2030},
+    {"year": 2030, "month": 1.5}, {"year": 2030.5, "month": 1},
+    {"year": 2030, "month": 1, "extra": True},
+])
+def test_invalid_preview_period_preserves_existing_draft(client, invoice_draft, period):
+    from backend.database import list_records
+
+    _, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    before = get_invoice(draft_id, database)
+    assert client.post("/api/invoices/preview", json=period).status_code == 422
+    assert get_invoice(draft_id, database) == before
+    assert [row["id"] for row in list_records("invoices", database_path=database)] == [draft_id]
+
+
 def test_invoice_preview_matches_example_and_refreshes_saved_preview(
     client: TestClient,
 ) -> None:

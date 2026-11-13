@@ -294,6 +294,77 @@ async function run() {
   await fs.writeFile(path.join(output, 'calendar-state.json'), JSON.stringify({year,month,plan,calendar:finalCalendar}));
   console.log('DESKTOP_CALENDAR_CHECK saved');
 
+  const previewReady = `!document.querySelector('#invoice-preview').hidden &&
+    document.querySelector('#invoice-preview-form').getAttribute('aria-busy') === 'false'`;
+  async function startPreview(period) {
+    const loading = await js(`(() => {
+      const month = document.querySelector('#invoice-month');
+      month.value = '${period}'; month.dispatchEvent(new Event('input', {bubbles:true}));
+      document.querySelector('#invoice-preview-form').requestSubmit();
+      return {
+        busy:document.querySelector('#invoice-preview-form').getAttribute('aria-busy') === 'true',
+        monthDisabled:month.disabled,
+        submitDisabled:document.querySelector('#load-invoice-preview').disabled,
+        createDisabled:document.querySelector('#create-invoice').disabled,
+        loadingVisible:!document.querySelector('#invoice-preview-status').hidden,
+      };
+    })()`);
+    assert.deepEqual(loading, {busy:true,monthDisabled:true,submitDisabled:true,createDisabled:true,loadingVisible:true});
+  }
+  async function loadPreview(period) {
+    await startPreview(period);
+    await until(() => js(previewReady), 'preview loaded');
+    assert.equal(await js('document.querySelector("#invoice-month").disabled || document.querySelector("#load-invoice-preview").disabled'), false);
+  }
+  const sequenceBeforePreview = (await (await fetch(new URL('/api/organization/settings', origin))).json()).next_invoice_number;
+  for (const [period, title] of [['0001-01', 'Januar 1'], ['0099-12', 'Dezember 99'], ['2020-03', 'März 2020']]) {
+    await loadPreview(period);
+    const actualTitle = await js('document.querySelector("#invoice-period-title").textContent');
+    assert.ok(actualTitle.endsWith(title), actualTitle);
+    assert.equal(await js('document.querySelectorAll("#invoice-items tr").length'), 0);
+    assert.equal(await js('document.querySelector("#invoice-empty").hidden'), false);
+    assert.equal(await js('document.querySelector("#create-invoice").disabled'), true);
+  }
+  const zeroActivity = (await (await fetch(new URL('/api/settings', origin), {
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({activities:[{name:'GUI Kostenfrei <Prüfung>',hourly_rate_cents:0}]}),
+  })).json()).activities.find(activity => activity.name === 'GUI Kostenfrei <Prüfung>');
+  const zeroTraining = await fetch(new URL('/api/trainings', origin), {
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({training_date:'2020-03-15',activity_type_id:zeroActivity.id,status:'completed'}),
+  });
+  assert.equal(zeroTraining.status, 201);
+  await loadPreview('2020-03');
+  assert.equal(await js('document.querySelectorAll("#invoice-items tr").length'), 1);
+  assert.equal(await js('document.querySelector("#invoice-items th").textContent'), 'GUI Kostenfrei <Prüfung>');
+  assert.equal(await js('document.querySelector("#invoice-items tr").children[2].textContent'), '–');
+  assert.match(await js('document.querySelector("#invoice-total").textContent'), /0,00/);
+  assert.equal(await js('document.querySelector("#invoice-empty").hidden'), true);
+  assert.equal(await js('document.querySelector("#create-invoice").disabled'), false);
+  assert.deepEqual(await (await fetch(new URL('/api/invoices', origin))).json(), []);
+  assert.equal((await (await fetch(new URL('/api/organization/settings', origin))).json()).next_invoice_number, sequenceBeforePreview);
+  const previewDocuments = await fs.readdir(directory).catch(error => {
+    assert.equal(error.code, 'ENOENT');
+    return [];
+  });
+  assert.deepEqual(previewDocuments, []);
+
+  expectedHTTPFailure = 503;
+  await fs.rename(database, heldDatabase);
+  try {
+    await startPreview('2020-03');
+    await until(() => js(`!document.querySelector('#invoice-preview-error').hidden &&
+      document.querySelector('#invoice-preview-form').getAttribute('aria-busy') === 'false'`), 'preview save error');
+    assert.equal(await js('document.querySelector("#invoice-preview").hidden && document.querySelector("#create-invoice").disabled'), true);
+    assert.equal(await js('document.querySelector("#invoice-month").disabled || document.querySelector("#load-invoice-preview").disabled'), false);
+  } finally {
+    await fs.rename(heldDatabase, database);
+    expectedHTTPFailure = null;
+  }
+  await loadPreview('2020-03');
+  assert.equal(await js('document.querySelector("#invoice-preview-error").hidden'), true);
+  console.log('DESKTOP_PREVIEW_CHECK saved');
+
   const seed = await js(`(async () => {
     async function request(url, body) {
       const response = await fetch(url, {method: url === '/api/settings' ? 'PUT' : 'POST',
@@ -314,8 +385,6 @@ async function run() {
     document.querySelector('#invoice-preview-form').requestSubmit();
     return {completedId,activityId:invoiceActivity.id};
   })()`);
-  const previewReady = `!document.querySelector('#invoice-preview').hidden &&
-    document.querySelector('#invoice-preview-form').getAttribute('aria-busy') === 'false'`;
   await until(() => js(previewReady), 'invoice preview');
   assert.equal(await js('document.querySelectorAll("#invoice-items tr").length'), 1);
   assert.match(await js('document.querySelector("#invoice-items").textContent'), /Electron Testtraining/);

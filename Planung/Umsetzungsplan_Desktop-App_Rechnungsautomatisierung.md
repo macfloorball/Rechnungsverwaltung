@@ -391,7 +391,11 @@ Internet und ohne Anmeldung unterstützen.
     Wiederholung und Monatsaktion per API geprüft. Echte Offline-Electron-Tests
     ergänzen Checkbox, „Nicht gemacht“, Dialogkorrektur, Speicherfehler und
     Datenerhalt aller drei Statuswerte nach vollständigem App-Neustart.
--   [ ] Rechnungsentwürfe und Rechnungsvorschauen testen.
+-   [x] Rechnungsentwürfe und Rechnungsvorschauen testen.
+    Gespeicherte Vorschauen als bestehende Entwurfsform geprüft: Aktualisieren,
+    Leeren, Transaktionsfehler, ungültige Zeiträume und Datenerhalt. Echte
+    Offline-Electron-Tests prüfen Anzeige, Monatswahl, Lade-/Fehlerzustände und
+    Wiederholen. Falsche Vorschau-Jahresanzeige für Jahre unter 100 korrigiert.
 -   [ ] Finale Rechnungen, erneute Vorschauen und das Löschen finaler
     Rechnungen gemäß der vorgesehenen Geschäftslogik testen.
 -   [ ] Prüfen, dass nur abrechnungsfähige bzw. erledigte Leistungen in
@@ -585,6 +589,40 @@ Standard-/eigener Dokumentenablage, ausschließlich mit temporären Daten.
 Am Produktcode war für diesen Schritt keine Änderung erforderlich. Die
 Abrechnungsfilter werden in den folgenden Schritten gesondert geprüft;
 native Windows-Abnahme und manuelle Betriebssystemdialoge bleiben offen.
+
+## Entwürfe und Rechnungsvorschauen prüfen (Schritt 9)
+
+Die bestehende Entwurfsform ist die in SQLite gespeicherte, aktualisierbare
+Vorschau (`is_preview = 1`); eine separate Entwurfsansicht oder manuelle
+Positionsbearbeitung wurde nicht eingeführt.
+
+13 zusätzliche API-Fälle sichern folgende Eigenschaften ab:
+
+- Wiederholte Vorschauen aktualisieren denselben Entwurf und ersetzen dessen
+  Positionen. Geänderte und gelöschte Termine werden bei Aktualisierung
+  berücksichtigt; ein leer gewordener Monat enthält keine veralteten Positionen.
+  Entwürfe anderer Monate bleiben erhalten.
+- Vorschauen erzeugen weder PDF noch Rechnungsnummer oder Archiveintrag.
+  Erneute Datenbankinitialisierung erhält den Entwurf. Eine vorhandene Position
+  mit Preis null bleibt von einem Monat ohne Positionen unterscheidbar.
+- Ein erzwungener SQLite-Fehler beim Ersetzen der Positionen rollt die gesamte
+  Aktualisierung zurück; der vorherige Entwurf bleibt vollständig erhalten.
+  Nach Beseitigung des Fehlers gelingt der erneute Versuch. Ungültige Zeiträume
+  werden ohne Änderung des vorhandenen Entwurfs abgelehnt.
+
+Die echten Electron-Tests prüfen Monatswahl und Ladezustand, leere Vorschauen,
+Pauschalposition ohne Stunden, Preis null, sichere Textanzeige mit Sonderzeichen
+sowie sichtbare Speicherfehler und erneuten Abruf. Ohne Finalisierung bleiben
+Archiv, Dokumentenordner und Nummernkreis unverändert. Ein gespeicherter Entwurf
+wird vor und nach vollständigem App-Neustart direkt aus SQLite verglichen,
+damit ein neuer Vorschauabruf den Persistenznachweis nicht verdeckt.
+
+Bei der Prüfung der gültigen Jahre 1 und 99 wurde eine falsche Jahresanzeige
+gefunden: `Date.UTC` interpretiert diese als 1901 beziehungsweise 1999.
+Die Vorschau setzt das UTC-Jahr jetzt ausdrücklich und zeigt den angeforderten
+Zeitraum korrekt. Alle vier Offline-Varianten aus Entwicklung/Produktion und
+Standard-/eigener Ablage werden geprüft. Finale Rechnungsabläufe und vollständige
+Abrechnungsfilter folgen separat; native Windows-Abnahme bleibt offen.
 
 ## Ergebnis / Abnahmekriterien
 

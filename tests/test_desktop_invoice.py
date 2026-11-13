@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 
@@ -99,6 +100,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert "DESKTOP_RECIPIENT_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_CALENDAR_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_STATUS_CHECK saved" in stdout, stdout + stderr
+    assert "DESKTOP_PREVIEW_CHECK saved" in stdout, stdout + stderr
     if offline_namespace:
         assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
@@ -113,6 +115,21 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert evidence["pdfBytes"] > 1000
     assert (output / "preview.png").stat().st_size > 1000
     assert (output / "download.pdf").read_bytes() == (output / "Rechnung_TTC_2020-01.pdf").read_bytes()
+    def stored_preview():
+        with sqlite3.connect(profile / "ttc.db") as connection:
+            draft = connection.execute(
+                "SELECT id, is_preview, total_amount_cents, invoice_number, pdf_path "
+                "FROM invoices WHERE year = 2020 AND month = 3"
+            ).fetchone()
+            assert draft is not None
+            assert draft[1:] == (1, 0, None, None)
+            items = connection.execute(
+                "SELECT description, hours, unit_rate_cents, amount_cents FROM invoice_items WHERE invoice_id = ?",
+                (draft[0],),
+            ).fetchall()
+            assert items == [("GUI Kostenfrei <Prüfung>", None, 0, 0)]
+            return draft, items
+    preview_before_restart = stored_preview()
     # A second complete Electron launch reuses the profile after the first
     # application's normal shutdown, including its managed Python backend.
     stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1"})
@@ -126,4 +143,5 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert json.loads(resumed.removeprefix("DESKTOP_PDF_RESUME ")) == {
         "invoices": 2, "totalCents": 6000, "handoffs": 1,
     }
+    assert stored_preview() == preview_before_restart
     print(f"Electron {mode}, custom documents={custom_documents}: {output}")
