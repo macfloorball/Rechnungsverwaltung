@@ -619,6 +619,74 @@ def test_activity_prices_are_centralized_in_settings(client: TestClient) -> None
     assert response.json()["activities"][0]["hourly_rate_cents"] == 1750
 
 
+RECIPIENT_LIMITS = {
+    "recipient_name": 200,
+    "recipient_street": 200,
+    "recipient_postal_code": 20,
+    "recipient_city": 100,
+    "recipient_email": 254,
+}
+
+
+def test_recipient_can_be_edited_partially_and_cleared(client: TestClient) -> None:
+    original = client.get("/api/organization/settings").json()
+    recipient = {
+        "recipient_name": "TTC O'Brien & Söhne <Verein>",
+        "recipient_street": "Äußere Straße 7",
+        "recipient_postal_code": "01234",
+        "recipient_city": "Köln",
+        "recipient_email": "kontakt@example.org",
+    }
+    response = client.put("/api/organization/settings", json={
+        key: f"  {value}  " for key, value in recipient.items()
+    })
+    assert response.status_code == 200
+    assert {key: response.json()[key] for key in recipient} == recipient
+    assert response.json()["name"] == original["name"]
+    assert response.json()["next_invoice_number"] == original["next_invoice_number"]
+
+    response = client.put("/api/organization/settings", json={"recipient_city": "Bonn"})
+    assert response.status_code == 200
+    recipient["recipient_city"] = "Bonn"
+    assert {key: response.json()[key] for key in recipient} == recipient
+    initialize_database(client.app.state.test_database_path)
+    loaded = client.get("/api/organization/settings").json()
+    assert {key: loaded[key] for key in recipient} == recipient
+
+    response = client.put("/api/organization/settings", json={key: "  " for key in recipient})
+    assert response.status_code == 200
+    assert all(response.json()[key] == "" for key in recipient)
+    assert all(client.get("/api/organization/settings").json()[key] == "" for key in recipient)
+    assert response.json()["name"] == original["name"]
+
+
+@pytest.mark.parametrize("field,limit", RECIPIENT_LIMITS.items())
+def test_recipient_accepts_maximum_field_lengths(client: TestClient, field: str, limit: int) -> None:
+    value = "a" * limit if field != "recipient_email" else "a" * (limit - 12) + "@example.org"
+    response = client.put("/api/organization/settings", json={field: value})
+    assert response.status_code == 200
+    assert client.get("/api/organization/settings").json()[field] == value
+
+
+@pytest.mark.parametrize("field,limit", RECIPIENT_LIMITS.items())
+@pytest.mark.parametrize("kind", ["too-long", "null", "wrong-type"])
+def test_invalid_recipient_update_preserves_all_settings(client: TestClient, field: str, limit: int, kind: str) -> None:
+    original = client.get("/api/organization/settings").json()
+    value = {"too-long": "a" * (limit + 1), "null": None, "wrong-type": []}[kind]
+    response = client.put("/api/organization/settings", json={"name": "Nicht speichern", field: value})
+    assert response.status_code == 422
+    assert any(error["loc"][-1] == field for error in response.json()["detail"])
+    assert client.get("/api/organization/settings").json() == original
+
+
+@pytest.mark.parametrize("email", ["ungueltig", "a b@example.org", "a@@example.org"])
+def test_invalid_recipient_email_preserves_existing_data(client: TestClient, email: str) -> None:
+    original = client.get("/api/organization/settings").json()
+    response = client.put("/api/organization/settings", json={"recipient_city": "Nicht speichern", "recipient_email": email})
+    assert response.status_code == 422
+    assert client.get("/api/organization/settings").json() == original
+
+
 def test_organization_settings_are_validated_and_persist_after_restart(
     client: TestClient,
 ) -> None:
@@ -744,6 +812,11 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
         "/api/organization/settings",
         json={
             "name": "Alter Absender",
+            "recipient_name": "Alter Empfänger",
+            "recipient_street": "Alte Straße 1",
+            "recipient_postal_code": "01234",
+            "recipient_city": "Köln",
+            "recipient_email": "alt@example.org",
             "city": "Köln",
             "iban": "DE89370400440532013000",
             "account_holder": "Alter Kontoinhaber",
@@ -792,6 +865,11 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
         "/api/organization/settings",
         json={
             "name": "Neuer Absender",
+            "recipient_name": "Neuer Empfänger",
+            "recipient_street": "Neue Straße 2",
+            "recipient_postal_code": "56789",
+            "recipient_city": "Bonn",
+            "recipient_email": "neu@example.org",
             "iban": "DE12500105170648489890",
             "account_holder": "Neuer Kontoinhaber",
             "payment_due_days": 30,
@@ -819,6 +897,10 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
             (first_invoice["id"],),
         ).fetchone()[0]
     assert snapshots[first_invoice["id"]]["name"] == "Alter Absender"
+    for field, value in {"recipient_name": "Alter Empfänger", "recipient_street": "Alte Straße 1",
+                         "recipient_postal_code": "01234", "recipient_city": "Köln", "recipient_email": "alt@example.org"}.items():
+        assert snapshots[first_invoice["id"]][field] == value
+        assert snapshots[second_invoice["id"]][field] == changed.json()[field]
     assert snapshots[first_invoice["id"]]["iban"] == "DE89370400440532013000"
     assert snapshots[first_invoice["id"]]["items"][0]["unit_rate_cents"] == 1500
     assert snapshots[second_invoice["id"]]["name"] == "Neuer Absender"

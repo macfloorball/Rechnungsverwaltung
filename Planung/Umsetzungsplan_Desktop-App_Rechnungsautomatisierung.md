@@ -375,7 +375,11 @@ Internet und ohne Anmeldung unterstützen.
     jeweils mit Standard-/eigener Dokumentenablage und vollständigem Neustart.
     Nur Loopback aktiv; externe IPv4-/IPv6-Verbindungen scheitern nachweislich.
     Reproduktion und Abgrenzung siehe README und Offline-Prüfung unten.
--   [ ] Kundenverwaltung vollständig testen.
+-   [x] Kundenverwaltung vollständig testen.
+    Bestehenden Umfang geprüft: ein Rechnungsempfänger in den
+    Organisationseinstellungen, keine separate Kundenkartei. API- und echte
+    Electron-Tests decken alle fünf Felder, Änderungen, Leeren, Validierung,
+    Persistenz und unveränderte Empfänger-Snapshots finaler Rechnungen ab.
 -   [ ] Wochenplan und Terminverwaltung vollständig testen.
 -   [ ] Statusverwaltung für erledigte und nicht erledigte Termine
     testen.
@@ -487,6 +491,31 @@ Native Windows-Ausführung und das physische Abschalten eines Netzwerkadapters
 bleiben separat offen. Die PDF-Übergabe wird weiterhin abgefangen und Dialoge
 werden kontrolliert beantwortet; Anzeige/Druck im tatsächlichen Standardbrowser
 und manuelle Betriebssystemdialoge sind durch diesen Test nicht abgenommen.
+
+## Empfängerverwaltung prüfen (Schritt 6)
+
+Gemäß Bestandsaufnahme aus Phase 0 bedeutet Kundenverwaltung hier die
+vorhandene Pflege eines Rechnungsempfängers in den Organisationseinstellungen.
+Eine Kundenliste, mehrere Empfänger oder das Löschen eines Kundendatensatzes
+sind nicht implementiert und wurden nicht neu eingeführt.
+
+- `tests/test_api.py` ergänzt 24 Fälle: Laden und Speichern aller fünf Felder,
+  Leerzeichenbereinigung, Unicode/Sonderzeichen, führende Null der Postleitzahl,
+  Teiländerung, erneute Initialisierung und Leeren. Grenzwerte werden pro Feld
+  akzeptiert; Überlängen, `null`, falsche Datentypen und ungültige E-Mail-Adressen
+  werden abgelehnt, ohne andere Einstellungen teilweise zu ändern.
+- Der bestehende Snapshot-Test prüft nun zusätzlich alle Empfängerfelder:
+  Änderungen gelten für neue Rechnungen; ältere Snapshots und gespeicherte
+  PDFs bleiben erhalten.
+- Der echte Electron-Test verwendet das vorhandene Formular: ungültige
+  E-Mail-Adresse abweisen, alle Felder ausfüllen und speichern, optionale
+  E-Mail-Adresse wieder leeren, übrige Daten erhalten und nach Neuladen sowie
+  vollständigem App-Neustart wieder anzeigen. Alle vier Varianten aus
+  Entwicklung/Produktion und Standard-/eigener Ablage werden offline geprüft.
+
+Die Tests verwenden ausschließlich temporäre Daten. Es war keine Änderung
+am Produktcode erforderlich. Native Windows-Abnahme und tatsächliche
+PDF-Darstellung im Standardbrowser bleiben wie bisher separat offen.
 
 ## Ergebnis / Abnahmekriterien
 

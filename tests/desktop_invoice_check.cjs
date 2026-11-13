@@ -15,6 +15,13 @@ app.setPath('userData', process.env.TTC_DATA_DIRECTORY);
 app.setPath('sessionData', process.env.TTC_DATA_DIRECTORY);
 const handoffs = [];
 const errors = [];
+const recipient = {
+  recipient_name: "TTC O'Brien & Söhne <Verein>",
+  recipient_street: 'Äußere Straße 7',
+  recipient_postal_code: '01234',
+  recipient_city: 'Köln',
+  recipient_email: '',
+};
 let expectedHTTPFailure = null;
 // Exercise the real URL-validation/window-open handler, but keep test links out
 // of the user's browser. Native browser rendering/printing remains manual QA.
@@ -72,7 +79,14 @@ async function run() {
 
   const origin = new URL('/', contents.getURL()).href;
   const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');
+  const recipientValues = `Object.fromEntries(${JSON.stringify(Object.keys(recipient))}.map(name =>
+    [name, document.querySelector('#organization-settings-form').elements.namedItem(name).value]))`;
+  await until(() => js('Boolean(document.querySelector(\'#organization-settings-form input[name="invoice_number_prefix"]\').value)'), 'organization settings loaded');
   if (process.env.TTC_TEST_RESUME === '1') {
+    assert.deepEqual(await js(recipientValues), recipient);
+    const settings = await (await fetch(new URL('/api/organization/settings', origin))).json();
+    for (const [key, value] of Object.entries(recipient)) assert.equal(settings[key], value);
+    console.log('DESKTOP_RECIPIENT_CHECK restart');
     const invoices = await (await fetch(new URL('/api/invoices', origin))).json();
     assert.equal(invoices.length, 2);
     const january = invoices.find(invoice => invoice.year === 2020 && invoice.month === 1);
@@ -95,6 +109,37 @@ async function run() {
     console.log('DESKTOP_PDF_RESUME ' + JSON.stringify({invoices:2,totalCents:6000,handoffs:1}));
     return;
   }
+
+  const originalSettings = await (await fetch(new URL('/api/organization/settings', origin))).json();
+  await js(`const form = document.querySelector('#organization-settings-form');
+    form.elements.namedItem('recipient_email').value = 'ungueltig';
+    form.requestSubmit();`);
+  assert.equal(await js('document.querySelector(\'#organization-settings-form input[name="recipient_email"]\').checkValidity()'), false);
+  assert.deepEqual(await (await fetch(new URL('/api/organization/settings', origin))).json(), originalSettings);
+  async function saveRecipient(values) {
+    await js(`(() => {
+      const form = document.querySelector('#organization-settings-form');
+      for (const [name, value] of Object.entries(${JSON.stringify(values)})) form.elements.namedItem(name).value = value;
+      document.querySelector('#organization-settings-success').hidden = true;
+      form.requestSubmit();
+    })()`);
+    await until(() => js('!document.querySelector("#organization-settings-success").hidden && !document.querySelector("#save-organization-settings").disabled'), 'recipient saved');
+    assert.equal(await js('document.querySelector("#organization-settings-error").hidden'), true);
+  }
+  await saveRecipient(Object.fromEntries(Object.entries({...recipient, recipient_email:'kontakt@example.org'})
+    .map(([key, value]) => [key, `  ${value}  `])));
+  assert.deepEqual(await js(recipientValues), {...recipient, recipient_email:'kontakt@example.org'});
+  await saveRecipient({recipient_email:''});
+  const savedSettings = await (await fetch(new URL('/api/organization/settings', origin))).json();
+  for (const [key, value] of Object.entries(recipient)) assert.equal(savedSettings[key], value);
+  assert.equal(savedSettings.name, originalSettings.name);
+  assert.equal(savedSettings.next_invoice_number, originalSettings.next_invoice_number);
+  await new Promise(resolve => {
+    contents.once('did-finish-load', resolve);
+    contents.reload();
+  });
+  await until(() => js(`JSON.stringify(${recipientValues}) === ${JSON.stringify(JSON.stringify(recipient))}`), 'recipient persisted in form');
+  console.log('DESKTOP_RECIPIENT_CHECK saved');
 
   const seed = await js(`(async () => {
     async function request(url, body) {

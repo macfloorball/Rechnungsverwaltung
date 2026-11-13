@@ -96,6 +96,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     if mode == "production":
         args.append("--desktop-production")
     stdout, stderr = _run_electron(args, tmp_path, environment)
+    assert "DESKTOP_RECIPIENT_CHECK saved" in stdout, stdout + stderr
     if offline_namespace:
         assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
@@ -113,6 +114,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     # A second complete Electron launch reuses the profile after the first
     # application's normal shutdown, including its managed Python backend.
     stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1"})
+    assert "DESKTOP_RECIPIENT_CHECK restart" in stdout, stdout + stderr
     if offline_namespace:
         assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     resumed = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_RESUME ")), None)
