@@ -7,6 +7,7 @@ import sqlite3
 import stat
 import tempfile
 import zipfile
+import zlib
 from contextlib import closing
 from pathlib import Path
 
@@ -47,6 +48,8 @@ def stage_backup(archive_path: Path, stage: Path) -> None:
             folded.add(name.casefold())
             entry = archive.getinfo(name)
             mode = entry.external_attr >> 16
+            if entry.flag_bits & 1:
+                raise ValueError('Verschlüsselte ZIP-Einträge werden nicht unterstützt.')
             if entry.is_dir() or stat.S_ISLNK(mode) or (stat.S_IFMT(mode) not in (0, stat.S_IFREG)):
                 raise ValueError('Nur reguläre Dateien sind zulässig.')
             if not isinstance(metadata, dict) or entry.file_size != metadata.get('size'):
@@ -86,7 +89,7 @@ def restore_backup(
         stage = Path(temporary)
         try:
             stage_backup(archive, stage)
-        except (KeyError, TypeError, zipfile.BadZipFile, json.JSONDecodeError) as error:
+        except (KeyError, TypeError, zipfile.BadZipFile, json.JSONDecodeError, zlib.error, NotImplementedError) as error:
             raise ValueError('Ungültige oder beschädigte Sicherung.') from error
         if target.resolve() == safety_directory.resolve() or target.resolve() in safety_directory.resolve().parents:
             raise ValueError('Sicherheitskopie muss außerhalb des neuen Profils liegen.')

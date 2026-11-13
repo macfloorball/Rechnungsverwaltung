@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import zipfile
 
 import pytest
 
@@ -104,6 +105,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert "DESKTOP_STATUS_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_PREVIEW_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_FINAL_CHECK saved" in stdout, stdout + stderr
+    assert "DESKTOP_BACKUP_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_BILLABLE_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_EMPTY_CHECK saved" in stdout, stdout + stderr
     if offline_namespace:
@@ -146,6 +148,28 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
             assert positions == [("Electron Testtraining", 4, 6000, "completed")]
             return positions
     final_positions_before_restart = billable_final_positions()
+    # Restore the real GUI backup offline, then launch the restored profile.
+    backup = next((output / "backups").glob("*.zip"))
+    restored = tmp_path / "Restored Profile"
+    documents = Path(environment.get("TTC_DOCUMENT_DIRECTORY", str(profile / "documents")))
+    subprocess.run([
+        sys.executable, "-m", "backend.backup_restore", "--archive", str(backup),
+        "--target", str(restored), "--current-database", str(profile / "ttc.db"),
+        "--current-documents", str(documents), "--safety-directory", str(output / "safety"), "--confirm",
+    ], cwd=installation, env=environment, capture_output=True, text=True, check=True, timeout=20)
+    with sqlite3.connect(profile / "ttc.db") as before, sqlite3.connect(restored / "ttc.db") as after:
+        for table in ("organizations", "activity_types", "weekly_plan", "trainings", "invoices", "invoice_items"):
+            assert before.execute(f"SELECT * FROM {table} ORDER BY id").fetchall() == after.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()
+    with zipfile.ZipFile(output / "export.zip") as exported:
+        assert "csv/trainings.csv" in exported.namelist()
+        assert exported.read("documents/Rechnung_TTC_2020-01.pdf") == (output / "recreated.pdf").read_bytes()
+    stdout, stderr = _run_electron(args, tmp_path, environment | {
+        "TTC_TEST_RESUME": "1", "TTC_DATA_DIRECTORY": str(restored),
+        "TTC_DOCUMENT_DIRECTORY": str(restored / "documents"),
+    })
+    assert "DESKTOP_PDF_RESUME " in stdout, stdout + stderr
+    assert list((output / "safety").glob("*.zip"))
+    print(f"Backup, CSV download and restored profile restart verified: {mode}, custom documents={custom_documents}")
     # A second complete Electron launch reuses the profile after the first
     # application's normal shutdown, including its managed Python backend.
     stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1"})

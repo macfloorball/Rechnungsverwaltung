@@ -1037,7 +1037,7 @@ keinen Schalter zum Umgehen der Sicherheitskopie.
 
 #### Datenexport
 
-**CSV und Dokumente exportieren** liefert ein ZIP mit sieben Tabellen
+**CSV und Dokumente exportieren** liefert ein ZIP mit sechs Tabellen
 (Organisation/Empfänger/Einstellungen, Tätigkeiten, Wochenplan, Termine,
 Rechnungen und Rechnungspositionen) sowie unveränderten PDFs/Anhängen.
 CSV verwendet UTF-8 mit BOM, Semikolon und Kopfzeilen; Geldbeträge bleiben Cent,

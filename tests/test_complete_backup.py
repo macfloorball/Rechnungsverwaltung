@@ -228,3 +228,74 @@ def test_csv_export_preserves_values_and_defuses_formulas(inventory, tmp_path):
         assert row['logo_data'] == 'base64:bG9nbw=='
         assert row['id'] == '1'
         assert 'csv/invoice_items.csv' in archive.namelist()
+
+
+@pytest.mark.parametrize('kind', ['directory', 'symlink', 'windows-name', 'case-collision'])
+def test_nonportable_documents_abort_without_publication(inventory, kind):
+    documents = inventory[1]
+    if kind == 'directory':
+        (documents / 'subfolder').mkdir()
+    elif kind == 'symlink':
+        (documents / 'link.pdf').symlink_to(documents / 'Beleg.pdf')
+    elif kind == 'windows-name':
+        (documents / 'CON.pdf').write_bytes(b'bad name')
+    else:
+        (documents / 'beleg.pdf').write_bytes(b'ambiguous')
+    with pytest.raises((OSError, ValueError)):
+        create_backup(*inventory)
+    assert not list(inventory[2].glob('*.zip'))
+
+
+@pytest.mark.parametrize('error_number', [13, 28])
+def test_copy_failure_preserves_originals(inventory, monkeypatch, error_number):
+    import backend.backup_service as service
+    def fail(*args):
+        raise OSError(error_number, 'simulated filesystem failure')
+    monkeypatch.setattr(service.shutil, 'copyfileobj', fail)
+    with pytest.raises(OSError):
+        create_backup(*inventory)
+    assert not list(inventory[2].iterdir())
+    assert (inventory[1] / 'Beleg.pdf').read_bytes() == b'%PDF-test'
+
+
+def test_restore_rejects_symlink_and_excessive_size(inventory, tmp_path, monkeypatch):
+    import stat
+    import backend.backup_restore as restore
+    archive = create_backup(*inventory)
+    kwargs = dict(confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
+    monkeypatch.setattr(restore, 'MAX_TOTAL_BYTES', 1)
+    with pytest.raises(ValueError, match='Limit|limit'):
+        restore.restore_backup(archive, tmp_path / 'new', **kwargs)
+    monkeypatch.setattr(restore, 'MAX_TOTAL_BYTES', 8 * 1024**3)
+    with zipfile.ZipFile(archive) as source, zipfile.ZipFile(tmp_path / 'symlink.zip', 'w') as output:
+        for name in source.namelist():
+            info = zipfile.ZipInfo(name)
+            info.external_attr = (stat.S_IFLNK | 0o777) << 16 if name.startswith('documents/') else (stat.S_IFREG | 0o600) << 16
+            output.writestr(info, source.read(name))
+    with pytest.raises(ValueError, match='reguläre'):
+        restore.restore_backup(tmp_path / 'symlink.zip', tmp_path / 'new', **kwargs)
+    assert not (tmp_path / 'new').exists()
+
+
+def test_export_api_download_and_error_response(inventory, tmp_path, monkeypatch):
+    import io
+    import backend.main as main
+    from fastapi.testclient import TestClient
+    database, documents, _ = inventory
+    main.app.dependency_overrides[main.get_database_path] = lambda: database
+    main.app.dependency_overrides[main.get_invoice_directory] = lambda: documents
+    try:
+        client = TestClient(main.app)
+        response = client.get('/api/exports/download')
+        assert response.status_code == 200
+        assert 'attachment' in response.headers['content-disposition']
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            assert archive.read('documents/Beleg.pdf') == b'%PDF-test'
+        (documents / 'Beleg.pdf').unlink()
+        with sqlite3.connect(database) as connection:
+            connection.execute("INSERT INTO invoices (organization_id, year, month, invoice_date, pdf_path, total_amount_cents) VALUES (1, 2026, 1, '2026-01-01', 'Beleg.pdf', 0)")
+        response = client.get('/api/exports/download')
+        assert response.status_code == 503
+        assert str(tmp_path) not in response.text
+    finally:
+        main.app.dependency_overrides.clear()
