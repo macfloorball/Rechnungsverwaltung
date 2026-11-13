@@ -352,9 +352,12 @@ Internet und ohne Anmeldung unterstützen.
     Quellcodebasierte Bestandsaufnahme einschließlich lokaler HTTP-Kommunikation,
     externer FastAPI-Dokumentationsressourcen, Einrichtung und Build sowie
     konfigurationsabhängiger Netzablagen durchgeführt.
-    Praktische Offline-Prüfung und Bewertung folgen in den nächsten Schritten.
--   [ ] Prüfen, welche davon für den lokalen Betrieb zwingend notwendig
+    Bewertung siehe Schritt 2; die praktische Offline-Prüfung folgt separat.
+-   [x] Prüfen, welche davon für den lokalen Betrieb zwingend notwendig
     sind.
+    Keine externe Netzwerkverbindung ist für die fachlichen Arbeitsabläufe
+    erforderlich. Der lokale HTTP-Dienst und installierte Laufzeitkomponenten
+    bleiben notwendig; Einzelbewertung siehe unten.
 -   [ ] Nicht notwendige Cloud- oder Serverabhängigkeiten für den
     lokalen Modus entfernen oder deaktivieren.
 -   [ ] Prüfen, ob Schriftarten, Bibliotheken und andere Ressourcen
@@ -373,6 +376,30 @@ Internet und ohne Anmeldung unterstützen.
     Daten und Programmabstürze.
 -   [ ] Bestehende automatisierte Tests ausführen und bei Bedarf
     erweitern.
+
+## Bewertung der Netzwerkabhängigkeiten (Schritt 2)
+
+Die Bewertung bezieht sich auf den aus Phase 1–3 übernommenen Code und die
+in Schritt 1 erfassten Abhängigkeiten. Sie unterscheidet den laufenden lokalen
+Betrieb von der vorherigen Einrichtung und dem Erzeugen eines Builds.
+
+| Abhängigkeit | Für den lokalen Betrieb zwingend? | Begründung / Folgerung |
+| --- | --- | --- |
+| HTTP über Loopback (`127.0.0.1` oder `::1`) | Ja, lokale Kommunikation | Electron lädt Oberfläche, Ressourcen und REST-API vom selbst gestarteten Python-/Uvicorn-Dienst; die Startprüfung benötigt dieselbe Origin. Kalender, Einstellungen, Wochenplan und Rechnungsabläufe verwenden relative `/api/...`-Pfade. Internet, DNS und ein externer Server sind dafür nicht erforderlich. Belege: `electron/config.cjs`, `electron/startup.cjs`, `scripts/run.cjs`, `frontend/js/`. |
+| PDF-Abruf über den lokalen Dienst | Ja, für Anzeige und Download | Auch die an den Standardbrowser übergebene URL zeigt ausschließlich auf `/api/invoices/{id}/pdf` derselben Loopback-Origin. Der lokale Dienst muss während des Abrufs laufen; eine Internetverbindung benötigt dieser Abruf nicht. Beleg: `electron/browser-links.cjs`. Eigenes Netzwerkverhalten des Standardbrowsers gehört nicht zum PDF-Abruf der Anwendung. |
+| CDN-Ressourcen der API-Dokumentation | Nein | FastAPIs automatisch registrierte `/docs`- und `/redoc`-Seiten binden JavaScript/CSS von `cdn.jsdelivr.net`, ein Favicon von `fastapi.tiangolo.com` und bei ReDoc Schrift-CSS von `fonts.googleapis.com` ein. Diese Hilfsseiten sind nicht Teil der Produktabläufe. Ihre externen Ressourcen können für den lokalen Modus in Schritt 3 deaktiviert oder ersetzt werden, ohne die fachliche REST-API zu entfernen. Beleg: `FastAPI(...)` in `backend/main.py` und die installierten FastAPI-Dokumentationsvorlagen. |
+| GitHub, npm-Registry, Python-Paketquellen und Electron-Downloads | Nein, nach abgeschlossener Einrichtung | Repository-Bezug, Paketinstallation und ein nicht gecachter Windows-Build können Downloads benötigen. Der normale App-Start installiert oder lädt keine Pakete nach. Electron sowie Python mit FastAPI/Uvicorn und ReportLab müssen bereits lokal vorhanden sein; der Windows-Testbuild enthält weiterhin keine eingebettete Python-Umgebung. Belege: `README.md`, `package-lock.json`, `requirements.txt`, `scripts/package_windows.cjs`. Eine erstmalige Einrichtung ohne lokale Pakete wird damit nicht zugesichert. |
+| Netzlaufwerke oder synchronisierte Speicherordner | Nein | Die Standardablagen für SQLite und Dokumente sind lokal. Benutzerdefinierte absolute Pfade können jedoch auf einen extern abhängigen Speicher zeigen. Für vollständig lokalen Betrieb müssen Datenbank, Dokumente und gegebenenfalls Importquellen auf erreichbaren lokalen Datenträgern liegen. Belege: `backend/paths.py`, `electron/main.cjs`, `electron/backend.cjs`. Es besteht keine eingebaute Cloud-Synchronisierung. |
+| Externe fachliche Dienste, Konten und Cloud-Datenbank | Nein; nicht implementiert | Kunden-/Empfängereinstellungen, Termine, Status und Rechnungssnapshots werden in SQLite verarbeitet, PDFs im lokalen Dokumentendienst. Es gibt keine eingerichtete Anmeldung, externe Fach-API, Telemetrie oder automatische Updateprüfung. Belege: `backend/main.py`, `backend/database.py`, `backend/document_storage.py`, `electron/main.cjs`. |
+
+**Ergebnis:** Für den vorgesehenen lokalen Betrieb muss keine externe
+Netzwerkabhängigkeit erhalten bleiben. Die Kommunikation zwischen Oberfläche,
+Backend und PDF-Browser über Loopback bleibt erhalten. Die externen Ressourcen
+der API-Dokumentation sind der konkrete Ansatzpunkt für Schritt 3.
+Lokale Schrift-/Bibliotheksverfügbarkeit wird erst in Schritt 4 vollständig
+geprüft. Diese Quellcodebewertung ersetzt weder den praktischen Offline-Test
+aus Schritt 5 noch die offene native Windows-Abnahme oder eine Messung möglichen
+Hintergrundverkehrs von Chromium, Betriebssystem und Standardbrowser.
 
 ## Ergebnis / Abnahmekriterien
 
