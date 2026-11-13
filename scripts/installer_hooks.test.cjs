@@ -15,6 +15,8 @@ test('NSIS compiles installation and data-protection hooks', (t) => {
   fs.writeFileSync(filename, `
 !include LogicLib.nsh
 !include FileFunc.nsh
+!define UNINSTALL_REGISTRY_KEY "Software\\TTC-hook-check"
+!define VERSION "0.1.0"
 !include "${path.join(__dirname, '..', 'build', 'windows', 'installer.nsh')}"
 Name "TTC hook compilation"
 Unicode true
@@ -22,6 +24,7 @@ OutFile "${executable}"
 Var isForceCurrentInstall
 Function .onInit
   !insertmacro customInstallMode
+  !insertmacro customInit
 FunctionEnd
 Function un.onInit
   !insertmacro customUnInit

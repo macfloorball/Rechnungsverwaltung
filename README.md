@@ -1146,3 +1146,31 @@ Backups. Auch der versteckte NSIS-Schalter `--delete-app-data` wird vor der
 Deinstallation abgelehnt (Exitcode 2). Persönliche Daten lassen sich nur separat
 und bewusst nach eigener Prüfung und Sicherung entfernen. Für einen späteren
 Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
+
+### Manueller Updateprozess
+
+1. In der laufenden App eine **vollständige Sicherung** erstellen (Datenbank,
+   Dokumente und Einstellungen), Erfolgsmeldung prüfen und Sicherung außerhalb
+   des Installationsordners aufbewahren. Eine reine Datenbankkopie reicht nicht.
+2. App vollständig schließen und das Ende ihres lokalen Servers abwarten.
+   Keine zweite Instanz oder Schreibprogramme auf dem Datenbestand offen lassen.
+3. Den neuen Installer aus derselben vertrauenswürdigen Bezugsquelle übernehmen,
+   SHA-256 vergleichen und unter demselben Windows-Benutzer starten.
+   App-ID, technischer Profilname und Herausgeber bleiben stabil.
+4. Über die vorhandene Installation installieren; nicht vorher Datenverzeichnisse
+   verschieben oder löschen. Gleichversionige Neuinstallation dient der Reparatur.
+5. App starten und Einstellungen, Termine, Rechnungsnummernkreis sowie gespeicherte
+   PDFs prüfen. Die vorhandene Datenbankinitialisierung prüft das Schema und
+   führt erforderliche Migrationen kontrolliert mit vorheriger SQLite-Sicherung aus.
+
+Es gibt keinen Hintergrunddownload, keine Update-URL und keinen automatischen
+Neustart. Der Installer blockiert ein Downgrade gegenüber der in Windows
+registrierten Version (Exitcode 3). Ein manuelles Austauschen von Dateien wird
+dadurch nicht abgesichert; zusätzlich lehnt das Backend neuere Datenbankschemata ab.
+Bei fehlgeschlagenem Update denselben oder einen neueren vollständigen Installer
+erneut ausführen. Originaldaten und Sicherungen behalten. Für einen notwendigen
+Rückfall eine zur Sicherung passende App-Version und den dokumentierten Offline-
+Wiederherstellungsprozess aus Phase 5 in einen neuen Datenordner verwenden. Niemals
+eine ältere App schreibend auf eine bereits migrierte Datenbank zwingen. Ein
+automatisches Zurückrollen sämtlicher Programmdateien bei Stromausfall ist nicht
+implementiert; die Reparatur erfolgt über den vollständigen Installer.

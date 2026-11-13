@@ -1,4 +1,20 @@
 ; Keep installation scope stable even if the installer is launched by an admin.
+!include WordFunc.nsh
+
+!macro customInit
+  ReadRegStr $R0 HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion"
+  ${If} $R0 != ""
+    ${VersionCompare} $R0 "${VERSION}" $R1
+    ${If} $R1 == "1"
+      ${IfNot} ${Silent}
+        MessageBox MB_OK|MB_ICONSTOP "Eine neuere App-Version ist installiert. Ein Downgrade kann den Datenbestand gefährden. Bitte die passende Version verwenden."
+      ${EndIf}
+      SetErrorLevel 3
+      Quit
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro customInstallMode
   StrCpy $isForceCurrentInstall "1"
 !macroend
