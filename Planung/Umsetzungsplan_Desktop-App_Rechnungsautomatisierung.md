@@ -324,7 +324,13 @@ verwaltet.
     Vor der PDF-Bereinigung verhindert eine weitere geschützte Zuordnungsprüfung
     konkurrierende Datenbankänderungen; geänderte Dateien und fremde Zuordnungen
     bleiben erhalten. Fehler-, Manipulations- und Konkurrenzfälle sind getestet.
--   [ ] Bestehende Rechnungs- und Vorschauabläufe vollständig testen.
+-   [x] Bestehende Rechnungs- und Vorschauabläufe vollständig testen.
+    Automatisierte Linux-Prüfung über API, Dateidienst und echte Electron-Fenster
+    einschließlich Vorschauänderung, Finalisierung, Download, Löschabbruch,
+    bestätigtem Löschen, Neu-Finalisierung und vollständigem App-Neustart.
+    Entwicklung/Produktion werden jeweils mit Standardablage und eigenem
+    Dokumentenordner geprüft. Native Windows-Abnahme, tatsächliche
+    Standardbrowser-Darstellung und manuelle Betriebssystemdialoge bleiben offen.
 
 ## Ergebnis / Abnahmekriterien
 

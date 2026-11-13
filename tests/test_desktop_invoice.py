@@ -10,8 +10,25 @@ import sys
 import pytest
 
 
+def _run_electron(args, working_directory, environment):
+    process = subprocess.Popen(args, cwd=working_directory, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        stdout, stderr = process.communicate(timeout=85)
+        assert process.returncode == 0, stdout + stderr
+        return stdout, stderr
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=25)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+
 @pytest.mark.skipif(os.environ.get("TTC_RUN_ELECTRON_TESTS") != "1", reason="Opt-in Electron/GUI test")
-@pytest.mark.parametrize("mode,custom_documents", [("development", False), ("production", True)])
+@pytest.mark.parametrize("mode", ["development", "production"])
+@pytest.mark.parametrize("custom_documents", [False, True])
 def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_documents):
     root = Path(__file__).resolve().parent.parent
     executable = root / "node_modules" / "electron" / "dist" / (
@@ -55,26 +72,25 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     args = [str(executable), str(installation)]
     if mode == "production":
         args.append("--desktop-production")
-    process = subprocess.Popen(args, cwd=tmp_path, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    try:
-        stdout, stderr = process.communicate(timeout=85)
-        assert process.returncode == 0, stdout + stderr
-        result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
-        assert result is not None, stdout + stderr
-        evidence = json.loads(result.removeprefix("DESKTOP_PDF_CHECK "))
-        assert evidence["previewRows"] == 1
-        assert evidence["totalCents"] == 3000
-        assert evidence["handoffs"] == 2
-        assert evidence["errorRecovery"] is True
-        assert evidence["pdfBytes"] > 1000
-        assert (output / "preview.png").stat().st_size > 1000
-        assert (output / "download.pdf").read_bytes() == (output / "Rechnung_TTC_2020-01.pdf").read_bytes()
-        print(f"Electron {mode}: {output}")
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=25)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
+    stdout, stderr = _run_electron(args, tmp_path, environment)
+    result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
+    assert result is not None, stdout + stderr
+    evidence = json.loads(result.removeprefix("DESKTOP_PDF_CHECK "))
+    assert evidence["previewRows"] == 1
+    assert evidence["totalCents"] == 4500
+    assert evidence["handoffs"] == 2
+    assert evidence["errorRecovery"] is True
+    assert evidence["lifecycle"] is True
+    assert evidence["refinalizedTotalCents"] == 6000
+    assert evidence["pdfBytes"] > 1000
+    assert (output / "preview.png").stat().st_size > 1000
+    assert (output / "download.pdf").read_bytes() == (output / "Rechnung_TTC_2020-01.pdf").read_bytes()
+    # A second complete Electron launch reuses the profile after the first
+    # application's normal shutdown, including its managed Python backend.
+    stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1"})
+    resumed = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_RESUME ")), None)
+    assert resumed is not None, stdout + stderr
+    assert json.loads(resumed.removeprefix("DESKTOP_PDF_RESUME ")) == {
+        "invoices": 2, "totalCents": 6000, "handoffs": 1,
+    }
+    print(f"Electron {mode}, custom documents={custom_documents}: {output}")

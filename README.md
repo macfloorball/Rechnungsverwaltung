@@ -626,10 +626,11 @@ erst nach vollständiger Prüfung beziehungsweise separater Sicherung entfernen.
 `tests/test_desktop_invoice.py` prüft die vorhandenen Abläufe mit echten
 Electron-Fenstern, Preload, Renderer und dem von Electron gestarteten Python-Backend.
 Der Test kopiert die App in temporäre Verzeichnisse und verwendet ausschließlich
-neue Testdaten und isolierte Profile. Entwicklung wird mit Standardablage,
-Produktion mit gebautem Frontend und eigenem Dokumentenordner geprüft.
+neue Testdaten und isolierte Profile. Seit Schritt 10 werden Entwicklung und
+Produktion jeweils mit Standardablage und eigenem Dokumentenordner geprüft;
+Produktion verwendet das gebaute Frontend.
 
-Geprüft werden die sichtbare HTML-Rechnungsvorschau, der Ausschluss geplanter
+Geprüft werden die sichtbare HTML-Rechnungsvorschau, der Ausschluss geplanter und abgesagter
 Termine, die Finalisierung, PDF-Abruf mit passenden HTTP-Headern, der tatsächliche
 Electron-Download und der bytegleiche Inhalt der gespeicherten PDF. Eine neue
 Vorschau verändert die finale PDF nicht. Nach Neuladen wird die Rechnung über
@@ -775,6 +776,43 @@ Datenbanklöschung und Dateientfernung bleiben zwei getrennte Schritte. Bei eine
 Fehler nach der Datenbanklöschung kann die PDF zurückbleiben; diese bestehende
 Einschränkung wird ausdrücklich gemeldet. Eine gemeinsame atomare Transaktion
 über SQLite und Dateisystem wird nicht zugesichert.
+
+### Rechnungs- und Vorschauabläufe prüfen (Phase 3, Schritt 10)
+
+Die Regression kombiniert folgende Prüfungen, ohne produktive Nutzerdaten zu
+verwenden:
+
+| Tests | Abgedeckte Abläufe |
+| --- | --- |
+| `tests/test_api.py` | Abrechenbare Termine, manuelle und Wochenplan-Leistungen, Pauschalen, Rundung, Vorschauaktualisierung, finale Snapshots samt Logos, Nummernkreis, Archiv, Konflikte und sichere Lösch-/Fehlerfälle |
+| `tests/test_invoice.py` | PDF-Erzeugung, Rechnungsdaten, Positionen, Kontaktdaten, Logo, Summen und Layoutgrenzen |
+| `tests/test_document_storage.py`, `tests/test_document_errors.py`, `tests/test_invoice_documents.py` | Dateioperationen, Zuordnung, unveränderte Bestände bei Fehlern, Konkurrenzschutz und PDF-Bereichsabrufe |
+| `tests/test_storage_paths.py`, `tests/test_storage_update.py`, `tests/test_storage_lifecycle.py` | Speicherorte, Bestandsübernahme, Installationsaustausch und echte Backend-Neustarts mit beiden Ablagen und mit/ohne Reload |
+| `tests/test_desktop_invoice.py` | Durchgehender Electron-Ablauf in allen vier Kombinationen aus Entwicklung/Produktion und Standard-/eigener Ablage, jeweils mit anschließendem vollständigem App-Neustart |
+
+Der Electron-Test aktualisiert eine Vorschau nach einer Terminänderung,
+finalisiert sie und prüft den Download. Nach einer weiteren Terminänderung
+muss die neue Vorschau vom weiterhin unveränderten finalen PDF abweichen.
+Ein erneuter Finalisierungsversuch vor dem Löschen wird abgelehnt. Im Archiv
+werden Abbrechen und Bestätigen der Löschabfrage mit kontrollierten Antworten
+geprüft; eine zweite Rechnung bleibt erhalten. Anschließend wird die aktuelle
+Vorschau mit neuer Rechnungsnummer finalisiert. Nach vollständigem Beenden und
+Neustarten der App müssen beide Rechnungen, PDFs und der Nummernkreis erhalten
+sein und das PDF aus dem Archiv wieder geöffnet werden können.
+
+Alle Python-Prüfungen einschließlich der GUI-Fälle unter Linux:
+
+```bash
+TTC_RUN_ELECTRON_TESTS=1 python -m pytest -q
+```
+
+Die JavaScript-Prüfungen laufen zusätzlich mit `npm run desktop:check`
+beziehungsweise mit der oben beschriebenen eingebetteten Node-Laufzeit.
+Die automatisierten Prüfungen unter Linux ersetzen weiterhin keine native
+Windows-Abnahme. Browserübergaben werden abgefangen, Downloads automatisch
+gespeichert und Bestätigungen kontrolliert beantwortet. Die tatsächliche
+PDF-Darstellung, das Drucken und manuelle Betriebssystemdialoge sind separat
+abzunehmen.
 
 ### Schemaänderungen
 
