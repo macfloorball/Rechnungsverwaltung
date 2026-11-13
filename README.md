@@ -70,9 +70,10 @@ curl http://127.0.0.1:8000/api/health
 ```
 
 Die Anwendung legt die lokale Datenbank unter `data/ttc.db` an. Erstellte
-Rechnungs-PDFs werden ohne Datenpfad-Override unter `rechnungen/` gespeichert.
+Rechnungs-PDFs werden ohne Pfad-Overrides unter `rechnungen/` gespeichert.
 Mit `TTC_DATA_DIRECTORY` liegen Datenbank und PDFs unter diesem Datenverzeichnis
 als `ttc.db` beziehungsweise in `documents/`; dies ist auch der Desktop-Modus.
+`TTC_DOCUMENT_DIRECTORY` kann die PDF-Ablage unabhängig davon überschreiben.
 
 ## Tests
 
@@ -208,6 +209,7 @@ curl http://127.0.0.1:8000/api/health
 The application creates its local database at `data/ttc.db` and stores
 generated invoice PDFs in `rechnungen/` by default. With `TTC_DATA_DIRECTORY`,
 including desktop mode, it uses `ttc.db` and `documents/` inside that directory.
+`TTC_DOCUMENT_DIRECTORY` optionally overrides the PDF directory independently.
 
 ## Tests
 
@@ -314,6 +316,7 @@ Standard ist `http://127.0.0.1:8000/`, zentral in `electron/config.cjs`.
 | `TTC_DESKTOP_PRODUCTION_URL` | Getrennte Adresse für Desktop-Produktion, EXE und `web:start`; ignoriert den Entwicklungswert |
 | `TTC_PYTHON` | Optionaler Interpreterpfad, vorzugsweise absolut |
 | `TTC_DATA_DIRECTORY` | Absolutes Verzeichnis für `ttc.db`; Desktop-Standard: Electron-`userData`, Web-Standard: `data/` im Projekt |
+| `TTC_DOCUMENT_DIRECTORY` | Optionales absolutes Dokumentenverzeichnis, unabhängig von SQLite; ohne Override `documents/` im Desktop-Datenverzeichnis bzw. `rechnungen/` im Webbetrieb ohne Datenpfad-Override |
 | `TTC_FRONTEND_DIRECTORY` | Frontend-Pfad beim direkten Uvicorn-Webstart; verwaltete Startmodi setzen ihn selbst |
 
 Zulässig sind nur HTTP-Origins mit `127.0.0.1` oder `[::1]`, optionalem Port,
@@ -488,7 +491,7 @@ Für den bisherigen Webbetrieb ohne `TTC_DATA_DIRECTORY` bleibt die Ablage
 `rechnungen/` im Projekt erhalten. Bei explizitem `TTC_DATA_DIRECTORY` verwendet
 auch der Webbetrieb dessen Unterordner `documents/`. Das Backend nutzt
 in beiden Startarten dieselbe Pfadauflösung. Ein unabhängig einstellbarer
-Dokumentenort wird erst im dafür vorgesehenen Phase-3-Schritt behandelt.
+Dokumentenort ist seit Schritt 5 über `TTC_DOCUMENT_DIRECTORY` verfügbar.
 
 Schritt 1 hat ausschließlich diese Verzeichnisentscheidung dokumentiert. Die
 Anbindung an die Rechnungs-API und die schonende Übernahme der bisherigen
@@ -506,8 +509,9 @@ absolute Pfade und Windows-Datenstromreferenzen werden abgelehnt. Dateisystemfeh
 werden an den Aufrufer weitergereicht.
 
 Ohne explizites Verzeichnis nutzt der Dienst `get_document_directory()` aus
-`backend/paths.py`: mit `TTC_DATA_DIRECTORY` dessen Unterordner `documents/`, sonst
-das bisherige Webverzeichnis `rechnungen/`. Die Auflösung legt keine Ordner an;
+`backend/paths.py`: zuerst `TTC_DOCUMENT_DIRECTORY`, andernfalls mit
+`TTC_DATA_DIRECTORY` dessen Unterordner `documents/`, sonst das bisherige
+Webverzeichnis `rechnungen/`. Die Auflösung legt keine Ordner an;
 erst das Speichern oder Übernehmen erzeugt die Ablage. Der Pfad wird pro Dienstinstanz absolut
 aufgelöst und bleibt bei einem Wechsel des Arbeitsverzeichnisses stabil.
 
@@ -573,6 +577,48 @@ gesichert sind. Ein externer Datenbankimport allein überträgt weiterhin keine
 PDFs: Liegen sie außerhalb der bisherigen Ablage der laufenden Installation,
 müssen die zu dieser Datenbank gehörenden Dateien bewusst bereitgestellt werden.
 Es wird kein Dateiverzeichnis aus einem beliebigen Datenbankpfad abgeleitet.
+
+### Einstellbarer Dokumentenspeicherort (Phase 3, Schritt 5)
+
+`TTC_DOCUMENT_DIRECTORY` bestimmt einen eigenen absoluten Dokumentenordner für
+Desktop- und Webstart. Die SQLite-Datei bleibt am bisherigen Datenbankpfad.
+Leere, nur aus Leerzeichen bestehende oder relative Werte werden beim Start
+abgelehnt. Ohne diese Variable bleibt die Standardablage unverändert. Die
+Konfiguration nutzt wie die vorhandenen Startoptionen die Umgebung; es gibt
+hierfür keinen zusätzlichen Einstellungsdialog.
+
+Beispiel unter Windows in PowerShell, vor dem App-Start:
+
+```powershell
+$env:TTC_DOCUMENT_DIRECTORY = "D:\TTC Dokumente"
+npm run desktop:start
+```
+
+Unter Linux beispielsweise:
+
+```bash
+TTC_DOCUMENT_DIRECTORY="/absoluter/Pfad/TTC Dokumente" npm run desktop:start
+```
+
+Einen lokalen Ordner außerhalb der Installation wählen. Bei jedem Start muss
+dieselbe Konfiguration gelten; für EXE-Starts unter Windows kann die Variable
+dauerhaft als Windows-Benutzervariable eingerichtet werden. Die App danach
+vollständig neu starten. Die Einstellung wird nicht in SQLite geschrieben.
+
+Beim Start werden fehlende, eindeutig zugeordnete PDFs zuerst aus der bisherigen
+Standardablage (`documents/` im Datenverzeichnis beziehungsweise `rechnungen/`
+im Webbetrieb ohne Datenpfad-Override) übernommen. Anschließend wird die alte
+Installationsablage berücksichtigt. Bestehende Zieldateien haben Vorrang; alle
+Quellen bleiben unverändert. Es gelten die oben beschriebenen Regeln zur
+Übernahme einschließlich der Hardlink-Unterstützung im Ziel.
+
+Beim Wechsel von einem eigenen Ordner zu einem anderen oder zurück zum Standard
+App und Backend zuerst beenden. Die zu dieser Datenbank gehörenden PDFs aus dem
+bisher aktiven Ordner im gewünschten Ziel bereitstellen, vorhandene gleichnamige
+Dateien vorab prüfen und nicht ungeprüft überschreiben. Erst anschließend die
+Variable ändern beziehungsweise entfernen, neu starten und die PDFs prüfen.
+Eigene frühere Ordner werden nicht automatisch gesucht oder verschoben. Quellen
+erst nach vollständiger Prüfung beziehungsweise separater Sicherung entfernen.
 
 ### Schemaänderungen
 

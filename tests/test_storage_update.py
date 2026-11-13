@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from backend.database import (
     create_record, create_invoice_with_items, get_invoice, initialize_database,
     update_organization,
@@ -47,7 +49,8 @@ print(json.dumps({"recipient": org["recipient_name"], "number": org["next_invoic
     assert not list(profile.glob("*.before-migration-*"))
 
 
-def test_replaced_installation_keeps_imported_pdf_in_user_profile(tmp_path):
+@pytest.mark.parametrize("custom_documents", [False, True])
+def test_replaced_installation_keeps_imported_pdf_in_user_profile(tmp_path, custom_documents):
     root = Path(__file__).resolve().parent.parent
     profile = tmp_path / "User Data"
     database = profile / "ttc.db"
@@ -66,6 +69,15 @@ def test_replaced_installation_keeps_imported_pdf_in_user_profile(tmp_path):
     legacy.write_bytes(b"%PDF-historical-content")
     orphan = legacy.parent / "unassigned.pdf"
     orphan.write_bytes(b"unassigned")
+    directory = tmp_path / "Custom Invoices" if custom_documents else profile / "documents"
+    expected_content = "%PDF-historical-content"
+    if custom_documents:
+        # The current profile copy takes precedence over older installation
+        # files when moving to a separately configured document directory.
+        default_pdf = profile / "documents" / reference
+        default_pdf.parent.mkdir()
+        expected_content = "%PDF-profile-content"
+        default_pdf.write_bytes(expected_content.encode())
     script = '''
 import json
 from fastapi.testclient import TestClient
@@ -76,19 +88,25 @@ with TestClient(app) as client:
     print(json.dumps({"content": response.content.decode(), "directory": str(get_invoice_directory())}))
 '''.replace("INVOICE_ID", str(invoice_id))
     for index, installation in enumerate(installations):
+        environment = os.environ | {
+            "PYTHONPATH": str(installation), "TTC_DATA_DIRECTORY": str(profile),
+            "TTC_FRONTEND_DIRECTORY": str(root / "frontend"),
+        }
+        environment.pop("TTC_DOCUMENT_DIRECTORY", None)
+        if custom_documents:
+            environment["TTC_DOCUMENT_DIRECTORY"] = str(directory)
         result = subprocess.run(
             [sys.executable, "-c", script], cwd=tmp_path,
-            env=os.environ | {
-                "PYTHONPATH": str(installation), "TTC_DATA_DIRECTORY": str(profile),
-                "TTC_FRONTEND_DIRECTORY": str(root / "frontend"),
-            }, capture_output=True, text=True, check=True, timeout=15,
+            env=environment, capture_output=True, text=True, check=True, timeout=15,
         )
         assert json.loads(result.stdout) == {
-            "content": "%PDF-historical-content", "directory": str(profile / "documents"),
+            "content": expected_content, "directory": str(directory),
         }
         assert database.read_bytes() == before
-        assert (profile / "documents" / reference).read_bytes() == b"%PDF-historical-content"
-        assert not (profile / "documents" / orphan.name).exists()
+        assert (directory / reference).read_bytes() == expected_content.encode()
+        assert not (directory / orphan.name).exists()
+        if custom_documents:
+            assert default_pdf.read_bytes() == expected_content.encode()
         if index == 0:
             assert legacy.read_bytes() == b"%PDF-historical-content"
             assert orphan.read_bytes() == b"unassigned"

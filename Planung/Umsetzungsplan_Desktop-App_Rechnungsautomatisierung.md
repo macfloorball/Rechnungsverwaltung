@@ -294,8 +294,11 @@ verwaltet.
     verdrahten. `backend/paths.py` bestimmt Ziel- und bisherige Ablage;
     die Rechnungs-API nutzt diese Auflösung. Eindeutig zugeordnete Bestands-PDFs
     werden beim Start ohne Überschreiben oder Löschen der Quellen übernommen.
--   [ ] Einen einstellbaren Speicherort vorsehen, sofern dies mit
-    vertretbarem Aufwand möglich ist.
+-   [x] Einen einstellbaren Speicherort vorsehen, sofern dies mit
+    vertretbarem Aufwand möglich ist. `TTC_DOCUMENT_DIRECTORY` erlaubt einen
+    absoluten Dokumentenpfad unabhängig von SQLite. Konfiguration erfolgt
+    über die Startumgebung; sichere Übernahme aus der Standardablage und
+    bewusster Wechsel zwischen eigenen Ordnern sind in der README beschrieben.
 -   [ ] Prüfen, ob vorhandene PDF-Erstellung und PDF-Vorschau in
     Electron funktionieren.
 -   [ ] Speichern, Öffnen, Umbenennen und Löschen von Dateien

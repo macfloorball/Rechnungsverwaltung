@@ -7,6 +7,7 @@ from backend.paths import PROJECT_ROOT, get_document_directory
 
 
 def test_document_directory_defaults_and_profile_override(monkeypatch, tmp_path):
+    monkeypatch.delenv("TTC_DOCUMENT_DIRECTORY", raising=False)
     monkeypatch.delenv("TTC_DATA_DIRECTORY", raising=False)
     assert get_document_directory() == PROJECT_ROOT / "rechnungen"
     profile = tmp_path / "User Data"
@@ -20,6 +21,7 @@ def test_document_directory_defaults_and_profile_override(monkeypatch, tmp_path)
 
 @pytest.mark.parametrize("value", ["", " ", "relative/path"])
 def test_invalid_profile_is_rejected(monkeypatch, value):
+    monkeypatch.delenv("TTC_DOCUMENT_DIRECTORY", raising=False)
     monkeypatch.setenv("TTC_DATA_DIRECTORY", value)
     with pytest.raises(ValueError, match="absolutes"):
         DocumentStore()

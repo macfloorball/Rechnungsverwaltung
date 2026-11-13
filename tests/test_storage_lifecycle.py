@@ -14,7 +14,7 @@ import pytest
 
 
 @contextmanager
-def backend_process(tmp_path, *, damaged=False, reload=False):
+def backend_process(tmp_path, *, damaged=False, reload=False, document_directory=None):
     root = Path(__file__).resolve().parent.parent
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -24,6 +24,9 @@ def backend_process(tmp_path, *, damaged=False, reload=False):
         "TTC_DATA_DIRECTORY": str(tmp_path / "User Data"),
         "TTC_LEGACY_DATABASE": str(tmp_path / "no-legacy.db"),
     }
+    env.pop("TTC_DOCUMENT_DIRECTORY", None)
+    if document_directory is not None:
+        env["TTC_DOCUMENT_DIRECTORY"] = str(document_directory)
     args = [sys.executable, "-m", "scripts.managed_server", "backend.main:app", "--host", "127.0.0.1", "--port", str(port)]
     if reload:
         args += ["--reload", "--reload-dir", str(tmp_path)]
@@ -68,8 +71,11 @@ def backend_process(tmp_path, *, damaged=False, reload=False):
 
 
 @pytest.mark.parametrize("reload", [False, True])
-def test_restart_preserves_recipient_plan_status_invoice_and_pdf(tmp_path, reload):
-    with backend_process(tmp_path, reload=reload) as request:
+@pytest.mark.parametrize("custom_documents", [False, True])
+def test_restart_preserves_recipient_plan_status_invoice_and_pdf(tmp_path, reload, custom_documents):
+    custom = tmp_path / "Custom Invoices" if custom_documents else None
+    directory = custom if custom is not None else tmp_path / "User Data" / "documents"
+    with backend_process(tmp_path, reload=reload, document_directory=custom) as request:
         request("PUT", "/api/organization/settings", {"recipient_name": "Test Recipient", "invoice_number_prefix": "TEST"})
         activity = request("PUT", "/api/settings", {"activities": [{"name": "Training", "hourly_rate_cents": 1500}]})["activities"][0]
         plan = request("PUT", "/api/weekly-plan", [{"weekday": 1, "activity_type_id": activity["id"], "hours": 1}])
@@ -80,9 +86,9 @@ def test_restart_preserves_recipient_plan_status_invoice_and_pdf(tmp_path, reloa
         invoice = request("POST", "/api/invoices", {"year": 2020, "month": 1}, 201)
         pdf = request("GET", f"/api/invoices/{invoice['id']}/pdf")
         assert pdf.startswith(b"%PDF-")
-        assert (tmp_path / "User Data" / "documents" / invoice["pdf_path"]).read_bytes() == pdf
+        assert (directory / invoice["pdf_path"]).read_bytes() == pdf
         request("PUT", "/api/settings", {"activities": [{"id": activity["id"], "name": "Changed", "hourly_rate_cents": 9999}]})
-    with backend_process(tmp_path, reload=reload) as request:
+    with backend_process(tmp_path, reload=reload, document_directory=custom) as request:
         organization = request("GET", "/api/organization/settings")
         assert organization["recipient_name"] == "Test Recipient"
         assert organization["next_invoice_number"] == 2

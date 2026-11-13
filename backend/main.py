@@ -18,7 +18,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.paths import get_database_path as resolve_database_path
-from backend.paths import get_document_directory, get_legacy_document_directory
+from backend.paths import (
+    get_document_directory, get_default_document_directory, get_legacy_document_directory,
+)
 from backend.document_storage import DocumentStore
 from backend.invoice_documents import (
     InvoiceDocumentAssociationError, get_owned_invoice_document, invoice_document_name,
@@ -82,6 +84,7 @@ async def lifespan(_: FastAPI):
         raise RuntimeError(MESSAGES[code]) from None
     try:
         directory = getattr(app.state, "test_invoice_directory", None) or get_invoice_directory()
+        prepare_invoice_documents(target, directory, get_default_document_directory())
         prepare_invoice_documents(target, directory, get_legacy_document_directory())
     except (OSError, ValueError):
         raise RuntimeError(
