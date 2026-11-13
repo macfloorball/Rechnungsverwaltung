@@ -1,8 +1,64 @@
 # Windows-Installationsprüfung für Phase 6
 
-Dies ist eine Testanleitung, kein Nachweis bereits durchgeführter Windows-Tests.
-Die native Ausführung wird als nächster Schritt in einer Windows-VM geprüft.
-Die zweite Windows-Maschine ist eine gesonderte Abnahme.
+Dieses Dokument enthält das berichtete native Testprotokoll vom 13.11.2026 und
+die weiterhin gültige Prüfanleitung. Nur die im Testprotokoll ausdrücklich als
+bestanden aufgeführten Fälle sind nachgewiesen; Erwartungen in der Anleitung
+sind keine Testergebnisse. **Phase 6 ist noch nicht vollständig abgenommen.**
+Die Abnahmekriterien der
+[Roadmap](Umsetzungsplan_Desktop-App_Rechnungsautomatisierung.md#phase-6----windows-installation-und-updates)
+bleiben maßgeblich; die zweite Windows-Maschine ist eine gesonderte Abnahme.
+
+## Natives Testprotokoll vom 13.11.2026
+
+Die folgenden Ergebnisse wurden vom Anwender nach manueller Durchführung
+berichtet. Testumgebung: Windows-11-VM unter VirtualBox auf einem Fedora-Host.
+Getestet wurden Version 0.1.0 und der Test-Installer 0.1.1 mit einem Testtermin
+und einer gespeicherten Rechnung über 30 €. Vor dem Update wurde ein
+VirtualBox-Sicherungspunkt erstellt. Eine vollständige Sicherung über die
+Anwendung ist damit nicht als durchgeführt nachgewiesen.
+
+| Prüffall | Tatsächlich beobachtetes Ergebnis | Status |
+| --- | --- | --- |
+| Erstinstallation von 0.1.0 | Installation in der Windows-11-VM erfolgreich. | Bestanden |
+| Start ohne Entwicklungswerkzeuge | Anwendung startet ohne separat installiertes Python, Node.js oder Git. | Bestanden |
+| Desktop-Verknüpfung | Anwendung lässt sich über die Desktop-Verknüpfung starten. | Bestanden |
+| Termin speichern und neu starten | Testtermin bleibt nach App-Neustart und Windows-Neustart erhalten. | Bestanden |
+| Deinstallation und Neuinstallation von 0.1.0 | Erneute Installation erfolgreich; vorhandene Daten bleiben erhalten. | Bestanden |
+| Versionsupdate 0.1.0 → 0.1.1 | Update zweimal erfolgreich durchgeführt; Testtermin und gespeicherte 30-€-Rechnung bleiben erhalten. | Bestanden |
+| Downgrade 0.1.1 → 0.1.0 | Installation der älteren Version wird mit einer entsprechenden Fehlermeldung verhindert. Der Exitcode wurde nicht geprüft. | Sperre bestanden; Exitcode offen |
+
+### Bekannter Fehler
+
+Nach der Rechnungserstellung blieb die Oberfläche im Ladezustand. Die Rechnung
+war gespeichert, wurde aber erst nach einem App-Neustart in der Rechnungsliste
+angezeigt. Der Fehler ist offen; der erfolgreiche Datenerhalt beim Update ist
+kein Nachweis eines fehlerfreien Ablaufs der Rechnungserstellung. Ursache und
+genaue Reproduktionsbedingungen sind noch zu untersuchen.
+
+### Offene Prüfungen und Grenzen des Nachweises
+
+- Abnahme auf einem unabhängigen zweiten Windows-PC beziehungsweise einer
+  unabhängigen sauberen Windows-VM (Schritt 10).
+- Rechnungs-PDF-Prüfsummen vor und nach dem Update wurden nicht verifiziert.
+  Der Erhalt der gespeicherten Rechnung belegt daher keine bytegleiche
+  Erhaltung des PDFs. Auch das Öffnen der PDFs ist nicht nachgewiesen.
+- Exitcode 3 der Downgrade-Sperre wurde nicht verifiziert; der genaue Wortlaut
+  der angezeigten Fehlermeldung wurde nicht protokolliert.
+- Startmenü-Verknüpfung, vollständiges Backup und Wiederherstellung, eigene
+  Dokumentenablage, Einstellungen und Rechnungsnummernkreis sind nicht
+  ausdrücklich geprüft beziehungsweise nicht vollständig nachgewiesen.
+- Die weiteren Fälle der nachstehenden Anleitung bleiben offen, insbesondere
+  Installationsabbruch, vollständige Entfernung von Registrierung und
+  Verknüpfungen bei Deinstallation, Schutzschalter `/D=` und
+  `--delete-app-data`, Rechtefehler, beschädigte oder unvollständige Installation,
+  fehlender Speicherplatz und Updateabbruch bei geöffneter App.
+- Genaue Windows-Buildnummer, Architektur, Benutzerrechte, Installer-Prüfsummen,
+  Darstellung von App-Name/Herausgeber, SmartScreen-Verhalten und Betrieb bei
+  deaktiviertem Netzwerk wurden für diesen Test nicht protokolliert.
+
+Alle weiteren bislang nicht nachgewiesenen Prüfkriterien bleiben offen. Die
+Roadmap-Schritte 5 und 10 sowie die allgemeine Definition of Done werden durch
+diesen Teilnachweis nicht als vollständig abgeschlossen markiert.
 
 ## Vorbereitung
 
@@ -75,9 +131,11 @@ eingerichteten Umgebung reicht als Nachweis einer sauberen Installation nicht.
 6. Beide PCs verwenden eigene lokale SQLite-Dateien. Die Datenbank nicht über
    einen gemeinsam geöffneten oder synchronisierten Ordner betreiben.
 
-Der nächste praktische Schritt ist die erste native Prüfung in der verfügbaren
-Windows-VM; danach folgt diese unabhängige zweite Umgebung. Bis beide Nachweise
-vorliegen, ist Phase 6 nach der allgemeinen Definition of Done nicht abgenommen.
+Die erste native Teilprüfung in der verfügbaren Windows-11-VM ist oben
+protokolliert. Es folgen die noch offenen Prüffälle und diese unabhängige zweite
+Umgebung. Bis die erforderlichen Nachweise vorliegen und der bekannte Fehler
+behoben und nachgetestet ist, bleibt Phase 6 nach der allgemeinen Definition of
+Done nicht vollständig abgenommen.
 
 ## Rechte und unvollständige Installation (Schritt 11)
 
