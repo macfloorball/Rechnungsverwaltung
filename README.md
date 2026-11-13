@@ -306,6 +306,12 @@ Pakete, Builds und belegte Ports führen zu einer Startfehlermeldung.
 Die bestehende Webanwendung bleibt zusätzlich über den oben beschriebenen
 direkten Befehl `python -m uvicorn backend.main:app ...` startbar.
 
+Die automatisch erzeugten API-Dokumentationsoberflächen `/docs` und `/redoc`
+sowie `/docs/oauth2-redirect` sind im gemeinsamen Backend für alle Startmodi
+deaktiviert (HTTP 404), da sie externe CDN-Ressourcen einbinden. Das lokale
+API-Schema bleibt unter `/openapi.json` verfügbar. Oberfläche und fachliche
+REST-Endpunkte verwenden weiterhin den lokalen Anwendungsdienst.
+
 ### Konfiguration
 
 Standard ist `http://127.0.0.1:8000/`, zentral in `electron/config.cjs`.
@@ -662,6 +668,34 @@ PDFs werden gemäß bestehender Architektur an den Standardbrowser übergeben.
 Der Test ersetzt weder die native Windows-Abnahme noch die manuelle Kontrolle
 der PDF-Darstellung und des Druckdialogs im tatsächlichen Standardbrowser.
 
+Unter Linux prüft jeder aktivierte Electron-Durchlauf außerdem einen absichtlichen
+`SIGKILL` des Test-Hauptprozesses nach bestätigten Schreibvorgängen. Das eigene
+Backend muss sich danach beenden; ein weiterer App-Start prüft Rechnungen, PDFs,
+Entwurf, Kalender und Nummernkreis erneut. Ausschließlich die temporäre Test-App
+und ihr eigenes Profil werden dafür verwendet.
+
+Für einen praktischen Offline-Test unter Linux kann derselbe Electron-Test in
+einem eigenen Netzwerk-Namespace mit ausschließlich Loopback ausgeführt werden.
+Voraussetzungen sind `unshare`, `ip`, erlaubte Benutzer-/Netzwerk-Namespaces,
+die eingerichtete Python-/Electron-Umgebung und eine lokale grafische Sitzung.
+Aus dem Projektverzeichnis:
+
+```bash
+unshare --user --map-current-user --net --keep-caps sh -c 'ip link set lo up && exec env TTC_RUN_ELECTRON_TESTS=1 TTC_EXPECT_OFFLINE=1 .venv/bin/python -m pytest -q -s tests/test_desktop_invoice.py'
+```
+
+Die Isolation gilt nur für den Test und seine Kindprozesse; die übrige Sitzung
+bleibt online. `TTC_EXPECT_OFFLINE=1` allein trennt kein Netzwerk: Es fordert
+die Prüfung an, dass ausschließlich Loopback mit IPv4/IPv6 vorhanden ist und
+Verbindungen zu externen IPv4-/IPv6-Testadressen an fehlender Erreichbarkeit
+scheitern. Auch Electron prüft den geerbten Netzwerk-Namespace und die fehlende
+Erreichbarkeit bei jedem Start. Die Chromium-Sandbox bleibt aktiv.
+Alle vier Kombinationen aus Entwicklung/Produktion und Standard-/eigener
+Dokumentenablage laufen einschließlich vollständigem Neustart mit temporären
+Daten. PDF-Browserübergaben und Dialogantworten bleiben wie oben kontrolliert;
+native Windows-Ausführung, tatsächliche Standardbrowser-Anzeige und das
+physische Abschalten eines Netzwerkadapters werden dadurch nicht geprüft.
+
 Falls `node`/`npm` fehlen, die vorhandene Electron-Abhängigkeit aber installiert
 ist, kann ihre eingebettete Node-Laufzeit unter Linux für die JavaScript-Tests
 verwendet werden:
@@ -701,6 +735,15 @@ gemeinsame atomare Operation aus zwei Namensänderungen. Dateisystemoperationen
 und SQLite bleiben ebenfalls getrennt; nach einem Fehler beim Entfernen der PDF
 kann wie bisher eine bereits gelöschte Rechnung mit zurückgebliebener PDF
 vorliegen. Die API meldet diesen Zustand ausdrücklich.
+
+Ein harter Absturz nach Veröffentlichung einer PDF und vor dem Datenbank-Commit
+kann umgekehrt eine PDF ohne finale Rechnung hinterlassen. Der erneute
+Finalisierungsversuch meldet HTTP 409 und überschreibt die Datei nicht.
+App und Backend vollständig beenden und Dateibestand sowie Rechnungszuordnung
+prüfen. Eine zweifelsfrei nicht zugeordnete PDF separat sichern und erhalten,
+bevor ihr ursprünglicher Dateiname für einen erneuten Versuch freigegeben wird.
+Es gibt keine automatische Löschung solcher Dateien; eine gemeinsame
+Absturztransaktion über SQLite und PDF-Ablage wird nicht zugesichert.
 
 `rename()` steht auf Ebene des Dateidienstes bereit. Finale Rechnungsoriginale
 behalten ihre verbindlichen Namen `Rechnung_TTC_YYYY-MM.pdf` und ihre bestehenden

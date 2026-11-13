@@ -185,7 +185,7 @@ function buildPlanRow(activities, entry = {}) {
   const activeLabel = element("label", "Aktiv");
   const activeInput = element("input");
   activeInput.type = "checkbox";
-  activeInput.checked = entry.is_active !== false;
+  activeInput.checked = entry.is_active === undefined ? true : Boolean(entry.is_active);
   activeInput.setAttribute("aria-label", "Planeintrag aktiv");
   activeInput.dataset.planActive = "";
   activeLabel.append(activeInput);

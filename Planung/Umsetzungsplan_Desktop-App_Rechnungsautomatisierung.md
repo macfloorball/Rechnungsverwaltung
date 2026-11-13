@@ -348,27 +348,403 @@ Internet und ohne Anmeldung unterstützen.
 
 ## Entwicklungsschritte
 
--   [ ] Alle externen Netzwerkabhängigkeiten der Anwendung erfassen.
--   [ ] Prüfen, welche davon für den lokalen Betrieb zwingend notwendig
+-   [x] Alle externen Netzwerkabhängigkeiten der Anwendung erfassen.
+    Quellcodebasierte Bestandsaufnahme einschließlich lokaler HTTP-Kommunikation,
+    externer FastAPI-Dokumentationsressourcen, Einrichtung und Build sowie
+    konfigurationsabhängiger Netzablagen durchgeführt.
+    Bewertung siehe Schritt 2; die praktische Offline-Prüfung folgt separat.
+-   [x] Prüfen, welche davon für den lokalen Betrieb zwingend notwendig
     sind.
--   [ ] Nicht notwendige Cloud- oder Serverabhängigkeiten für den
+    Keine externe Netzwerkverbindung ist für die fachlichen Arbeitsabläufe
+    erforderlich. Der lokale HTTP-Dienst und installierte Laufzeitkomponenten
+    bleiben notwendig; Einzelbewertung siehe unten.
+-   [x] Nicht notwendige Cloud- oder Serverabhängigkeiten für den
     lokalen Modus entfernen oder deaktivieren.
--   [ ] Prüfen, ob Schriftarten, Bibliotheken und andere Ressourcen
+    Die externen CDN-Ressourcen von Swagger UI und ReDoc entfallen durch
+    Deaktivieren von `/docs`, `/redoc` und `/docs/oauth2-redirect` im gemeinsamen
+    Backend (Desktop und Web). `/openapi.json`, Oberfläche und fachliche API
+    bleiben verfügbar; Regressionstests sichern diese Abgrenzung ab.
+-   [x] Prüfen, ob Schriftarten, Bibliotheken und andere Ressourcen
     lokal verfügbar sind.
--   [ ] Die Anwendung mit deaktivierter Internetverbindung testen.
--   [ ] Kundenverwaltung vollständig testen.
--   [ ] Wochenplan und Terminverwaltung vollständig testen.
--   [ ] Statusverwaltung für erledigte und nicht erledigte Termine
+    Quellfrontend, vorhandener Produktions-Build und Paketvorbereitung in
+    temporärer Kopie geprüft; Ressourcen und lokale Laufzeit verfügbar.
+    Details und Verteilungsgrenzen siehe Ressourcenprüfung unten.
+-   [x] Die Anwendung mit deaktivierter Internetverbindung testen.
+    Vier echte Electron-Durchläufe unter Linux in einem eigenen Netzwerk-
+    Namespace ohne externe Netzverbindung bestanden: Entwicklung/Produktion
+    jeweils mit Standard-/eigener Dokumentenablage und vollständigem Neustart.
+    Nur Loopback aktiv; externe IPv4-/IPv6-Verbindungen scheitern nachweislich.
+    Reproduktion und Abgrenzung siehe README und Offline-Prüfung unten.
+-   [x] Kundenverwaltung vollständig testen.
+    Bestehenden Umfang geprüft: ein Rechnungsempfänger in den
+    Organisationseinstellungen, keine separate Kundenkartei. API- und echte
+    Electron-Tests decken alle fünf Felder, Änderungen, Leeren, Validierung,
+    Persistenz und unveränderte Empfänger-Snapshots finaler Rechnungen ab.
+-   [x] Wochenplan und Terminverwaltung vollständig testen.
+    API- und echte Offline-Electron-Tests für Planpflege, Kalendernavigation,
+    Terminbearbeitung und Datenerhalt ergänzt. Zwei dabei gefundene Fehler
+    korrigiert: deaktivierte Planeinträge bleiben beim Laden deaktiviert;
+    bestehende Termine mit inzwischen inaktiver Tätigkeit bleiben bearbeitbar.
+-   [x] Statusverwaltung für erledigte und nicht erledigte Termine
     testen.
--   [ ] Rechnungsentwürfe und Rechnungsvorschauen testen.
--   [ ] Finale Rechnungen, erneute Vorschauen und das Löschen finaler
+    Alle Statusübergänge für manuelle und generierte Termine, Validierung,
+    Wiederholung und Monatsaktion per API geprüft. Echte Offline-Electron-Tests
+    ergänzen Checkbox, „Nicht gemacht“, Dialogkorrektur, Speicherfehler und
+    Datenerhalt aller drei Statuswerte nach vollständigem App-Neustart.
+-   [x] Rechnungsentwürfe und Rechnungsvorschauen testen.
+    Gespeicherte Vorschauen als bestehende Entwurfsform geprüft: Aktualisieren,
+    Leeren, Transaktionsfehler, ungültige Zeiträume und Datenerhalt. Echte
+    Offline-Electron-Tests prüfen Anzeige, Monatswahl, Lade-/Fehlerzustände und
+    Wiederholen. Falsche Vorschau-Jahresanzeige für Jahre unter 100 korrigiert.
+-   [x] Finale Rechnungen, erneute Vorschauen und das Löschen finaler
     Rechnungen gemäß der vorgesehenen Geschäftslogik testen.
--   [ ] Prüfen, dass nur abrechnungsfähige bzw. erledigte Leistungen in
+    Aktuelle Daten bei Finalisierung, unveränderte finale Snapshots/PDFs,
+    erneute Vorschauen, Transaktionsfehler und Neu-Finalisierung nach Löschen
+    ergänzt geprüft. Echte Offline-Electron-Tests sichern auch Monatswechsel,
+    Löschfehler, erneuten Versuch und Datenerhalt nach App-Neustart ab.
+-   [x] Prüfen, dass nur abrechnungsfähige bzw. erledigte Leistungen in
     Rechnungen einfließen.
--   [ ] Fehler- und Grenzfälle testen, etwa doppelte Aktionen, fehlende
+    Filtermatrix für Status, manuelle/generierte Termine, Stunden/Pauschale
+    und Monats-/Jahresgrenzen ergänzt. Vorschau, finale Positionen, Snapshot und
+    PDF-Erzeugung enthalten ausschließlich erledigte Termine des gewählten Monats;
+    gespeicherte Preise bleiben auch nach Deaktivierung der Tätigkeit maßgeblich.
+-   [x] Fehler- und Grenzfälle testen, etwa doppelte Aktionen, fehlende
     Daten und Programmabstürze.
--   [ ] Bestehende automatisierte Tests ausführen und bei Bedarf
+    Gleichzeitige API-Aktionen, Doppelklick und leere Oberfläche ergänzt.
+    Echte Prozessabbrüche prüfen SQLite-Rollback, PDF-Veröffentlichung vor
+    Datenbank-Commit sowie Electron-Absturz mit Backend-Beendigung und Wiederanlauf.
+    Die bestehende Grenze zwischen Dateisystem und SQLite ist dokumentiert.
+-   [x] Bestehende automatisierte Tests ausführen und bei Bedarf
     erweitern.
+    Abschließende Linux-Prüfung: 355 Python-Tests einschließlich aller vier
+    Offline-Electron-Varianten mit Absturzwiederanlauf ohne Überspringen bestanden;
+    46 JavaScript-Tests, elf Starter-/Build-Syntaxprüfungen und Syntaxprüfung des
+    Electron-Testtreibers bestanden. Paketvorbereitung und lokale Abhängigkeiten
+    zusätzlich geprüft. Die Windows-Abnahme gemäß Definition of Done bleibt offen.
+
+## Bewertung der Netzwerkabhängigkeiten (Schritt 2)
+
+Die Bewertung bezieht sich auf den aus Phase 1–3 übernommenen Code und die
+in Schritt 1 erfassten Abhängigkeiten. Sie unterscheidet den laufenden lokalen
+Betrieb von der vorherigen Einrichtung und dem Erzeugen eines Builds.
+
+| Abhängigkeit | Für den lokalen Betrieb zwingend? | Begründung / Folgerung |
+| --- | --- | --- |
+| HTTP über Loopback (`127.0.0.1` oder `::1`) | Ja, lokale Kommunikation | Electron lädt Oberfläche, Ressourcen und REST-API vom selbst gestarteten Python-/Uvicorn-Dienst; die Startprüfung benötigt dieselbe Origin. Kalender, Einstellungen, Wochenplan und Rechnungsabläufe verwenden relative `/api/...`-Pfade. Internet, DNS und ein externer Server sind dafür nicht erforderlich. Belege: `electron/config.cjs`, `electron/startup.cjs`, `scripts/run.cjs`, `frontend/js/`. |
+| PDF-Abruf über den lokalen Dienst | Ja, für Anzeige und Download | Auch die an den Standardbrowser übergebene URL zeigt ausschließlich auf `/api/invoices/{id}/pdf` derselben Loopback-Origin. Der lokale Dienst muss während des Abrufs laufen; eine Internetverbindung benötigt dieser Abruf nicht. Beleg: `electron/browser-links.cjs`. Eigenes Netzwerkverhalten des Standardbrowsers gehört nicht zum PDF-Abruf der Anwendung. |
+| CDN-Ressourcen der API-Dokumentation | Nein | FastAPIs automatisch registrierte `/docs`- und `/redoc`-Seiten binden JavaScript/CSS von `cdn.jsdelivr.net`, ein Favicon von `fastapi.tiangolo.com` und bei ReDoc Schrift-CSS von `fonts.googleapis.com` ein. Diese Hilfsseiten sind nicht Teil der Produktabläufe. Ihre externen Ressourcen können für den lokalen Modus in Schritt 3 deaktiviert oder ersetzt werden, ohne die fachliche REST-API zu entfernen. Beleg: `FastAPI(...)` in `backend/main.py` und die installierten FastAPI-Dokumentationsvorlagen. |
+| GitHub, npm-Registry, Python-Paketquellen und Electron-Downloads | Nein, nach abgeschlossener Einrichtung | Repository-Bezug, Paketinstallation und ein nicht gecachter Windows-Build können Downloads benötigen. Der normale App-Start installiert oder lädt keine Pakete nach. Electron sowie Python mit FastAPI/Uvicorn und ReportLab müssen bereits lokal vorhanden sein; der Windows-Testbuild enthält weiterhin keine eingebettete Python-Umgebung. Belege: `README.md`, `package-lock.json`, `requirements.txt`, `scripts/package_windows.cjs`. Eine erstmalige Einrichtung ohne lokale Pakete wird damit nicht zugesichert. |
+| Netzlaufwerke oder synchronisierte Speicherordner | Nein | Die Standardablagen für SQLite und Dokumente sind lokal. Benutzerdefinierte absolute Pfade können jedoch auf einen extern abhängigen Speicher zeigen. Für vollständig lokalen Betrieb müssen Datenbank, Dokumente und gegebenenfalls Importquellen auf erreichbaren lokalen Datenträgern liegen. Belege: `backend/paths.py`, `electron/main.cjs`, `electron/backend.cjs`. Es besteht keine eingebaute Cloud-Synchronisierung. |
+| Externe fachliche Dienste, Konten und Cloud-Datenbank | Nein; nicht implementiert | Kunden-/Empfängereinstellungen, Termine, Status und Rechnungssnapshots werden in SQLite verarbeitet, PDFs im lokalen Dokumentendienst. Es gibt keine eingerichtete Anmeldung, externe Fach-API, Telemetrie oder automatische Updateprüfung. Belege: `backend/main.py`, `backend/database.py`, `backend/document_storage.py`, `electron/main.cjs`. |
+
+**Ergebnis:** Für den vorgesehenen lokalen Betrieb muss keine externe
+Netzwerkabhängigkeit erhalten bleiben. Die Kommunikation zwischen Oberfläche,
+Backend und PDF-Browser über Loopback bleibt erhalten. Die externen Ressourcen
+der API-Dokumentation sind der konkrete Ansatzpunkt für Schritt 3.
+Lokale Schrift-/Bibliotheksverfügbarkeit wird erst in Schritt 4 vollständig
+geprüft. Diese Quellcodebewertung ersetzt weder den praktischen Offline-Test
+aus Schritt 5 noch die offene native Windows-Abnahme oder eine Messung möglichen
+Hintergrundverkehrs von Chromium, Betriebssystem und Standardbrowser.
+
+## Lokale Ressourcenprüfung (Schritt 4)
+
+Prüfung am 13.11.2026 unter Linux, ohne Änderung vorhandener Builds oder
+Nutzerdaten und ohne Download zusätzlicher Ressourcen:
+
+- **Frontend:** Beide HTML-Ressourcen (`css/style.css`, `js/app.js`) und alle
+  fünf ES-Module sind lokal vorhanden; sämtliche Modulimporte lassen sich
+  lokal auflösen. CSS enthält weder `@import`, `@font-face` noch `url(...)`.
+  Der vorhandene Produktions-Build stimmt für alle Quelldateien byteweise
+  mit `frontend/` überein.
+- **Oberflächenschriften:** `Inter` ist optional und wird nicht mitgeliefert
+  oder nachgeladen. Die vorhandene CSS-Fallback-Liste verwendet lokale
+  Systemschriften; `fc-match` löst hier sowohl `Inter` als auch `system-ui`
+  auf die installierte Noto Sans auf. Auf Windows ist die konkrete Schrift
+  systemabhängig; identische Darstellung über Betriebssysteme wird nicht
+  zugesichert.
+- **PDF und Logos:** ReportLabs Standardschriften `Helvetica` und
+  `Helvetica-Bold` samt lokaler Zeichenbreitenberechnung für Umlaute, ß und €
+  sind verfügbar. Es sind PDF-Standardschriften, keine nachzuladenden Webfonts.
+  Logos gelangen als Bildbytes über `BytesIO` in die PDF-Erzeugung; Pillow
+  ist lokal importierbar. PDF-/Logo-Verarbeitung wird zusätzlich durch die
+  vorhandenen Rechnungs- und API-Tests geprüft. Die tatsächliche Anzeige im
+  Standardbrowser bleibt eine separate Abnahme.
+- **Python:** FastAPI, Uvicorn, Pydantic, ReportLab, Pillow, SQLite sowie
+  die Testabhängigkeiten pytest und `httpx2` sind in der vorhandenen Umgebung
+  verfügbar. Die Anwendung benötigt beim Start keine Paketinstallation.
+- **Electron und Paketinhalt:** Die installierte Linux-Laufzeit enthält
+  Ressourcenpakete, ICU-Daten, Snapshots und `locales/de.pak`; `ldd` meldet
+  keine fehlenden Bibliotheken. `prepareWindowsSource()` wurde mit echten
+  Projektquellen in einer temporären Kopie ausgeführt: Frontend samt
+  Importkette und Build-Kennung, Backend-/Electron-Module, alle drei Icons,
+  Startskripte und `requirements.txt` sind vollständig enthalten.
+
+**Ergebnis:** Für die hier eingerichtete Umgebung fehlen keine benötigten
+lokalen Ressourcen; zusätzliche Webfonts oder Frontend-Bibliotheken sind
+nicht erforderlich. Der Windows-Testbuild enthält weiterhin keine Python-
+Laufzeit oder Python-Pakete. Diese müssen vor dem Offlinebetrieb lokal
+eingerichtet sein; eine eigenständig verteilbare Windows-Version oder native
+Windows-Ausführung wird durch diese Paketvorbereitung nicht nachgewiesen.
+Der Test mit tatsächlich deaktiviertem Internet bleibt Schritt 5.
+
+## Praktische Offline-Prüfung (Schritt 5)
+
+Am 13.11.2026 wurden alle vier Varianten aus `tests/test_desktop_invoice.py`
+mit echten Electron-Fenstern, unverändertem Produktcode, eigenem Backend und
+temporären Daten in einem isolierten Linux-Netzwerk-Namespace ausgeführt:
+**4 Tests bestanden**. Der Namespace enthält ausschließlich die aktive
+Loopback-Schnittstelle mit `127.0.0.1` und `::1`; Verbindungsversuche zu externen
+IPv4-/IPv6-Testadressen scheitern mit `ENETUNREACH`. Der Python-Test prüft diese
+Voraussetzung für jede Variante. Electron prüft bei Erststart und Neustart
+denselben geerbten Namespace sowie die fehlende externe Erreichbarkeit.
+Damit ist nicht nur eine Renderer-Anfrage blockiert: Auch Electron-Main und
+das von ihm gestartete Python-Backend haben keine externe Netzverbindung.
+Die Chromium-Sandbox bleibt eingeschaltet, die übrige Sitzung bleibt online.
+
+Geprüft wurden Entwicklung und Produktion jeweils mit Standardablage und
+eigenem Dokumentenordner. Der bestehende Test umfasst Start und lokale
+Ressourcen, Termin-Testdaten, Vorschau und Vorschauänderung, Finalisierung,
+PDF-Download, Archivöffnung, Löschabbruch/-bestätigung, erneute Finalisierung,
+Fehlerbehebung an der Dokumentenablage und Datenerhalt nach vollständigem
+App-Neustart. Alle vier Varianten liefen erfolgreich; die geprüften Beträge,
+Nummernkreise und PDF-Dateien blieben nach dem Neustart erhalten.
+Diese Offline-Durchläufe ersetzen nicht die noch folgenden vollständigen
+fachlichen Einzelprüfungen der Schritte 6–12.
+
+Der Aufruf mit `TTC_RUN_ELECTRON_TESTS=1` und `TTC_EXPECT_OFFLINE=1` innerhalb
+von `unshare --user --map-current-user --net --keep-caps` ist in der README
+dokumentiert. Das zweite Flag allein deaktiviert keine Verbindung, sondern
+fordert die überprüfte Offline-Testumgebung an. Es gibt keine produktive
+Netzwerkumschaltung und keine Änderung an Nutzerdaten oder Systemadaptern.
+Native Windows-Ausführung und das physische Abschalten eines Netzwerkadapters
+bleiben separat offen. Die PDF-Übergabe wird weiterhin abgefangen und Dialoge
+werden kontrolliert beantwortet; Anzeige/Druck im tatsächlichen Standardbrowser
+und manuelle Betriebssystemdialoge sind durch diesen Test nicht abgenommen.
+
+## Empfängerverwaltung prüfen (Schritt 6)
+
+Gemäß Bestandsaufnahme aus Phase 0 bedeutet Kundenverwaltung hier die
+vorhandene Pflege eines Rechnungsempfängers in den Organisationseinstellungen.
+Eine Kundenliste, mehrere Empfänger oder das Löschen eines Kundendatensatzes
+sind nicht implementiert und wurden nicht neu eingeführt.
+
+- `tests/test_api.py` ergänzt 24 Fälle: Laden und Speichern aller fünf Felder,
+  Leerzeichenbereinigung, Unicode/Sonderzeichen, führende Null der Postleitzahl,
+  Teiländerung, erneute Initialisierung und Leeren. Grenzwerte werden pro Feld
+  akzeptiert; Überlängen, `null`, falsche Datentypen und ungültige E-Mail-Adressen
+  werden abgelehnt, ohne andere Einstellungen teilweise zu ändern.
+- Der bestehende Snapshot-Test prüft nun zusätzlich alle Empfängerfelder:
+  Änderungen gelten für neue Rechnungen; ältere Snapshots und gespeicherte
+  PDFs bleiben erhalten.
+- Der echte Electron-Test verwendet das vorhandene Formular: ungültige
+  E-Mail-Adresse abweisen, alle Felder ausfüllen und speichern, optionale
+  E-Mail-Adresse wieder leeren, übrige Daten erhalten und nach Neuladen sowie
+  vollständigem App-Neustart wieder anzeigen. Alle vier Varianten aus
+  Entwicklung/Produktion und Standard-/eigener Ablage werden offline geprüft.
+
+Die Tests verwenden ausschließlich temporäre Daten. Es war keine Änderung
+am Produktcode erforderlich. Native Windows-Abnahme und tatsächliche
+PDF-Darstellung im Standardbrowser bleiben wie bisher separat offen.
+
+## Wochenplan und Terminverwaltung prüfen (Schritt 7)
+
+Die API-Prüfung ergänzt 24 Fälle für den bestehenden Funktionsumfang:
+
+- Alle sieben Wochentage, Jahreswechsel und Schaltjahr, keine automatische
+  Generierung in vergangenen Monaten und keine Duplikate bei erneutem Laden.
+- Planänderung, Deaktivierung und Entfernen ohne Verlust vorhandener Termine;
+  neue Monate verwenden die geänderten Planwerte. Ungültige Stapel werden
+  einschließlich vorheriger Änderungen vollständig zurückgerollt, auch bei
+  doppelten oder unbekannten IDs und unbekannten Tätigkeiten.
+- Manuelle Termine anlegen, auf einen anderen Tag verschieben, Tätigkeit und
+  Stunden ändern, Notiz oder Stunden leeren und gezielt löschen. Andere Termine
+  bleiben erhalten. Ungültige Daten, Datentypen, Überlängen und nicht mehr
+  vorhandene IDs werden ohne unbeabsichtigte Änderungen behandelt.
+- Inaktive Tätigkeiten erzeugen keine neuen Plantermine und sind für neue
+  Termine gesperrt. Eine bereits zugeordnete, inzwischen deaktivierte Tätigkeit
+  darf beim Bearbeiten eines bestehenden Termins beibehalten werden.
+
+Die echten Electron-Tests ergänzen das Wochenplanformular (Anlegen, Stunden
+ändern, Deaktivieren, Entfernen), Kalendernavigation und den Termindialog
+(Abbrechen, Anlegen, Ändern und Pauschale ohne Stunden). Der zuletzt bearbeitete
+Termin verwendet dabei eine inzwischen deaktivierte Tätigkeit. Plan und Termine
+werden nach einem vollständigen App-Neustart erneut mit den gespeicherten Werten
+verglichen, jeweils in Entwicklung/Produktion und Standard-/eigener Ablage.
+
+Dabei wurden zwei Produktfehler behoben: Das Planformular wertet SQLite-`0`
+nun korrekt als deaktiviert aus. Die Termin-API erlaubt das Beibehalten der
+bereits zugeordneten inaktiven Tätigkeit; neue Zuordnungen zu anderen inaktiven
+Tätigkeiten bleiben abgelehnt. Statuswechsel und Rechnungsregeln sind weiterhin
+Gegenstand der folgenden Schritte. Native Windows-Abnahme bleibt offen.
+
+## Statusverwaltung prüfen (Schritt 8)
+
+Die ergänzten 31 API-Fälle prüfen alle neun Kombinationen aus `planned`,
+`completed` und `cancelled` jeweils für manuelle und generierte Termine,
+einschließlich unverändertem Status und Wiederholung. Andere Termindaten und
+andere Termine bleiben unverändert; erneute Initialisierung und Kalenderabruf
+erhalten den Status. Ungültige Werte einschließlich `null` und falscher
+Datentypen werden beim Anlegen und Ändern ohne Teiländerungen abgelehnt.
+
+Die Monatsaktion aktualisiert ausschließlich die berechtigten geplanten
+Wochenplanvorkommen im ausgewählten Monat. Bereits durchgeführte, ausgefallene,
+manuelle und verschobene Termine bleiben unverändert. Getrennte Monate,
+wiederholter Abschluss mit Änderungszahl null, ein Monat ohne vorhandene
+Termine und ungültige Zeiträume sind zusätzlich geprüft.
+
+Der echte Electron-Test bedient Durchgeführt-Checkbox und „Nicht gemacht“,
+prüft die gesperrten Schnellaktionen ausgefallener Termine und korrigiert einen
+ausgefallenen Termin über den Dialog zurück auf geplant. Eine vorübergehend
+nicht verfügbare Testdatenbank führt zu einer sichtbaren Fehlermeldung und
+zurückgesetzter Checkbox; nach Wiederherstellung gelingt der erneute Versuch.
+Abbruch, Bestätigung und Wiederholung der Monatsaktion werden mit kontrollierten
+Bestätigungsantworten geprüft. Der anschließende vollständige App-Neustart
+erhält alle drei Statuswerte und die übrigen Kalenderdaten.
+
+Geprüft wird in allen vier Offline-Varianten aus Entwicklung/Produktion und
+Standard-/eigener Dokumentenablage, ausschließlich mit temporären Daten.
+Am Produktcode war für diesen Schritt keine Änderung erforderlich. Die
+Abrechnungsfilter werden in den folgenden Schritten gesondert geprüft;
+native Windows-Abnahme und manuelle Betriebssystemdialoge bleiben offen.
+
+## Entwürfe und Rechnungsvorschauen prüfen (Schritt 9)
+
+Die bestehende Entwurfsform ist die in SQLite gespeicherte, aktualisierbare
+Vorschau (`is_preview = 1`); eine separate Entwurfsansicht oder manuelle
+Positionsbearbeitung wurde nicht eingeführt.
+
+13 zusätzliche API-Fälle sichern folgende Eigenschaften ab:
+
+- Wiederholte Vorschauen aktualisieren denselben Entwurf und ersetzen dessen
+  Positionen. Geänderte und gelöschte Termine werden bei Aktualisierung
+  berücksichtigt; ein leer gewordener Monat enthält keine veralteten Positionen.
+  Entwürfe anderer Monate bleiben erhalten.
+- Vorschauen erzeugen weder PDF noch Rechnungsnummer oder Archiveintrag.
+  Erneute Datenbankinitialisierung erhält den Entwurf. Eine vorhandene Position
+  mit Preis null bleibt von einem Monat ohne Positionen unterscheidbar.
+- Ein erzwungener SQLite-Fehler beim Ersetzen der Positionen rollt die gesamte
+  Aktualisierung zurück; der vorherige Entwurf bleibt vollständig erhalten.
+  Nach Beseitigung des Fehlers gelingt der erneute Versuch. Ungültige Zeiträume
+  werden ohne Änderung des vorhandenen Entwurfs abgelehnt.
+
+Die echten Electron-Tests prüfen Monatswahl und Ladezustand, leere Vorschauen,
+Pauschalposition ohne Stunden, Preis null, sichere Textanzeige mit Sonderzeichen
+sowie sichtbare Speicherfehler und erneuten Abruf. Ohne Finalisierung bleiben
+Archiv, Dokumentenordner und Nummernkreis unverändert. Ein gespeicherter Entwurf
+wird vor und nach vollständigem App-Neustart direkt aus SQLite verglichen,
+damit ein neuer Vorschauabruf den Persistenznachweis nicht verdeckt.
+
+Bei der Prüfung der gültigen Jahre 1 und 99 wurde eine falsche Jahresanzeige
+gefunden: `Date.UTC` interpretiert diese als 1901 beziehungsweise 1999.
+Die Vorschau setzt das UTC-Jahr jetzt ausdrücklich und zeigt den angeforderten
+Zeitraum korrekt. Alle vier Offline-Varianten aus Entwicklung/Produktion und
+Standard-/eigener Ablage werden geprüft. Finale Rechnungsabläufe und vollständige
+Abrechnungsfilter folgen separat; native Windows-Abnahme bleibt offen.
+
+## Finale Rechnungsabläufe prüfen (Schritt 10)
+
+Fünf zusätzliche API-Fälle ergänzen die vorhandenen Rechnungs-, Datei- und
+Konkurrenztests um folgende zusammenhängende Abläufe:
+
+- Die Finalisierung berechnet aktuelle Termine neu, auch wenn der gespeicherte
+  Entwurf inzwischen veraltet ist. Der Entwurf wird zur finalen Rechnung,
+  Snapshots und PDF werden gespeichert und der Nummernkreis genau einmal erhöht.
+  Ein erneuter Finalisierungsversuch verändert diese Rechnung nicht.
+- Ein echter SQLite-Fehler beim Einfügen finaler Positionen rollt Entwurf,
+  Positionen und Nummernkreis zurück. Die gerade erzeugte PDF wird bereinigt;
+  andere Dokumente bleiben erhalten. Nach Fehlerbehebung gelingt die Finalisierung.
+- Das Löschen der Quelltermine verändert weder finalen Snapshot noch PDF.
+  Die gespeicherten Rechnungspositionen bleiben erhalten; lediglich ihre
+  Fremdschlüssel zu gelöschten Terminen werden wie vorgesehen auf `null` gesetzt.
+  Eine neue leere Vorschau ersetzt die finale Rechnung nicht.
+- Rechnungslöschen erhält einen neuen Entwurf, andere Monatsrechnungen, deren
+  PDFs, exportierte Kopien und den Nummernkreis. Danach kann der aktuelle
+  Entwurf unter neuer Rechnungsnummer finalisiert werden. Wiederholtes Löschen
+  und der Versuch, eine Vorschau als finale Rechnung zu löschen, sind abgesichert.
+- Ein SQLite-Fehler vor der Datenbanklöschung erhält die Rechnung samt PDF;
+  der anschließende erneute Löschversuch funktioniert.
+
+Die echten Electron-Tests ergänzen den bisherigen vollständigen Rechnungsablauf
+um Monatswechsel nach Finalisierung (keine veralteten PDF-Links in der neuen
+Vorschau) und einen fehlgeschlagenen Löschversuch im Archiv. Fehleranzeige,
+wieder freigegebener Löschbutton, unveränderte PDF und Nummernkreis sowie der
+erfolgreiche erneute Versuch werden geprüft. Löschabbruch, bestätigtes Löschen,
+Neu-Finalisierung und vollständiger App-Neustart bleiben Bestandteil aller vier
+Offline-Varianten aus Entwicklung/Produktion und Standard-/eigener Ablage.
+
+Am Produktcode war keine Änderung erforderlich. Die vollständige Prüfung der
+Abrechnungsfilter folgt in Schritt 11. Native Windows-Ausführung, echte
+Standardbrowser-Darstellung und manuelle Betriebssystemdialoge bleiben offen.
+
+## Abrechnungsfähige Leistungen prüfen (Schritt 11)
+
+Die dokumentierte Geschäftsregel wird unverändert beibehalten: Nur gespeicherte
+Termine mit Status `completed` im ausgewählten Monat werden abgerechnet.
+Wochenplanvorkommen sind zunächst geplant; `planned` und `cancelled` werden
+nicht durch die Vorschau oder Finalisierung automatisch als erledigt behandelt.
+Ein zusätzliches Abrechenbarkeitsfeld wurde nicht eingeführt.
+
+39 zusätzliche API-Fälle prüfen:
+
+- Eine Matrix aus drei Statuswerten, manueller/generierter Herkunft,
+  Stunden/Pauschale sowie Terminen im vorherigen, ausgewählten und folgenden
+  Monat. Sie umfasst den Jahreswechsel. Positionen und Summen werden in der
+  Vorschau, der finalen Rechnung, dem gespeicherten Snapshot und den an den
+  tatsächlichen PDF-Renderer übergebenen Positionen verglichen. Nicht
+  abrechenbare Fälle erzeugen weder finale Rechnung noch PDF oder Nummernverbrauch.
+- Ein nach der Vorschau auf geplant oder ausgefallen geänderter Termin darf
+  nicht aus einem veralteten Entwurf finalisiert werden. Nur die anschließend
+  erneut bestätigte Leistung fließt ein.
+- Ein gemischter Monat enthält nur die ausdrücklich erwarteten erledigten
+  Leistungen, einschließlich erster/letzter Monatstage und Pauschale. Spätere
+  Preisänderung und Deaktivierung der Tätigkeit entfernen keine historischen
+  erledigten Leistungen und ändern deren gespeicherten Preis nicht.
+
+Die echten Electron-Tests ergänzen erledigte Testtermine außerhalb des Monats
+sowie den Wechsel der einzigen berechtigten Leistung auf geplant/ausgefallen
+und zurück. Leere Vorschau und gesperrte Finalisierung werden geprüft. Nach dem
+vollständigen Rechnungsablauf enthält die finale Monatsrechnung ausschließlich
+die erwartete erledigte Position; dies wird vor und nach App-Neustart direkt
+in SQLite geprüft. Alle vier Offline-Varianten aus Entwicklung/Produktion und
+Standard-/eigener Ablage sind einbezogen.
+
+Am Produktcode war keine Änderung erforderlich. Native Windows-Abnahme und
+tatsächliche Darstellung der PDF im Standardbrowser bleiben separat offen.
+
+## Fehler, Grenzfälle und Abstürze prüfen (Schritt 12)
+
+Die bisherigen Tests für fehlende/beschädigte/gesperrte Datenbanken, Dateifehler,
+ungültige Eingaben, veränderte Zuordnungen, Portkonflikte und Prozessfehler bleiben
+Teil der Regression. Fünf neue automatisierte Fälle ergänzen:
+
+- Zwei gleichzeitige Vorschauanfragen erhalten einen Entwurf ohne doppelte
+  Positionen. Zwei gleichzeitige Finalisierungen erzeugen genau eine finale
+  Rechnung und PDF mit einmaligem Nummernverbrauch; die zweite Anfrage meldet
+  einen Konflikt. Gleichzeitiges Löschen entfernt die Rechnung genau einmal.
+- Ein eigener Schreibprozess wird während einer offenen SQLite-Transaktion mit
+  vorhandenem Rollback-Journal hart beendet. Unbestätigte Änderungen an Empfänger,
+  Nummernkreis und Terminen verschwinden beim Wiederöffnen; bestätigte Daten
+  bleiben erhalten. Integritäts- und Fremdschlüsselprüfung sind erfolgreich.
+- Ein eigener Prozess wird nach tatsächlicher PDF-Veröffentlichung und vor
+  Aufruf der Datenbank-Finalisierung hart beendet. Entwurf und Nummernkreis
+  bleiben erhalten. Die hinterlassene PDF wird bei Wiederholung nicht
+  überschrieben (HTTP 409); nach ausdrücklicher Bestandssicherung/Freigabe des
+  Dateinamens gelingt der erneute Versuch. Diese bestehende Grenze erfordert
+  im betroffenen Absturzfenster eine manuelle Dateiprüfung, keine automatische
+  Löschung möglicherweise fremder Dokumente. Hinweise stehen in der README.
+
+Die echten Electron-Tests prüfen zusätzlich den Dialog ohne Tätigkeitsdaten,
+ein leeres Archiv und den Doppelklick auf Finalisieren. Unter Linux folgt auf
+den normalen Rechnungsablauf und Neustart ein tatsächlicher `SIGKILL` des
+Test-Hauptprozesses. Das eigene Backend muss danach den lokalen Port freigeben.
+Ein weiterer Start prüft die gespeicherten Rechnungen/PDFs, Einstellungen,
+Kalenderdaten, Entwurf und Nummernkreis erneut. Alle vier Kombinationen aus
+Entwicklung/Produktion und Standard-/eigener Ablage werden offline einbezogen.
+
+Es werden ausschließlich temporäre Daten und eigene Testprozesse verwendet;
+Produktcode bleibt unverändert. Die Tests decken die genannten Abbruchpunkte
+ab, simulieren jedoch keinen Stromausfall und garantieren keine Wiederherstellung
+beliebiger Hardware-/Dateisystemschäden. Native Windows-Absturzabnahme bleibt offen.
 
 ## Ergebnis / Abnahmekriterien
 

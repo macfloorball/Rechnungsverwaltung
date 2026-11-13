@@ -97,7 +97,15 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="TTC-Rechnungsverwaltung", lifespan=lifespan)
+# Die eingebauten Dokumentationsoberflächen laden externe CDN-Ressourcen.
+# Das lokale OpenAPI-Schema bleibt für Entwicklung und Werkzeuge verfügbar.
+app = FastAPI(
+    title="TTC-Rechnungsverwaltung",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    swagger_ui_oauth2_redirect_url=None,
+)
 logger = logging.getLogger(__name__)
 
 
@@ -479,7 +487,10 @@ def put_training(
             values["activity_type_id"],
             database_path,
         )
-        if activity is None or not activity["is_active"]:
+        if activity is None or (
+            not activity["is_active"]
+            and payload.activity_type_id != existing["activity_type_id"]
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Aktive Tätigkeitsart wurde nicht gefunden",

@@ -2,6 +2,9 @@ import base64
 import json
 import sqlite3
 import struct
+import subprocess
+import sys
+import time
 import zlib
 from datetime import date
 from pathlib import Path
@@ -43,6 +46,29 @@ def client(tmp_path: Path):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/docs/oauth2-redirect"])
+def test_external_documentation_pages_are_unavailable(client: TestClient, path: str) -> None:
+    response = client.get(path)
+    assert response.status_code == 404
+    assert "text/html" not in response.headers.get("content-type", "")
+
+
+def test_local_frontend_and_openapi_remain_available(client: TestClient) -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'src="js/app.js"' in response.text
+    assert client.get("/js/app.js").status_code == 200
+    assert client.get("/css/style.css").status_code == 200
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schema = response.json()
+    assert schema["info"]["title"] == "TTC-Rechnungsverwaltung"
+    for path in ("/api/health", "/api/calendar/{year}/{month}", "/api/invoices"):
+        assert path in schema["paths"]
+    assert not schema.get("servers")
 
 
 def test_health_and_request_validation(client: TestClient) -> None:
@@ -596,6 +622,74 @@ def test_activity_prices_are_centralized_in_settings(client: TestClient) -> None
     assert response.json()["activities"][0]["hourly_rate_cents"] == 1750
 
 
+RECIPIENT_LIMITS = {
+    "recipient_name": 200,
+    "recipient_street": 200,
+    "recipient_postal_code": 20,
+    "recipient_city": 100,
+    "recipient_email": 254,
+}
+
+
+def test_recipient_can_be_edited_partially_and_cleared(client: TestClient) -> None:
+    original = client.get("/api/organization/settings").json()
+    recipient = {
+        "recipient_name": "TTC O'Brien & Söhne <Verein>",
+        "recipient_street": "Äußere Straße 7",
+        "recipient_postal_code": "01234",
+        "recipient_city": "Köln",
+        "recipient_email": "kontakt@example.org",
+    }
+    response = client.put("/api/organization/settings", json={
+        key: f"  {value}  " for key, value in recipient.items()
+    })
+    assert response.status_code == 200
+    assert {key: response.json()[key] for key in recipient} == recipient
+    assert response.json()["name"] == original["name"]
+    assert response.json()["next_invoice_number"] == original["next_invoice_number"]
+
+    response = client.put("/api/organization/settings", json={"recipient_city": "Bonn"})
+    assert response.status_code == 200
+    recipient["recipient_city"] = "Bonn"
+    assert {key: response.json()[key] for key in recipient} == recipient
+    initialize_database(client.app.state.test_database_path)
+    loaded = client.get("/api/organization/settings").json()
+    assert {key: loaded[key] for key in recipient} == recipient
+
+    response = client.put("/api/organization/settings", json={key: "  " for key in recipient})
+    assert response.status_code == 200
+    assert all(response.json()[key] == "" for key in recipient)
+    assert all(client.get("/api/organization/settings").json()[key] == "" for key in recipient)
+    assert response.json()["name"] == original["name"]
+
+
+@pytest.mark.parametrize("field,limit", RECIPIENT_LIMITS.items())
+def test_recipient_accepts_maximum_field_lengths(client: TestClient, field: str, limit: int) -> None:
+    value = "a" * limit if field != "recipient_email" else "a" * (limit - 12) + "@example.org"
+    response = client.put("/api/organization/settings", json={field: value})
+    assert response.status_code == 200
+    assert client.get("/api/organization/settings").json()[field] == value
+
+
+@pytest.mark.parametrize("field,limit", RECIPIENT_LIMITS.items())
+@pytest.mark.parametrize("kind", ["too-long", "null", "wrong-type"])
+def test_invalid_recipient_update_preserves_all_settings(client: TestClient, field: str, limit: int, kind: str) -> None:
+    original = client.get("/api/organization/settings").json()
+    value = {"too-long": "a" * (limit + 1), "null": None, "wrong-type": []}[kind]
+    response = client.put("/api/organization/settings", json={"name": "Nicht speichern", field: value})
+    assert response.status_code == 422
+    assert any(error["loc"][-1] == field for error in response.json()["detail"])
+    assert client.get("/api/organization/settings").json() == original
+
+
+@pytest.mark.parametrize("email", ["ungueltig", "a b@example.org", "a@@example.org"])
+def test_invalid_recipient_email_preserves_existing_data(client: TestClient, email: str) -> None:
+    original = client.get("/api/organization/settings").json()
+    response = client.put("/api/organization/settings", json={"recipient_city": "Nicht speichern", "recipient_email": email})
+    assert response.status_code == 422
+    assert client.get("/api/organization/settings").json() == original
+
+
 def test_organization_settings_are_validated_and_persist_after_restart(
     client: TestClient,
 ) -> None:
@@ -721,6 +815,11 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
         "/api/organization/settings",
         json={
             "name": "Alter Absender",
+            "recipient_name": "Alter Empfänger",
+            "recipient_street": "Alte Straße 1",
+            "recipient_postal_code": "01234",
+            "recipient_city": "Köln",
+            "recipient_email": "alt@example.org",
             "city": "Köln",
             "iban": "DE89370400440532013000",
             "account_holder": "Alter Kontoinhaber",
@@ -769,6 +868,11 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
         "/api/organization/settings",
         json={
             "name": "Neuer Absender",
+            "recipient_name": "Neuer Empfänger",
+            "recipient_street": "Neue Straße 2",
+            "recipient_postal_code": "56789",
+            "recipient_city": "Bonn",
+            "recipient_email": "neu@example.org",
             "iban": "DE12500105170648489890",
             "account_holder": "Neuer Kontoinhaber",
             "payment_due_days": 30,
@@ -796,6 +900,10 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
             (first_invoice["id"],),
         ).fetchone()[0]
     assert snapshots[first_invoice["id"]]["name"] == "Alter Absender"
+    for field, value in {"recipient_name": "Alter Empfänger", "recipient_street": "Alte Straße 1",
+                         "recipient_postal_code": "01234", "recipient_city": "Köln", "recipient_email": "alt@example.org"}.items():
+        assert snapshots[first_invoice["id"]][field] == value
+        assert snapshots[second_invoice["id"]][field] == changed.json()[field]
     assert snapshots[first_invoice["id"]]["iban"] == "DE89370400440532013000"
     assert snapshots[first_invoice["id"]]["items"][0]["unit_rate_cents"] == 1500
     assert snapshots[second_invoice["id"]]["name"] == "Neuer Absender"
@@ -1011,6 +1119,156 @@ def test_final_invoice_can_be_deleted_before_finalizing_current_preview(
             (second_training["id"], "completed"),
             (other_training["id"], "completed"),
         ]
+
+
+@pytest.fixture
+def calendar_activities(client, monkeypatch):
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2031, 12, 15)
+
+    monkeypatch.setattr("backend.main.date", FrozenDate)
+    monkeypatch.setattr("backend.database.date", FrozenDate)
+    return client.put("/api/settings", json={"activities": [
+        {"name": "Training", "hourly_rate_cents": 1500},
+        {"name": "Assistenz", "hourly_rate_cents": 2200},
+        {"name": "Inaktiv", "hourly_rate_cents": 1000, "is_active": False},
+    ]}).json()["activities"]
+
+
+def test_weekly_plan_covers_all_weekdays_and_leap_year_without_duplicates(client, calendar_activities):
+    activity = calendar_activities[0]
+    response = client.put("/api/weekly-plan", json=[
+        {"weekday": weekday, "activity_type_id": activity["id"], "hours": weekday + 1}
+        for weekday in range(7)
+    ])
+    assert response.status_code == 200
+    assert len(response.json()) == 7
+    assert all(not day["trainings"] for day in client.get("/api/calendar/2031/11").json()["days"])
+    for year, month, days in ((2031, 12, 31), (2032, 1, 31), (2032, 2, 29)):
+        calendar = client.get(f"/api/calendar/{year}/{month}").json()
+        assert len(calendar["days"]) == days
+        ids = []
+        for day in calendar["days"]:
+            assert len(day["trainings"]) == 1
+            training = day["trainings"][0]
+            assert training["hours"] == date.fromisoformat(day["date"]).weekday() + 1
+            assert training["activity_type_id"] == activity["id"]
+            ids.append(training["id"])
+        assert len(set(ids)) == days
+        assert client.get(f"/api/calendar/{year}/{month}").json() == calendar
+
+
+def test_plan_changes_deactivation_and_removal_preserve_existing_trainings(client, calendar_activities):
+    from backend.database import list_records
+
+    plan = client.put("/api/weekly-plan", json=[
+        {"weekday": 0, "activity_type_id": calendar_activities[0]["id"], "hours": 1},
+    ]).json()[0]
+    before = list_records("trainings", database_path=client.app.state.test_database_path)
+    changed = {"id": plan["id"], "weekday": 6, "activity_type_id": calendar_activities[1]["id"], "hours": 3}
+    assert client.put("/api/weekly-plan", json=[changed]).status_code == 200
+    for training in before:
+        assert client.put(f"/api/trainings/{training['id']}", json={}).json() == training
+    february = client.get("/api/calendar/2032/2").json()
+    generated = [training for day in february["days"] for training in day["trainings"]]
+    assert len(generated) == 5  # February 2032 has five Sundays.
+    assert all(training["hours"] == 3 and training["activity_type_id"] == calendar_activities[1]["id"] for training in generated)
+    assert client.put("/api/weekly-plan", json=[{**changed, "is_active": False}]).status_code == 200
+    assert all(not day["trainings"] for day in client.get("/api/calendar/2032/3").json()["days"])
+    assert client.put("/api/weekly-plan", json=[]).json() == []
+    remaining = list_records("trainings", database_path=client.app.state.test_database_path)
+    assert {training["id"] for training in before + generated} <= {training["id"] for training in remaining}
+    assert all(training["weekly_plan_id"] is None for training in remaining)
+
+
+@pytest.mark.parametrize("change,status", [
+    ({"weekday": -1}, 422), ({"weekday": 7}, 422),
+    ({"hours": 0}, 422), ({"hours": 1.5}, 422), ({"hours": "2"}, 422), ({"hours": None}, 422),
+    ({"activity_type_id": 99999}, 409), ({"id": 99999}, 404),
+    ({"extra": True}, 422), ({"duplicate": True}, 422),
+])
+def test_invalid_plan_batches_do_not_change_plan_or_occurrences(client, calendar_activities, change, status):
+    from backend.database import list_records
+
+    plan = client.put("/api/weekly-plan", json=[
+        {"weekday": 0, "activity_type_id": calendar_activities[0]["id"], "hours": 1},
+    ]).json()
+    before = list_records("trainings", database_path=client.app.state.test_database_path)
+    first = {key: plan[0][key] for key in ("id", "weekday", "activity_type_id", "is_active")}
+    first["hours"] = 2
+    second = {"weekday": 1, "activity_type_id": calendar_activities[1]["id"], "hours": 3, **change}
+    if change.get("duplicate"):
+        second = first
+    response = client.put("/api/weekly-plan", json=[first, second])
+    assert response.status_code == status
+    assert client.get("/api/weekly-plan").json() == plan
+    assert list_records("trainings", database_path=client.app.state.test_database_path) == before
+
+
+def test_manual_training_edit_move_and_delete_leave_other_appointments_unchanged(client, calendar_activities):
+    payload = {"training_date": "2032-02-28", "activity_type_id": calendar_activities[0]["id"], "hours": 2, "note": "Änderung <Termin>"}
+    first = client.post("/api/trainings", json=payload).json()
+    other = client.post("/api/trainings", json=payload).json()
+    assert first["id"] != other["id"]
+    response = client.put(f"/api/trainings/{first['id']}", json={
+        "training_date": "2032-02-29", "activity_type_id": calendar_activities[1]["id"],
+        "hours": None, "note": None,
+    })
+    assert response.status_code == 200
+    changed = response.json()
+    assert changed["hours"] is None and changed["note"] is None
+    assert changed["unit_rate_cents"] == 2200
+    assert changed["status"] == first["status"]
+    calendar = client.get("/api/calendar/2032/2").json()["days"]
+    assert [training["id"] for training in calendar[27]["trainings"]] == [other["id"]]
+    assert [training["id"] for training in calendar[28]["trainings"]] == [first["id"]]
+    assert client.delete(f"/api/trainings/{first['id']}").status_code == 204
+    assert client.delete(f"/api/trainings/{first['id']}").status_code == 404
+    assert client.put(f"/api/trainings/{first['id']}", json={"hours": 1}).status_code == 404
+    assert client.put(f"/api/trainings/{other['id']}", json={}).json() == other
+
+
+@pytest.mark.parametrize("change,status", [
+    ({"training_date": "2031-02-29"}, 422), ({"training_date": None}, 422),
+    ({"activity_type_id": None}, 422), ({"activity_type_id": 99999}, 404),
+    ({"hours": 0}, 422), ({"hours": 1.5}, 422), ({"hours": "2"}, 422),
+    ({"note": "a" * 1001}, 422), ({"extra": True}, 422),
+])
+def test_invalid_training_edits_preserve_appointment(client, calendar_activities, change, status):
+    original = client.post("/api/trainings", json={
+        "training_date": "2032-02-29", "activity_type_id": calendar_activities[0]["id"], "hours": 1,
+    }).json()
+    response = client.put(f"/api/trainings/{original['id']}", json={"note": "Nicht speichern", **change})
+    assert response.status_code == status
+    assert client.put(f"/api/trainings/{original['id']}", json={}).json() == original
+
+
+def test_existing_training_can_keep_its_now_inactive_activity_when_edited(client, calendar_activities):
+    activity = calendar_activities[0]
+    training = client.post("/api/trainings", json={
+        "training_date": "2032-02-29", "activity_type_id": activity["id"], "hours": 1,
+    }).json()
+    assert client.put("/api/settings", json={"activities": [{
+        "id": activity["id"], "name": activity["name"], "hourly_rate_cents": 1500, "is_active": False,
+    }]}).status_code == 200
+    response = client.put(f"/api/trainings/{training['id']}", json={
+        "activity_type_id": activity["id"], "hours": 2, "note": "Bestand bearbeiten",
+    })
+    assert response.status_code == 200
+    assert response.json()["activity_type_id"] == activity["id"]
+    assert response.json()["hours"] == 2
+    assert response.json()["note"] == "Bestand bearbeiten"
+    assert client.put(f"/api/trainings/{training['id']}", json={"activity_type_id": calendar_activities[2]["id"]}).status_code == 404
+    assert client.put(f"/api/trainings/{training['id']}", json={}).json() == response.json()
+
+
+def test_inactive_activities_do_not_generate_or_accept_new_appointments(client, calendar_activities):
+    inactive = calendar_activities[2]["id"]
+    assert client.post("/api/trainings", json={"training_date": "2032-02-29", "activity_type_id": inactive}).status_code == 404
+    assert client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": inactive, "hours": 1}]).status_code == 200
+    assert all(not day["trainings"] for day in client.get("/api/calendar/2032/2").json()["days"])
 
 
 def test_settings_weekly_plan_and_calendar(client: TestClient) -> None:
@@ -1238,6 +1496,86 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
     )
     assert january_training["hours"] == 3.0
     assert january_training["status"] == "planned"
+
+
+@pytest.mark.parametrize("generated", [False, True])
+@pytest.mark.parametrize("before,after", [
+    (before, after) for before in ("planned", "completed", "cancelled")
+    for after in ("planned", "completed", "cancelled")
+])
+def test_all_status_transitions_preserve_appointment_data(client, calendar_activities, generated, before, after):
+    activity_id = calendar_activities[0]["id"]
+    if generated:
+        client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": activity_id, "hours": 2}])
+        training_id = client.get("/api/calendar/2031/12").json()["days"][0]["trainings"][0]["id"]
+    else:
+        training_id = client.post("/api/trainings", json={
+            "training_date": "2031-12-01", "activity_type_id": activity_id, "hours": 2,
+        }).json()["id"]
+    original = client.put(f"/api/trainings/{training_id}", json={"status": before, "note": "Statusprüfung"}).json()
+    other = client.post("/api/trainings", json={
+        "training_date": "2031-12-02", "activity_type_id": calendar_activities[1]["id"], "hours": 1,
+    }).json()
+    response = client.put(f"/api/trainings/{training_id}", json={"status": after})
+    assert response.status_code == 200
+    expected = {**original, "status": after}
+    assert response.json() == expected
+    assert client.put(f"/api/trainings/{training_id}", json={"status": after}).json() == expected
+    initialize_database(client.app.state.test_database_path)
+    calendar = client.get("/api/calendar/2031/12").json()
+    stored = next(training for day in calendar["days"] for training in day["trainings"] if training["id"] == training_id)
+    assert {key: stored[key] for key in expected} == expected
+    assert client.put(f"/api/trainings/{other['id']}", json={}).json() == other
+
+
+@pytest.mark.parametrize("status", [None, "", "done", "Completed", 0, True, [], {}])
+def test_invalid_status_values_do_not_create_or_change_appointments(client, calendar_activities, status):
+    from backend.database import list_records
+
+    payload = {"training_date": "2031-12-01", "activity_type_id": calendar_activities[0]["id"], "hours": 1}
+    original = client.post("/api/trainings", json=payload).json()
+    assert client.post("/api/trainings", json={**payload, "status": status}).status_code == 422
+    assert client.put(f"/api/trainings/{original['id']}", json={"status": status, "hours": 2}).status_code == 422
+    assert list_records("trainings", database_path=client.app.state.test_database_path) == [original]
+
+
+def test_month_completion_is_repeatable_and_excludes_moved_and_manual_appointments(client, calendar_activities):
+    from backend.database import list_records
+
+    activity_id = calendar_activities[0]["id"]
+    client.put("/api/weekly-plan", json=[{"weekday": day, "activity_type_id": activity_id, "hours": 1} for day in range(7)])
+    december = client.get("/api/calendar/2031/12").json()["days"]
+    completed_id = december[0]["trainings"][0]["id"]
+    cancelled_id = december[1]["trainings"][0]["id"]
+    moved_id = december[2]["trainings"][0]["id"]
+    client.put(f"/api/trainings/{completed_id}", json={"status": "completed"})
+    client.put(f"/api/trainings/{cancelled_id}", json={"status": "cancelled"})
+    client.put(f"/api/trainings/{moved_id}", json={"training_date": "2032-01-02"})
+    manual = client.post("/api/trainings", json={"training_date": "2031-12-01", "activity_type_id": activity_id}).json()
+    before = list_records("trainings", database_path=client.app.state.test_database_path)
+    assert client.post("/api/calendar/2031/12/complete").json() == {"updated_count": 28}
+    assert client.post("/api/calendar/2031/12/complete").json() == {"updated_count": 0}
+    assert client.put(f"/api/trainings/{cancelled_id}", json={}).json()["status"] == "cancelled"
+    assert client.put(f"/api/trainings/{manual['id']}", json={}).json() == manual
+    assert client.put(f"/api/trainings/{moved_id}", json={}).json()["status"] == "planned"
+    assert client.post("/api/calendar/2032/1/complete").json() == {"updated_count": 31}
+    assert client.put(f"/api/trainings/{moved_id}", json={}).json()["status"] == "planned"
+    after = {training["id"]: training for training in list_records("trainings", database_path=client.app.state.test_database_path)}
+    assert set(after) == {training["id"] for training in before}
+    for training in before:
+        assert {key: value for key, value in after[training["id"]].items() if key != "status"} == {
+            key: value for key, value in training.items() if key != "status"
+        }
+    assert client.post("/api/calendar/2032/2/complete").json() == {"updated_count": 0}
+
+
+@pytest.mark.parametrize("year,month", [(0, 1), (10000, 1), (2031, 0), (2031, 13)])
+def test_invalid_completion_periods_leave_appointments_unchanged(client, calendar_activities, year, month):
+    from backend.database import list_records
+
+    original = client.post("/api/trainings", json={"training_date": "2031-12-01", "activity_type_id": calendar_activities[0]["id"]}).json()
+    assert client.post(f"/api/calendar/{year}/{month}/complete").status_code == 422
+    assert list_records("trainings", database_path=client.app.state.test_database_path) == [original]
 
 
 def test_complete_month_only_updates_planned_weekly_plan_occurrences(
@@ -1567,6 +1905,351 @@ def test_invoice_item_amount_multiplies_hours_by_rate_and_rounds_cents(
     assert item["hours"] == pytest.approx(0.333)
     assert item["amount_cents"] == 500
     assert preview.json()["total_amount_cents"] == 500
+
+
+@pytest.fixture
+def invoice_draft(client):
+    activity = client.put("/api/settings", json={"activities": [{"name": "Entwurf <Training>", "hourly_rate_cents": 1500}]}).json()["activities"][0]
+    trainings = [client.post("/api/trainings", json={
+        "training_date": f"2030-01-{day}", "activity_type_id": activity["id"], "hours": hours, "status": "completed",
+    }).json() for day, hours in ((15, 2), (16, None))]
+    period = {"year": 2030, "month": 1}
+    assert client.post("/api/invoices/preview", json=period).status_code == 200
+    from backend.database import list_records
+    draft = list_records("invoices", {"is_preview": 1}, client.app.state.test_database_path)[0]
+    return period, draft["id"], trainings
+
+
+def test_preview_refresh_replaces_draft_without_pdf_archive_or_number(client, invoice_draft, monkeypatch):
+    from backend.database import get_organization, list_records
+    from backend import main
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    sequence = get_organization(database)["next_invoice_number"]
+    def no_pdf(*args, **kwargs):
+        raise AssertionError("Eine Vorschau darf keine PDF rendern")
+    monkeypatch.setattr(main, "render_invoice_pdf", no_pdf)
+    assert client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 4}).status_code == 200
+    assert client.delete(f"/api/trainings/{trainings[1]['id']}").status_code == 204
+    response = client.post("/api/invoices/preview", json=period)
+    assert response.status_code == 200
+    assert response.json()["total_amount_cents"] == 6000
+    assert [item["training_id"] for item in response.json()["items"]] == [trainings[0]["id"]]
+    for _ in range(2):
+        assert client.post("/api/invoices/preview", json=period).json() == response.json()
+    initialize_database(database)
+    stored = get_invoice(draft_id, database)
+    assert stored["is_preview"] == 1 and stored["total_amount_cents"] == 6000
+    assert len(stored["items"]) == 1 and stored["items"][0]["hours"] == 4
+    assert stored["invoice_number"] is None and stored["pdf_path"] is None
+    assert stored["invoice_snapshot_json"] is None
+    assert [row["id"] for row in list_records("invoices", database_path=database)] == [draft_id]
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert client.get("/api/invoices").json() == []
+    assert client.get(f"/api/invoices/{draft_id}/pdf").status_code == 404
+    assert not list(client.app.state.test_invoice_directory.glob("*"))
+
+
+def test_refreshing_empty_draft_clears_stale_items_and_preserves_other_period(client, invoice_draft):
+    from backend.database import list_records
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    assert client.post("/api/invoices/preview", json={"year": 2030, "month": 2}).status_code == 200
+    other = next(row for row in list_records("invoices", database_path=database) if row["month"] == 2)
+    other_before = get_invoice(other["id"], database)
+    for training in trainings:
+        assert client.delete(f"/api/trainings/{training['id']}").status_code == 204
+    response = client.post("/api/invoices/preview", json=period)
+    assert response.json() == {**period, "items": [], "total_amount_cents": 0}
+    initialize_database(database)
+    assert get_invoice(draft_id, database)["items"] == []
+    assert get_invoice(draft_id, database)["total_amount_cents"] == 0
+    assert get_invoice(other["id"], database) == other_before
+
+
+def test_zero_price_preview_keeps_its_position(client):
+    activity = client.put("/api/settings", json={"activities": [{"name": "Kostenfrei", "hourly_rate_cents": 0}]}).json()["activities"][0]
+    training = client.post("/api/trainings", json={"training_date": "2030-01-01", "activity_type_id": activity["id"], "status": "completed"}).json()
+    response = client.post("/api/invoices/preview", json={"year": 2030, "month": 1})
+    assert response.status_code == 200
+    assert response.json()["total_amount_cents"] == 0
+    assert len(response.json()["items"]) == 1
+    assert response.json()["items"][0]["training_id"] == training["id"]
+    assert response.json()["items"][0]["hours"] is None
+
+
+def test_failed_draft_refresh_rolls_back_items_and_can_be_retried(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    before = get_invoice(draft_id, database)
+    sequence = get_organization(database)["next_invoice_number"]
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 10})
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TRIGGER reject_draft_item BEFORE INSERT ON invoice_items BEGIN SELECT RAISE(ABORT, 'Testfehler'); END")
+    try:
+        assert client.post("/api/invoices/preview", json=period).status_code == 409
+        assert get_invoice(draft_id, database) == before
+        assert get_organization(database)["next_invoice_number"] == sequence
+    finally:
+        with sqlite3.connect(database) as connection:
+            connection.execute("DROP TRIGGER reject_draft_item")
+    assert client.post("/api/invoices/preview", json=period).json()["total_amount_cents"] == 16500
+
+
+@pytest.mark.parametrize("period", [
+    {"year": 0, "month": 1}, {"year": 10000, "month": 1},
+    {"year": 2030, "month": 0}, {"year": 2030, "month": 13},
+    {"year": None, "month": 1}, {"year": 2030},
+    {"year": 2030, "month": 1.5}, {"year": 2030.5, "month": 1},
+    {"year": 2030, "month": 1, "extra": True},
+])
+def test_invalid_preview_period_preserves_existing_draft(client, invoice_draft, period):
+    from backend.database import list_records
+
+    _, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    before = get_invoice(draft_id, database)
+    assert client.post("/api/invoices/preview", json=period).status_code == 422
+    assert get_invoice(draft_id, database) == before
+    assert [row["id"] for row in list_records("invoices", database_path=database)] == [draft_id]
+
+
+def test_finalization_recalculates_stale_draft_and_freezes_snapshot(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 4})
+    assert get_invoice(draft_id, database)["total_amount_cents"] == 4500
+    sequence = get_organization(database)["next_invoice_number"]
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201
+    final = response.json()
+    assert final["id"] == draft_id and final["total_amount_cents"] == 7500
+    stored = get_invoice(draft_id, database)
+    snapshot = json.loads(stored["invoice_snapshot_json"])
+    assert [item["hours"] for item in snapshot["items"]] == [4, None]
+    assert stored["is_preview"] == 0 and stored["invoice_number"]
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    pdf = client.get(f"/api/invoices/{draft_id}/pdf").content
+    assert pdf.startswith(b"%PDF-")
+    assert client.post("/api/invoices", json=period).status_code == 409
+    assert get_invoice(draft_id, database) == stored
+    assert client.get(f"/api/invoices/{draft_id}/pdf").content == pdf
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+
+
+def test_failed_finalization_restores_draft_number_and_document_state(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    before = get_invoice(draft_id, database)
+    sequence = get_organization(database)["next_invoice_number"]
+    directory = client.app.state.test_invoice_directory
+    directory.mkdir(exist_ok=True)
+    unrelated = directory / "Andere-Datei.txt"
+    unrelated.write_bytes(b"erhalten")
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TRIGGER reject_final_item BEFORE INSERT ON invoice_items BEGIN SELECT RAISE(ABORT, 'Testfehler'); END")
+    try:
+        assert client.post("/api/invoices", json=period).status_code == 409
+        assert get_invoice(draft_id, database) == before
+        assert get_organization(database)["next_invoice_number"] == sequence
+        assert list(directory.iterdir()) == [unrelated]
+    finally:
+        with sqlite3.connect(database) as connection:
+            connection.execute("DROP TRIGGER reject_final_item")
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201 and response.json()["id"] == draft_id
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    assert unrelated.read_bytes() == b"erhalten"
+
+
+def test_final_snapshot_and_pdf_survive_deleted_source_trainings(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, _, trainings = invoice_draft
+    final = client.post("/api/invoices", json=period).json()
+    database = client.app.state.test_database_path
+    stored = get_invoice(final["id"], database)
+    pdf = client.get(f"/api/invoices/{final['id']}/pdf").content
+    sequence = get_organization(database)["next_invoice_number"]
+    for training in trainings:
+        assert client.delete(f"/api/trainings/{training['id']}").status_code == 204
+    response = client.post("/api/invoices/preview", json=period)
+    assert response.json() == {**period, "items": [], "total_amount_cents": 0}
+    after = get_invoice(final["id"], database)
+    assert after["invoice_snapshot_json"] == stored["invoice_snapshot_json"]
+    assert after["total_amount_cents"] == 4500
+    assert [item["training_id"] for item in after["items"]] == [None, None]
+    assert [item["amount_cents"] for item in after["items"]] == [3000, 1500]
+    assert client.get(f"/api/invoices/{final['id']}/pdf").content == pdf
+    assert client.post("/api/invoices", json=period).status_code == 400
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert [row["id"] for row in client.get("/api/invoices").json()] == [final["id"]]
+
+
+def test_deletion_and_refinalization_preserve_copies_draft_other_month_and_number(client, invoice_draft):
+    from backend.database import get_organization, list_records
+
+    period, _, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    original = client.post("/api/invoices", json=period).json()
+    directory = client.app.state.test_invoice_directory
+    pdf_path = directory / original["pdf_path"]
+    copy = directory / "Exportierte-Kopie.pdf"
+    copy.write_bytes(pdf_path.read_bytes())
+    client.post("/api/trainings", json={"training_date": "2030-02-01", "activity_type_id": trainings[0]["activity_type_id"], "hours": 1, "status": "completed"})
+    other = client.post("/api/invoices", json={"year": 2030, "month": 2}).json()
+    other_before = get_invoice(other["id"], database)
+    other_pdf = (directory / other["pdf_path"]).read_bytes()
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"hours": 4})
+    assert client.post("/api/invoices/preview", json=period).json()["total_amount_cents"] == 7500
+    preview = next(row for row in list_records("invoices", database_path=database) if row["is_preview"])
+    draft_before = get_invoice(preview["id"], database)
+    sequence = get_organization(database)["next_invoice_number"]
+    assert client.delete(f"/api/invoices/{original['id']}").status_code == 204
+    assert not pdf_path.exists()
+    assert copy.read_bytes().startswith(b"%PDF-")
+    assert get_invoice(preview["id"], database) == draft_before
+    assert get_invoice(other["id"], database) == other_before
+    assert (directory / other["pdf_path"]).read_bytes() == other_pdf
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert client.delete(f"/api/invoices/{original['id']}").status_code == 404
+    assert client.delete(f"/api/invoices/{preview['id']}").status_code == 409
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201
+    recreated = response.json()
+    assert recreated["id"] == preview["id"] and recreated["total_amount_cents"] == 7500
+    assert recreated["invoice_number"].endswith(f"-{sequence:04d}")
+    assert recreated["invoice_number"] != original["invoice_number"]
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    assert pdf_path.read_bytes() != copy.read_bytes()
+    assert (directory / other["pdf_path"]).read_bytes() == other_pdf
+
+
+def test_failed_final_invoice_deletion_preserves_database_and_pdf(client, invoice_draft):
+    from backend.database import get_organization
+
+    period, _, _ = invoice_draft
+    final = client.post("/api/invoices", json=period).json()
+    database = client.app.state.test_database_path
+    stored = get_invoice(final["id"], database)
+    path = client.app.state.test_invoice_directory / final["pdf_path"]
+    pdf = path.read_bytes()
+    sequence = get_organization(database)["next_invoice_number"]
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TRIGGER reject_final_delete BEFORE DELETE ON invoices BEGIN SELECT RAISE(ABORT, 'Testfehler'); END")
+    try:
+        assert client.delete(f"/api/invoices/{final['id']}").status_code == 409
+        assert get_invoice(final["id"], database) == stored
+        assert path.read_bytes() == pdf
+        assert get_organization(database)["next_invoice_number"] == sequence
+    finally:
+        with sqlite3.connect(database) as connection:
+            connection.execute("DROP TRIGGER reject_final_delete")
+    assert client.delete(f"/api/invoices/{final['id']}").status_code == 204
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("action", ["preview", "finalize", "delete"])
+def test_concurrent_invoice_actions_do_not_duplicate_or_lose_data(client, invoice_draft, action):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from backend.database import get_organization, list_records
+
+    period, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    sequence = get_organization(database)["next_invoice_number"]
+    if action == "delete":
+        assert client.post("/api/invoices", json=period).status_code == 201
+    barrier = Barrier(2)
+    def request():
+        barrier.wait(timeout=5)
+        if action == "delete":
+            return client.delete(f"/api/invoices/{draft_id}")
+        return client.post("/api/invoices/preview" if action == "preview" else "/api/invoices", json=period)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _: request(), range(2)))
+    statuses = sorted(response.status_code for response in responses)
+    invoices = list_records("invoices", database_path=database)
+    if action == "preview":
+        assert statuses == [200, 200]
+        assert len(invoices) == 1 and invoices[0]["id"] == draft_id
+        assert len(get_invoice(draft_id, database)["items"]) == 2
+        assert get_organization(database)["next_invoice_number"] == sequence
+    elif action == "finalize":
+        assert statuses == [201, 409]
+        assert len(invoices) == 1 and invoices[0]["is_preview"] == 0
+        assert len(get_invoice(draft_id, database)["items"]) == 2
+        assert get_organization(database)["next_invoice_number"] == sequence + 1
+        assert [path.name for path in client.app.state.test_invoice_directory.iterdir()] == ["Rechnung_TTC_2030-01.pdf"]
+        assert client.get(f"/api/invoices/{draft_id}/pdf").content.startswith(b"%PDF-")
+    else:
+        assert statuses[0] == 204 and statuses[1] in (404, 409)
+        assert invoices == []
+        assert get_organization(database)["next_invoice_number"] == sequence + 1
+        assert not list(client.app.state.test_invoice_directory.iterdir())
+
+
+def test_crash_after_pdf_publication_preserves_draft_and_requires_explicit_file_check(client, invoice_draft, tmp_path):
+    from backend.database import get_organization
+
+    period, draft_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    directory = client.app.state.test_invoice_directory
+    before = get_invoice(draft_id, database)
+    sequence = get_organization(database)["next_invoice_number"]
+    marker = tmp_path / "pdf-published"
+    script = '''
+from pathlib import Path
+import sys
+from backend import main
+from backend.models import InvoiceCreate
+def pause_before_commit(*args, **kwargs):
+    Path(sys.argv[3]).write_text('ready')
+    sys.stdin.read()
+main.create_invoice_with_items = pause_before_commit
+main.post_invoice(InvoiceCreate(year=2030, month=1), Path(sys.argv[1]), Path(sys.argv[2]))
+'''
+    process = subprocess.Popen([sys.executable, "-c", script, str(database), str(directory), str(marker)],
+                               cwd=Path(__file__).resolve().parent.parent,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        deadline = time.monotonic() + 10
+        while not marker.exists():
+            assert process.poll() is None, process.communicate()[1].decode()
+            assert time.monotonic() < deadline, "PDF-Veröffentlichung wurde nicht erreicht"
+            time.sleep(0.02)
+        process.kill()
+        process.communicate(timeout=5)
+        assert process.returncode != 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+    pdf = directory / "Rechnung_TTC_2030-01.pdf"
+    original_pdf = pdf.read_bytes()
+    assert original_pdf.startswith(b"%PDF-")
+    initialize_database(database)
+    assert get_invoice(draft_id, database) == before
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert client.post("/api/invoices", json=period).status_code == 409
+    assert pdf.read_bytes() == original_pdf
+    assert get_invoice(draft_id, database) == before
+    # Explicit recovery after inspecting the isolated test files: keep the
+    # candidate PDF under another name; never remove it automatically on start.
+    retained = directory / "Absturz-Kopie.pdf"
+    pdf.rename(retained)
+    response = client.post("/api/invoices", json=period)
+    assert response.status_code == 201 and response.json()["id"] == draft_id
+    assert get_organization(database)["next_invoice_number"] == sequence + 1
+    assert retained.read_bytes() == original_pdf
 
 
 def test_invoice_preview_matches_example_and_refreshes_saved_preview(
@@ -2005,6 +2688,112 @@ def test_calendar_and_invoice_preview_handle_month_and_year_boundaries(
     assert january_calendar["days"][0]["date"] == "2027-01-01"
     assert len(leap_calendar["days"]) == 29
     assert leap_calendar["days"][-1]["date"] == "2028-02-29"
+
+
+@pytest.mark.parametrize("status", ["planned", "completed", "cancelled"])
+@pytest.mark.parametrize("generated", [False, True])
+@pytest.mark.parametrize("hours", [2, None])
+@pytest.mark.parametrize("training_date", ["2031-11-30", "2031-12-01", "2032-01-01"])
+def test_billing_filter_matrix_applies_to_preview_final_snapshot_and_pdf(
+    client, calendar_activities, monkeypatch, status, generated, hours, training_date,
+):
+    from backend import main
+    from backend.database import get_organization, list_records
+
+    activity_id = calendar_activities[0]["id"]
+    if generated:
+        client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": activity_id, "hours": 1}])
+        training_id = client.get("/api/calendar/2031/12").json()["days"][0]["trainings"][0]["id"]
+        response = client.put(f"/api/trainings/{training_id}", json={"status": status, "hours": hours, "training_date": training_date})
+    else:
+        response = client.post("/api/trainings", json={"training_date": training_date, "activity_type_id": activity_id, "status": status, "hours": hours})
+        training_id = response.json()["id"]
+    assert response.status_code in (200, 201)
+    database = client.app.state.test_database_path
+    before = list_records("trainings", database_path=database)
+    sequence = get_organization(database)["next_invoice_number"]
+    lines = []
+    render_pdf = main.render_invoice_pdf
+    def capture_pdf(year, month, invoice_date, items, total, details):
+        lines.extend(items)
+        return render_pdf(year, month, invoice_date, items, total, details)
+    monkeypatch.setattr(main, "render_invoice_pdf", capture_pdf)
+    period = {"year": 2031, "month": 12}
+    billable = status == "completed" and training_date == "2031-12-01"
+    preview = client.post("/api/invoices/preview", json=period)
+    assert preview.status_code == 200
+    expected_ids = [training_id] if billable else []
+    expected_amount = (3000 if hours == 2 else 1500) if billable else 0
+    assert [item["training_id"] for item in preview.json()["items"]] == expected_ids
+    assert preview.json()["total_amount_cents"] == expected_amount
+    final = client.post("/api/invoices", json=period)
+    assert final.status_code == (201 if billable else 400)
+    if billable:
+        assert [item["training_id"] for item in final.json()["items"]] == expected_ids
+        snapshot = json.loads(get_invoice(final.json()["id"], database)["invoice_snapshot_json"])
+        assert [item["training_id"] for item in snapshot["items"]] == expected_ids
+        assert [(line.training_date.isoformat(), line.hours, line.amount_cents) for line in lines] == [(training_date, hours, expected_amount)]
+        assert client.get(f"/api/invoices/{final.json()['id']}/pdf").content.startswith(b"%PDF-")
+    else:
+        assert lines == []
+        assert client.get("/api/invoices").json() == []
+        assert not list(client.app.state.test_invoice_directory.glob("*"))
+    assert get_organization(database)["next_invoice_number"] == sequence + int(billable)
+    assert list_records("trainings", database_path=database) == before
+
+
+@pytest.mark.parametrize("status", ["planned", "cancelled"])
+def test_finalization_rechecks_completion_after_preview(client, invoice_draft, status):
+    from backend.database import get_organization
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    sequence = get_organization(database)["next_invoice_number"]
+    for training in trainings:
+        client.put(f"/api/trainings/{training['id']}", json={"status": status})
+    assert client.post("/api/invoices", json=period).status_code == 400
+    assert get_invoice(draft_id, database)["is_preview"] == 1
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert not list(client.app.state.test_invoice_directory.glob("*"))
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"status": "completed"})
+    final = client.post("/api/invoices", json=period)
+    assert final.status_code == 201
+    assert [item["training_id"] for item in final.json()["items"]] == [trainings[0]["id"]]
+    assert final.json()["total_amount_cents"] == 3000
+
+
+def test_mixed_billable_sources_keep_historical_prices_after_deactivation(client, calendar_activities, monkeypatch):
+    from backend import main
+
+    regular, flat = calendar_activities[:2]
+    client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": regular["id"], "hours": 1}])
+    generated = client.get("/api/calendar/2031/12").json()["days"][0]["trainings"][0]
+    client.put(f"/api/trainings/{generated['id']}", json={"status": "completed"})
+    expected = {generated["id"]: 1500}
+    for day, activity, hours in (("2031-12-31", regular, 2), ("2031-12-15", flat, None)):
+        response = client.post("/api/trainings", json={"training_date": day, "activity_type_id": activity["id"], "hours": hours, "status": "completed"})
+        expected[response.json()["id"]] = 3000 if hours else 2200
+    for day, status in (("2031-12-31", "planned"), ("2031-12-15", "cancelled"), ("2031-11-30", "completed"), ("2032-01-01", "completed")):
+        assert client.post("/api/trainings", json={"training_date": day, "activity_type_id": regular["id"], "hours": 99, "status": status}).status_code == 201
+    assert client.put("/api/settings", json={"activities": [
+        {"id": activity["id"], "name": activity["name"], "hourly_rate_cents": 9999, "is_active": False}
+        for activity in (regular, flat)
+    ]}).status_code == 200
+    lines = []
+    render_pdf = main.render_invoice_pdf
+    def capture_pdf(year, month, invoice_date, items, total, details):
+        lines.extend(items)
+        return render_pdf(year, month, invoice_date, items, total, details)
+    monkeypatch.setattr(main, "render_invoice_pdf", capture_pdf)
+    period = {"year": 2031, "month": 12}
+    preview = client.post("/api/invoices/preview", json=period).json()
+    assert {item["training_id"]: item["amount_cents"] for item in preview["items"]} == expected
+    assert preview["total_amount_cents"] == 6700
+    final = client.post("/api/invoices", json=period)
+    assert final.status_code == 201
+    assert {item["training_id"]: item["amount_cents"] for item in final.json()["items"]} == expected
+    assert sum(line.amount_cents for line in lines) == 6700
+    assert sorted(line.unit_rate_cents for line in lines) == [1500, 1500, 2200]
 
 
 def test_invoice_preview_only_includes_completed_trainings(
