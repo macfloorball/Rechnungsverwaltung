@@ -306,8 +306,12 @@ verwaltet.
     Opt-in-Test: `tests/test_desktop_invoice.py`. Die Standardbrowser-Übergabe
     wird im Test abgefangen; native Windows-Ausführung sowie Darstellung
     und Drucken im tatsächlichen Standardbrowser bleiben offene Abnahmen.
--   [ ] Speichern, Öffnen, Umbenennen und Löschen von Dateien
-    kontrolliert umsetzen.
+-   [x] Speichern, Öffnen, Umbenennen und Löschen von Dateien
+    kontrolliert umsetzen. Der Dokumentendienst veröffentlicht vollständige
+    Dateien ohne Überschreiben, bietet geprüften Lesezugriff sowie Umbenennen
+    ohne Zielersetzung und identitätsgeprüftes Löschen. Die Rechnungs-API nutzt
+    den Dienst auch zur Fehlerbereinigung; Originalnamen finaler Rechnungen
+    bleiben gemäß bestehender Zuordnung fest.
 -   [ ] Fehlerfälle behandeln, etwa fehlende Dateien oder fehlende
     Schreibrechte.
 -   [ ] Sicherstellen, dass das Löschen einer Rechnung nicht

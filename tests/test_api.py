@@ -121,6 +121,43 @@ def test_finalization_does_not_reuse_another_invoices_reference(client: TestClie
     assert not (client.app.state.test_invoice_directory / "Rechnung_TTC_2026-11.pdf").exists()
 
 
+@pytest.mark.parametrize("replaced", [False, True])
+def test_finalization_rollback_only_removes_its_own_file(client, monkeypatch, replaced):
+    import backend.main as main
+    from backend.database import get_organization, list_records
+    from backend.document_storage import DocumentChangedError
+
+    activity = client.put("/api/settings", json={"activities": [
+        {"name": "Training", "hourly_rate_cents": 1500},
+    ]}).json()["activities"][0]
+    assert client.post("/api/trainings", json={
+        "training_date": "2026-11-12", "activity_type_id": activity["id"],
+        "hours": 1, "status": "completed",
+    }).status_code == 201
+    database = client.app.state.test_database_path
+    pdf = client.app.state.test_invoice_directory / "Rechnung_TTC_2026-11.pdf"
+    sequence = get_organization(database)["next_invoice_number"]
+
+    def fail_database_write(*args, **kwargs):
+        assert pdf.read_bytes().startswith(b"%PDF-")
+        if replaced:
+            replacement = pdf.with_name("replacement.pdf")
+            replacement.write_bytes(b"another document")
+            replacement.replace(pdf)
+        raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert")
+
+    monkeypatch.setattr(main, "create_invoice_with_items", fail_database_write)
+    if replaced:
+        with pytest.raises(DocumentChangedError):
+            client.post("/api/invoices", json={"year": 2026, "month": 11})
+        assert pdf.read_bytes() == b"another document"
+    else:
+        assert client.post("/api/invoices", json={"year": 2026, "month": 11}).status_code == 409
+        assert not pdf.exists()
+    assert list_records("invoices", database_path=database) == []
+    assert get_organization(database)["next_invoice_number"] == sequence
+
+
 def test_hour_inputs_reject_fractional_and_comma_values(client: TestClient) -> None:
     settings = client.put(
         "/api/settings",

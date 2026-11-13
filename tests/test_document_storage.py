@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.document_storage import DocumentStore
+from backend.document_storage import DocumentChangedError, DocumentStore
 from backend.paths import PROJECT_ROOT, get_document_directory
 
 
@@ -35,7 +35,7 @@ def test_existing_document_is_not_overwritten(tmp_path):
     assert path.read_bytes() == b"original"
 
 
-@pytest.mark.parametrize("name", ["", ".", "..", "../other.pdf", "/other.pdf", "sub/file.pdf", "sub\\file.pdf", "C:\\other.pdf", "file.pdf:stream", "bad\0.pdf"])
+@pytest.mark.parametrize("name", ["", ".", "..", "../other.pdf", "/other.pdf", "sub/file.pdf", "sub\\file.pdf", "C:\\other.pdf", "file.pdf:stream", "bad\0.pdf", "file.pdf ", "file.pdf.", "CON.pdf", "nul", "COM1.txt", "file?.pdf"])
 def test_path_references_are_rejected_without_creating_directories(tmp_path, name):
     root = tmp_path / "documents"
     store = DocumentStore(root)
@@ -165,3 +165,153 @@ def test_legacy_copy_rejects_target_symlink(tmp_path):
         target.copy_missing_from(source, original.name)
     assert link.is_symlink()
     assert original.read_bytes() == b"original"
+
+
+def test_write_is_not_published_until_complete_and_synced(monkeypatch, tmp_path):
+    import backend.document_storage as storage
+
+    store = DocumentStore(tmp_path)
+    fsync = storage.os.fsync
+
+    def inspect_sync(descriptor):
+        assert not (tmp_path / "invoice.pdf").exists()
+        fsync(descriptor)
+
+    monkeypatch.setattr(storage.os, "fsync", inspect_sync)
+    path, identity = store.save_new_with_identity("invoice.pdf", b"complete")
+    assert store.get_identity(path.name) == identity
+    assert path.read_bytes() == b"complete"
+
+
+def test_saved_identity_includes_metadata_finalized_at_close(monkeypatch, tmp_path):
+    import os
+    from contextlib import contextmanager
+
+    open_file = Path.open
+
+    @contextmanager
+    def finalize_metadata(path, mode="r", *args, **kwargs):
+        with open_file(path, mode, *args, **kwargs) as stream:
+            yield stream
+        if mode == "xb":
+            info = path.stat()
+            os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000_000))
+
+    monkeypatch.setattr(Path, "open", finalize_metadata)
+    store = DocumentStore(tmp_path)
+    path, identity = store.save_new_with_identity("invoice.pdf", b"content")
+    assert store.get_identity(path.name) == identity
+    assert store.delete(path.name, expected=identity)
+
+
+def test_atomic_save_does_not_replace_a_concurrent_file(monkeypatch, tmp_path):
+    import backend.document_storage as storage
+
+    store = DocumentStore(tmp_path)
+    link = storage.os.link
+
+    def concurrent_link(staged, target):
+        target.write_bytes(b"concurrent")
+        link(staged, target)
+
+    monkeypatch.setattr(storage.os, "link", concurrent_link)
+    with pytest.raises(FileExistsError):
+        store.save_new("invoice.pdf", b"new")
+    assert (tmp_path / "invoice.pdf").read_bytes() == b"concurrent"
+    assert [file.name for file in tmp_path.iterdir()] == ["invoice.pdf"]
+
+
+def test_read_rename_and_delete_keep_document_content(tmp_path):
+    store = DocumentStore(tmp_path)
+    original = store.save_new("original.pdf", b"content")
+    with store.open_read(original.name) as reader:
+        assert reader.read() == b"content"
+        assert not reader.writable()
+    assert reader.closed
+    renamed = store.rename(original.name, "renamed.pdf")
+    assert not original.exists()
+    assert renamed.read_bytes() == b"content"
+    assert store.rename(renamed.name, renamed.name) == renamed
+    assert store.delete(renamed.name, expected=store.get_identity(renamed.name))
+    assert not renamed.exists()
+    assert not store.delete(renamed.name, missing_ok=True)
+    with pytest.raises(FileNotFoundError):
+        store.delete(renamed.name)
+
+
+def test_rename_collision_preserves_both_files(tmp_path):
+    store = DocumentStore(tmp_path)
+    original = store.save_new("original.pdf", b"original")
+    target = store.save_new("target.pdf", b"existing")
+    with pytest.raises(FileExistsError):
+        store.rename(original.name, target.name)
+    assert original.read_bytes() == b"original"
+    assert target.read_bytes() == b"existing"
+
+
+def test_failed_rename_retains_both_copies(monkeypatch, tmp_path):
+    store = DocumentStore(tmp_path)
+    original = store.save_new("original.pdf", b"original")
+    unlink = Path.unlink
+
+    def refuse_original(path, *args, **kwargs):
+        if path == original:
+            raise PermissionError("File is open")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", refuse_original)
+    with pytest.raises(PermissionError):
+        store.rename(original.name, "renamed.pdf")
+    assert original.read_bytes() == b"original"
+    assert (tmp_path / "renamed.pdf").read_bytes() == b"original"
+
+
+def test_delete_rejects_replaced_file(tmp_path):
+    store = DocumentStore(tmp_path)
+    path, identity = store.save_new_with_identity("invoice.pdf", b"original")
+    replacement = tmp_path / "replacement.pdf"
+    replacement.write_bytes(b"different content")
+    replacement.replace(path)
+    with pytest.raises(DocumentChangedError):
+        store.delete(path.name, expected=identity)
+    assert path.read_bytes() == b"different content"
+
+
+def test_read_rejects_a_file_replaced_during_open(monkeypatch, tmp_path):
+    import backend.document_storage as storage
+
+    store = DocumentStore(tmp_path)
+    original = store.save_new("original.pdf", b"original")
+    replacement = store.save_new("replacement.pdf", b"replacement")
+    open_file = storage.os.open
+
+    def replace_before_open(path, flags, *args, **kwargs):
+        replacement.replace(original)
+        return open_file(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(storage.os, "open", replace_before_open)
+    with pytest.raises(DocumentChangedError):
+        with store.open_read(original.name):
+            pytest.fail("A replaced file must not be handed to the reader")
+    assert original.read_bytes() == b"replacement"
+
+
+def test_file_operations_reject_links_directories_and_escaping_names(tmp_path):
+    store = DocumentStore(tmp_path / "documents")
+    original = store.save_new("original.pdf", b"original")
+    link = store.directory / "link.pdf"
+    link.symlink_to(original)
+    (store.directory / "folder").mkdir()
+    for name in (link.name, "folder", "../outside.pdf", "CON.pdf"):
+        with pytest.raises(ValueError):
+            with store.open_read(name):
+                pass
+        with pytest.raises(ValueError):
+            store.delete(name, missing_ok=True)
+        with pytest.raises(ValueError):
+            store.rename(name, "new.pdf")
+        with pytest.raises((ValueError, FileExistsError)):
+            store.rename(original.name, name)
+    assert link.is_symlink()
+    assert original.read_bytes() == b"original"
+    assert not (tmp_path / "outside.pdf").exists()

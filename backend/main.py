@@ -762,7 +762,7 @@ def post_invoice(
         pdf_details,
     )
     try:
-        pdf_path = documents.save_new(filename, pdf_content)
+        _, pdf_identity = documents.save_new_with_identity(filename, pdf_content)
     except FileExistsError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -804,27 +804,27 @@ def post_invoice(
             updated_next_invoice_number=sequence + 1,
         )
     except InvoiceAlreadyExistsError as error:
-        pdf_path.unlink(missing_ok=True)
+        documents.delete(filename, expected=pdf_identity, missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
         ) from error
     except InvoiceDocumentConflictError as error:
-        pdf_path.unlink(missing_ok=True)
+        documents.delete(filename, expected=pdf_identity, missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Die PDF-Datei ist bereits einer anderen Rechnung zugeordnet",
         ) from error
     except ValueError as error:
-        pdf_path.unlink(missing_ok=True)
-        if "rechnungsnummernkreis" in str(error):
+        documents.delete(filename, expected=pdf_identity, missing_ok=True)
+        if "rechnungsnummernkreis" in str(error).lower():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Der Rechnungsnummernkreis wurde parallel geändert. Bitte versuche es erneut.",
             ) from error
         raise
     except Exception:
-        pdf_path.unlink(missing_ok=True)
+        documents.delete(filename, expected=pdf_identity, missing_ok=True)
         raise
 
     invoice = get_invoice(invoice_id, database_path)
@@ -863,6 +863,19 @@ def delete_invoice(
             detail="Die zugehörige PDF-Datei konnte nicht sicher zugeordnet werden",
         ) from error
 
+    documents = DocumentStore(invoice_directory)
+    pdf_identity = None
+    if existing_invoice["pdf_path"]:
+        try:
+            pdf_identity = documents.get_identity(existing_invoice["pdf_path"])
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Die zugehörige PDF-Datei konnte nicht sicher geöffnet werden; die Rechnung wurde nicht gelöscht",
+            ) from error
+
     try:
         invoice = delete_final_invoice(invoice_id, database_path)
     except InvoicePreviewDeletionError as error:
@@ -877,7 +890,7 @@ def delete_invoice(
         )
 
     pdf_path = invoice["pdf_path"]
-    if pdf_path:
+    if pdf_path and pdf_identity is not None:
         try:
             expected_filename = invoice_document_name(invoice)
         except InvoiceDocumentAssociationError as error:
@@ -886,8 +899,8 @@ def delete_invoice(
                 detail="Rechnung wurde gelöscht, die PDF-Datei konnte nicht sicher zugeordnet werden",
             ) from error
         try:
-            (invoice_directory / expected_filename).unlink(missing_ok=True)
-        except OSError as error:
+            documents.delete(expected_filename, expected=pdf_identity, missing_ok=True)
+        except (OSError, ValueError) as error:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Rechnung wurde gelöscht, die zugehörige PDF-Datei konnte jedoch nicht entfernt werden",

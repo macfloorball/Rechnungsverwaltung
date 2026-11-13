@@ -500,10 +500,11 @@ Rechnungsdateien sind seit Schritt 4 umgesetzt und unten beschrieben.
 ### Zentraler Dokumentendienst (Phase 3, Schritt 2)
 
 `backend/document_storage.py` stellt `DocumentStore` bereit. Er kennt weder
-SQLite noch FastAPI oder Rechnungsregeln. `save_new()` legt Dateien exklusiv an;
+SQLite noch FastAPI oder Rechnungsregeln. `save_new()` veröffentlicht Dateien
+exklusiv nach vollständigem Schreiben in eine temporäre Datei und `fsync`;
 vorhandene Dateien und symbolische Links werden nicht überschrieben. Bei einem
-Schreibfehler wird die neu angelegte unvollständige Datei nach dem Schließen
-entfernt. `get_file()` liefert nur vorhandene reguläre Dateien, keine symbolischen
+Schreibfehler wird nur die temporäre Datei bereinigt. `get_file()` liefert
+nur vorhandene reguläre Dateien, keine symbolischen
 Links. Dokumentreferenzen müssen einfache Dateinamen sein; Verzeichnisbestandteile,
 absolute Pfade und Windows-Datenstromreferenzen werden abgelehnt. Dateisystemfehler
 werden an den Aufrufer weitergereicht.
@@ -665,6 +666,44 @@ verwendet werden:
 ```bash
 ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/electron --test --test-isolation=none electron/*.test.cjs scripts/*.test.cjs
 ```
+
+### Kontrollierte Dateioperationen (Phase 3, Schritt 7)
+
+Der Dokumentendienst bündelt Speichern, geprüften Lesezugriff, Umbenennen und
+Löschen innerhalb eines Dokumentenverzeichnisses. Alle Operationen akzeptieren
+einfache Dateinamen; Pfadbestandteile, Windows-Gerätenamen, Datenstromreferenzen,
+Steuerzeichen und unter Windows mehrdeutige abschließende Punkte/Leerzeichen
+werden abgelehnt.
+
+| Operation | Verhalten |
+| --- | --- |
+| `save_new()` | Vollständig schreiben, synchronisieren und ohne Ersetzen veröffentlichen; bei Fehlern kein teilweise veröffentlichtes Dokument |
+| `save_new_with_identity()` | Zusätzlich die Identität der gerade veröffentlichten Datei für eine spätere bedingte Bereinigung zurückgeben |
+| `get_file()` / `open_read()` | Vorhandene reguläre Datei ermitteln beziehungsweise lesend öffnen; `open_read()` prüft auch den tatsächlich geöffneten Dateideskriptor |
+| `rename()` | Innerhalb derselben Ablage einen neuen Namen ohne Zielersetzung anlegen, dann den geprüften alten Namen entfernen |
+| `delete()` | Reguläre Datei entfernen; mit `expected` nur bei passender vorher erfasster Dateiidentität, mit `missing_ok` fehlende Dateien tolerieren |
+
+Die Dateiidentität umfasst Dateisystem, Dateikennung, Größe und Änderungszeit.
+Sie wird beim Speichern nach Schließen des Schreibhandles und vor der
+Veröffentlichung erfasst. Die Rechnungs-API verwendet sie bei fehlgeschlagener
+Finalisierung zur Bereinigung der eigenen neuen PDF und beim Löschen einer
+Rechnung. Eine dabei als geändert erkannte Datei wird erhalten. War eine PDF
+schon vor dem Löschen der Rechnung nicht vorhanden, wird anschließend keine
+zwischenzeitlich entstandene Datei unter demselben Namen entfernt.
+
+Publizieren und Umbenennen benötigen ein Dateisystem mit Hardlink-Unterstützung.
+Scheitert beim Umbenennen das Entfernen des alten Namens, bleiben beide Namen
+erhalten und der Aufrufer erhält den Fehler. Die Umbenennung ist daher keine
+gemeinsame atomare Operation aus zwei Namensänderungen. Dateisystemoperationen
+und SQLite bleiben ebenfalls getrennt; nach einem Fehler beim Entfernen der PDF
+kann wie bisher eine bereits gelöschte Rechnung mit zurückgebliebener PDF
+vorliegen. Die API meldet diesen Zustand ausdrücklich.
+
+`rename()` steht auf Ebene des Dateidienstes bereit. Finale Rechnungsoriginale
+behalten ihre verbindlichen Namen `Rechnung_TTC_YYYY-MM.pdf` und ihre bestehenden
+Datenbankreferenzen. Frei gewählte Namen für exportierte Kopien bleiben über
+den vorhandenen Download-/Speicherdialog möglich. Electron erhält weiterhin
+ausschließlich die bisherige begrenzte Bridge und validierte PDF-URLs.
 
 ### Schemaänderungen
 
