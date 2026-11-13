@@ -673,6 +673,7 @@ export function initializeSettings() {
   });
 
   reloadInvoicesButton.addEventListener("click", loadInvoices);
+  document.addEventListener("invoice-created", loadInvoices);
   loadOrganizationSettings();
 
   requestJson("/api/settings")

@@ -796,6 +796,10 @@ dialog textarea {
   opacity: 0.6;
 }
 
+#create-invoice:disabled:not([aria-busy="true"]) {
+  cursor: default;
+}
+
 .calendar-placeholder {
   grid-column: 1 / -1;
   margin: 0;

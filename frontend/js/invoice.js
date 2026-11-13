@@ -110,6 +110,8 @@ export function initializeInvoicePreview() {
   }
 
   let previewPeriod = null;
+  let creating = false;
+  const createButtonLabel = createButton.textContent.trim();
   const now = new Date();
   monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -118,6 +120,7 @@ export function initializeInvoicePreview() {
     errorMessage.hidden = true;
     preview.hidden = true;
     createButton.disabled = true;
+    createButton.textContent = createButtonLabel;
     createError.hidden = true;
     openPdfLink.hidden = true;
     downloadPdfLink.hidden = true;
@@ -125,7 +128,7 @@ export function initializeInvoicePreview() {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!form.reportValidity()) {
+    if (creating || !form.reportValidity()) {
       return;
     }
 
@@ -146,6 +149,7 @@ export function initializeInvoicePreview() {
     submitButton.disabled = true;
     monthInput.disabled = true;
     createButton.disabled = true;
+    createButton.textContent = createButtonLabel;
     form.setAttribute("aria-busy", "true");
     try {
       const response = await fetch("/api/invoices/preview", {
@@ -195,12 +199,18 @@ export function initializeInvoicePreview() {
   });
 
   createButton.addEventListener("click", async () => {
-    if (!previewPeriod || createButton.disabled) {
+    if (creating || !previewPeriod || createButton.disabled) {
       return;
     }
 
     createError.hidden = true;
+    creating = true;
     createButton.disabled = true;
+    createButton.setAttribute("aria-busy", "true");
+    createButton.textContent = "Rechnung wird gespeichert …";
+    monthInput.disabled = true;
+    submitButton.disabled = true;
+    let saved = false;
     try {
       const today = new Date();
       const invoiceDate = [
@@ -235,12 +245,22 @@ export function initializeInvoicePreview() {
       const month = String(invoice.month).padStart(2, "0");
       downloadPdfLink.download = `Rechnung_TTC_${year}-${month}.pdf`;
       downloadPdfLink.hidden = false;
+      saved = true;
+      document.dispatchEvent(new Event("invoice-created"));
     } catch (error) {
       createError.textContent = error instanceof Error
         ? error.message
         : "Rechnung konnte nicht erstellt werden.";
       createError.hidden = false;
-      createButton.disabled = false;
+    } finally {
+      creating = false;
+      createButton.setAttribute("aria-busy", "false");
+      createButton.textContent = saved ? "Rechnung gespeichert" : createButtonLabel;
+      // A saved preview cannot be finalized twice. A fresh preview still uses
+      // the backend's existing duplicate check for an already invoiced month.
+      createButton.disabled = saved;
+      monthInput.disabled = false;
+      submitButton.disabled = false;
     }
   });
 }

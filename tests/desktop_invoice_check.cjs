@@ -458,6 +458,11 @@ async function run() {
   const url = await js('document.querySelector("#open-invoice-pdf").href');
   assert.match(url, /\/api\/invoices\/[1-9]\d*\/pdf$/);
   const invoiceId = Number(new URL(url).pathname.split('/')[3]);
+  // The archive must update in the same renderer, without reload or restart.
+  await until(() => js(`Boolean(document.querySelector('#saved-invoices-rows a[href="/api/invoices/${invoiceId}/pdf"][target=_blank]'))`), 'archive immediately after finalization');
+  assert.equal(await js('document.querySelector("#create-invoice").getAttribute("aria-busy")'), 'false');
+  assert.equal(await js('document.querySelector("#create-invoice").textContent'), 'Rechnung gespeichert');
+  assert.equal(await js('getComputedStyle(document.querySelector("#create-invoice")).cursor'), 'default');
   const originalInvoice = (await (await fetch(new URL('/api/invoices', url))).json()).find(invoice => invoice.id === invoiceId);
   assert.equal(originalInvoice.total_amount_cents, 4500);
   const response = await fetch(url);
@@ -575,8 +580,30 @@ async function run() {
   await until(() => js(previewReady), 'preview after deletion');
   assert.equal(await js('document.querySelectorAll("#invoice-items tr").length'), 1);
   assert.match(await js('document.querySelector("#invoice-total").textContent'), /60,00/);
+  // Saving succeeded even if the subsequent archive request fails. Keep the
+  // success state and duplicate guard; the archive offers its existing retry.
+  await js(`(() => {
+    const originalFetch = window.fetch;
+    window.fetch = (...args) => {
+      if (args[0] === '/api/invoices' && (!args[1] || args[1].method === 'GET')) {
+        window.fetch = originalFetch;
+        return Promise.resolve(new Response(JSON.stringify({detail:'Rechnungsliste vorübergehend nicht verfügbar.'}),
+          {status:503,headers:{'Content-Type':'application/json'}}));
+      }
+      return originalFetch(...args);
+    };
+  })()`);
   await js('document.querySelector("#create-invoice").click()');
   await until(() => js('!document.querySelector("#open-invoice-pdf").hidden'), 'refinalization');
+  await until(() => js('!document.querySelector("#saved-invoices-error").hidden'), 'archive refresh error after saving');
+  assert.match(await js('document.querySelector("#saved-invoices-error").textContent'), /vorübergehend nicht verfügbar/);
+  assert.equal(await js('document.querySelector("#create-invoice").getAttribute("aria-busy")'), 'false');
+  assert.equal(await js('document.querySelector("#create-invoice").textContent'), 'Rechnung gespeichert');
+  assert.equal(await js('document.querySelector("#create-invoice").disabled && document.querySelector("#invoice-create-error").hidden'), true);
+  assert.equal(await js('document.querySelector("#reload-invoices").disabled'), false);
+  await js('document.querySelector("#reload-invoices").click()');
+  await until(() => js('document.querySelectorAll("#saved-invoices-rows tr").length === 2 && !document.querySelector("#reload-invoices").disabled'), 'archive retry after saving');
+  assert.equal(await js('document.querySelector("#saved-invoices-error").hidden'), true);
   const recreatedUrl = await js('document.querySelector("#open-invoice-pdf").href');
   const recreated = Buffer.from(await (await fetch(recreatedUrl)).arrayBuffer());
   assert.equal(recreated.subarray(0,5).toString(), '%PDF-');
