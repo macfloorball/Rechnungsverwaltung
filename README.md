@@ -1174,3 +1174,15 @@ Wiederherstellungsprozess aus Phase 5 in einen neuen Datenordner verwenden. Niem
 eine ältere App schreibend auf eine bereits migrierte Datenbank zwingen. Ein
 automatisches Zurückrollen sämtlicher Programmdateien bei Stromausfall ist nicht
 implementiert; die Reparatur erfolgt über den vollständigen Installer.
+
+### Trennung von Installation und Daten
+
+Der Installationsdialog bietet keine freie Pfadwahl. Auch der NSIS-Schalter
+`/D=` wird vor einer Installation abgelehnt (Exitcode 4), damit Programmdateien
+nicht versehentlich in einen bestehenden Daten- oder Dokumentenordner gelangen.
+Updates ersetzen die Programmdateien und die eingebettete Laufzeit, während
+das technische Benutzerprofil und konfigurierte Dokumentenpfade erhalten bleiben.
+Die vorhandenen Tests `tests/test_storage_update.py` prüfen den Wechsel zwischen
+getrennten Installationsverzeichnissen bei unveränderter Datenbank, Einstellungen,
+Logo, Nummernkreis, Rechnungssnapshots und PDFs, einschließlich eigener Ablage.
+Diese Regression wird wiederverwendet; es gibt keine zweite Datenmigration.

@@ -2,6 +2,18 @@
 !include WordFunc.nsh
 
 !macro customInit
+  ; A command-line /D override could put program files in a data directory.
+  ClearErrors
+  ; NSIS strips /D from $CMDLINE; StdUtils retrieves the original OS command line.
+  ${StdUtils.GetAllParameters} $R0 "0"
+  ${GetOptions} $R0 "/D=" $R1
+  ${IfNot} ${Errors}
+    ${IfNot} ${Silent}
+      MessageBox MB_OK|MB_ICONSTOP "Ein eigener Installationspfad wird zum Schutz persönlicher Daten nicht unterstützt. Bitte ohne /D erneut starten."
+    ${EndIf}
+    SetErrorLevel 4
+    Quit
+  ${EndIf}
   ReadRegStr $R0 HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion"
   ${If} $R0 != ""
     ${VersionCompare} $R0 "${VERSION}" $R1
