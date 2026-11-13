@@ -457,6 +457,45 @@ PDF-Inhalte bleiben außerhalb von SQLite. Die Datenbank enthält ihre bisherige
 Dateizuordnung; die Umstellung der Dokumentenablage gehört zur nachfolgenden
 Phase 3. Electron-Profile und Fensterzustand gehören nicht ins fachliche Schema.
 
+### Dokumentenverzeichnis (Phase 3, Schritt 1)
+
+Für die Desktop-App wird `documents/` unterhalb des bestehenden lokalen
+Datenverzeichnisses als Dokumentenablage festgelegt. Maßgeblich ist der von
+`backend/paths.py` ermittelte Datenordner: Electron übergibt standardmäßig
+`app.getPath('userData')`; ein absolutes `TTC_DATA_DIRECTORY` bestimmt bereits
+heute einen abweichenden Datenordner. Die geplanten Desktop-Pfade lauten damit:
+
+| Inhalt | Pfad relativ zum Datenverzeichnis |
+| --- | --- |
+| SQLite-Datenbank (bereits umgesetzt) | `ttc.db` |
+| Rechnungs-PDFs (Zielablage) | `documents/` |
+| Weitere dateibasierte Anhänge (Zielablage, soweit vorhanden) | `documents/` |
+
+Unter Windows ist die Standard-Zielablage somit
+`%APPDATA%/ttc-rechnungsverwaltung/documents/`. Sie liegt außerhalb der
+Installation und bleibt bei unverändertem Benutzerprofil unabhängig von
+Installationspfad, Arbeitsverzeichnis und App-Version. Entwicklung und Produktion
+teilen wie bei der Datenbank dasselbe Profil; Tests verwenden temporäre
+Datenverzeichnisse. Logos und Rechnungssnapshots bleiben gemäß Phase 2 in SQLite.
+Eine konkrete Zuordnungs- oder Unterordnerstruktur für weitere Anhänge wird hier
+nicht eingeführt.
+
+Für den bisherigen Webbetrieb ohne `TTC_DATA_DIRECTORY` bleibt die Ablage
+`rechnungen/` im Projekt erhalten. Bei explizitem `TTC_DATA_DIRECTORY` soll auch
+der Webbetrieb dessen Unterordner `documents/` verwenden. Damit kann das Backend
+in beiden Startarten dieselbe Pfadauflösung nutzen. Ein unabhängig einstellbarer
+Dokumentenort wird erst im dafür vorgesehenen Phase-3-Schritt behandelt.
+
+Dies ist die Zielentscheidung, noch keine Umstellung der Dateioperationen:
+Aktuell verwendet `backend/main.py:get_invoice_directory()` weiterhin
+`PROJECT_ROOT / "rechnungen"`, im Testbuild also `resources/app/rechnungen/`.
+Die Umsetzung der zentralen Ablage folgt im nächsten Arbeitsschritt. Vorhandene
+PDFs dürfen beim Pfadwechsel nicht still verschoben, überschrieben oder gelöscht
+werden; ihre Übernahme und die bestehende Datenbankzuordnung müssen bei der
+Umstellung berücksichtigt werden. Bis dahin die bisherigen Rechnungsverzeichnisse
+unverändert erhalten. Dieser Schritt legt keine Ordner an und verändert weder
+Datenbank noch Dokumente.
+
 ### Schemaänderungen
 
 Die bestehenden Migrationen 1–6 bleiben unverändert in ihrer fachlichen Wirkung.

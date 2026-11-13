@@ -275,8 +275,11 @@ verwaltet.
 
 ## Entwicklungsschritte
 
--   [ ] Festlegen, in welchem lokalen Verzeichnis Anwendungsdokumente
-    gespeichert werden.
+-   [x] Festlegen, in welchem lokalen Verzeichnis Anwendungsdokumente
+    gespeichert werden. Zielentscheidung: `documents/` im bestehenden
+    Desktop-Datenverzeichnis außerhalb der Installation; Webbetrieb ohne
+    Datenpfad-Override behält `rechnungen/`. Details und Abgrenzung zum noch
+    unveränderten Dateizugriff: [README.md](../README.md#dokumentenverzeichnis-phase-3-schritt-1).
 -   [ ] Einen zentralen Dienst für Dateiablage und Dateizugriff
     einrichten.
 -   [ ] Rechnungs-PDFs und weitere Anhänge eindeutig zuordnen.
