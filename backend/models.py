@@ -169,3 +169,6 @@ class InvoicePeriod(APIModel):
 
 class InvoiceCreate(InvoicePeriod):
     invoice_date: date | None = None
+
+class BackupRequest(APIModel):
+    directory: str | None = Field(default=None, min_length=1, max_length=4096)

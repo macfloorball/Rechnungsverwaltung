@@ -37,3 +37,30 @@ def test_missing_pdf_publishes_nothing(inventory):
     with pytest.raises(ValueError, match='fehlt'):
         create_backup(*inventory)
     assert not list(destination.glob('*.zip'))
+
+
+@pytest.mark.parametrize('target', ['relative', 'inside-documents'])
+def test_invalid_destination(inventory, target):
+    database, documents, _ = inventory
+    destination = Path('relative') if target == 'relative' else documents / 'backups'
+    with pytest.raises(ValueError):
+        create_backup(database, documents, destination)
+
+
+def test_backup_api_custom_destination(inventory):
+    from fastapi.testclient import TestClient
+    from backend.main import app, get_database_path, get_invoice_directory
+    database, documents, destination = inventory
+    app.dependency_overrides[get_database_path] = lambda: database
+    app.dependency_overrides[get_invoice_directory] = lambda: documents
+    try:
+        client = TestClient(app)
+        response = client.post('/api/backups', json={'directory': str(destination)})
+        assert response.status_code == 200
+        assert Path(response.json()['path']).parent == destination
+        response = client.post('/api/backups', json={'directory': 'relative'})
+        assert response.status_code == 503
+        assert str(database) not in response.text
+        assert client.post('/api/backups', json={'directory': 42}).status_code == 422
+    finally:
+        app.dependency_overrides.clear()

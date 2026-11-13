@@ -12,7 +12,11 @@ backupButton.addEventListener("click", async () => {
   backupButton.disabled = true;
   message.textContent = "Sicherung läuft …";
   try {
-    const response = await fetch("/api/backups", { method: "POST" });
+    const response = await fetch("/api/backups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ directory: document.getElementById("backup-directory").value.trim() || null }),
+    });
     const result = await response.json();
     if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "Sicherung fehlgeschlagen.");
     message.textContent = `Sicherung erstellt: ${result.path}`;

@@ -65,6 +65,7 @@ from backend.invoice_generator import (
     render_invoice_pdf,
 )
 from backend.models import (
+    BackupRequest,
     InvoiceCreate,
     InvoicePeriod,
     LogoUpload,
@@ -965,10 +966,10 @@ def get_invoice_pdf(
 
 
 @app.post("/api/backups")
-def backup_data(database_path: DatabasePath, invoice_directory: InvoiceDirectory) -> dict:
+def backup_data(request: BackupRequest, database_path: DatabasePath, invoice_directory: InvoiceDirectory) -> dict:
     from backend.backup_service import create_backup
     try:
-        path = create_backup(database_path, invoice_directory, Path.home() / "ttc-rechnungsverwaltung-backups")
+        path = create_backup(database_path, invoice_directory, Path(request.directory) if request.directory else Path.home() / "ttc-rechnungsverwaltung-backups")
         return {"path": str(path)}
     except (OSError, sqlite3.Error, ValueError) as error:
         logger.warning("Backup failed: %s", type(error).__name__)
