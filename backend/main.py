@@ -976,6 +976,22 @@ def backup_data(request: BackupRequest, database_path: DatabasePath, invoice_dir
         raise HTTPException(503, "Sicherung fehlgeschlagen. Datenbestand, Zugriffsrechte und freien Speicher prüfen; vorhandene Daten bleiben erhalten.") from None
 
 
+@app.get("/api/exports/download")
+def export_data(database_path: DatabasePath, invoice_directory: InvoiceDirectory) -> FileResponse:
+    import shutil
+    import tempfile
+    from starlette.background import BackgroundTask
+    from backend.data_export import create_export
+    temporary = Path(tempfile.mkdtemp(prefix="ttc-export-"))
+    try:
+        path = create_export(database_path, invoice_directory, temporary)
+        return FileResponse(path, media_type="application/zip", filename="ttc-datenexport.zip",
+                            background=BackgroundTask(shutil.rmtree, temporary))
+    except (OSError, sqlite3.Error, ValueError):
+        shutil.rmtree(temporary)
+        raise HTTPException(503, "Export fehlgeschlagen. Dokumente, Datenbank, Zugriffsrechte und freien Speicher prüfen.") from None
+
+
 app.mount(
     "/",
     StaticFiles(

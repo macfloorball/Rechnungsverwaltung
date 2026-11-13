@@ -26,3 +26,30 @@ backupButton.addEventListener("click", async () => {
     backupButton.disabled = false;
   }
 });
+
+const exportButton = document.getElementById("export-data");
+exportButton.addEventListener("click", async () => {
+  const message = document.getElementById("backup-message");
+  exportButton.disabled = true;
+  message.textContent = "Export läuft …";
+  try {
+    const response = await fetch("/api/exports/download");
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.detail || "Export fehlgeschlagen.");
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ttc-datenexport.zip";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    message.textContent = "Export zum Speichern übergeben. Download prüfen.";
+  } catch (error) {
+    message.textContent = error.message || "Export fehlgeschlagen.";
+  } finally {
+    exportButton.disabled = false;
+  }
+});

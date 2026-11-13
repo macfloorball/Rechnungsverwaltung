@@ -211,3 +211,20 @@ def test_failed_safety_backup_prevents_restore(inventory, tmp_path, monkeypatch)
     with pytest.raises(OSError):
         restore.restore_backup(archive, target, confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
     assert not target.exists()
+
+
+def test_csv_export_preserves_values_and_defuses_formulas(inventory, tmp_path):
+    import csv
+    import io
+    from backend.data_export import create_export
+    with sqlite3.connect(inventory[0]) as connection:
+        connection.execute("UPDATE organizations SET name=?, logo_data=? WHERE id=1", ('=HYPERLINK("bad")\n;Ümlaut', b'logo'))
+    exported = create_export(inventory[0], inventory[1], tmp_path / 'exports')
+    with zipfile.ZipFile(exported) as archive:
+        assert archive.read('documents/Beleg.pdf') == b'%PDF-test'
+        text = archive.read('csv/organizations.csv').decode('utf-8-sig')
+        row = next(csv.DictReader(io.StringIO(text), delimiter=';'))
+        assert row['name'] == '\'=HYPERLINK("bad")\n;Ümlaut'
+        assert row['logo_data'] == 'base64:bG9nbw=='
+        assert row['id'] == '1'
+        assert 'csv/invoice_items.csv' in archive.namelist()

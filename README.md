@@ -1034,3 +1034,14 @@ neuen PC die App zunächst einmal mit einem eigenen leeren Profil starten und
 wieder schließen; dieses Profil als aktuellen Bestand angeben. Das Backup-ZIP
 anschließend in einen weiteren neuen Profilordner wiederherstellen. Es gibt
 keinen Schalter zum Umgehen der Sicherheitskopie.
+
+#### Datenexport
+
+**CSV und Dokumente exportieren** liefert ein ZIP mit sieben Tabellen
+(Organisation/Empfänger/Einstellungen, Tätigkeiten, Wochenplan, Termine,
+Rechnungen und Rechnungspositionen) sowie unveränderten PDFs/Anhängen.
+CSV verwendet UTF-8 mit BOM, Semikolon und Kopfzeilen; Geldbeträge bleiben Cent,
+Datumswerte ISO-Text und Binärwerte erhalten `base64:`. Formelfähige Textfelder
+werden mit einem Apostroph entschärft. Der Export verwendet denselben konsistenten
+Snapshot wie Backups. Er dient der Auswertung; CSV-Import und Zusammenführung
+sind nicht vorgesehen. Zur Wiederherstellung das vollständige Backup verwenden.
