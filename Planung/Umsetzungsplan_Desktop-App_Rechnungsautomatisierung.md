@@ -358,8 +358,12 @@ Internet und ohne Anmeldung unterstützen.
     Keine externe Netzwerkverbindung ist für die fachlichen Arbeitsabläufe
     erforderlich. Der lokale HTTP-Dienst und installierte Laufzeitkomponenten
     bleiben notwendig; Einzelbewertung siehe unten.
--   [ ] Nicht notwendige Cloud- oder Serverabhängigkeiten für den
+-   [x] Nicht notwendige Cloud- oder Serverabhängigkeiten für den
     lokalen Modus entfernen oder deaktivieren.
+    Die externen CDN-Ressourcen von Swagger UI und ReDoc entfallen durch
+    Deaktivieren von `/docs`, `/redoc` und `/docs/oauth2-redirect` im gemeinsamen
+    Backend (Desktop und Web). `/openapi.json`, Oberfläche und fachliche API
+    bleiben verfügbar; Regressionstests sichern diese Abgrenzung ab.
 -   [ ] Prüfen, ob Schriftarten, Bibliotheken und andere Ressourcen
     lokal verfügbar sind.
 -   [ ] Die Anwendung mit deaktivierter Internetverbindung testen.

@@ -97,7 +97,15 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="TTC-Rechnungsverwaltung", lifespan=lifespan)
+# Die eingebauten Dokumentationsoberflächen laden externe CDN-Ressourcen.
+# Das lokale OpenAPI-Schema bleibt für Entwicklung und Werkzeuge verfügbar.
+app = FastAPI(
+    title="TTC-Rechnungsverwaltung",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    swagger_ui_oauth2_redirect_url=None,
+)
 logger = logging.getLogger(__name__)
 
 

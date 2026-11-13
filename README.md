@@ -306,6 +306,12 @@ Pakete, Builds und belegte Ports führen zu einer Startfehlermeldung.
 Die bestehende Webanwendung bleibt zusätzlich über den oben beschriebenen
 direkten Befehl `python -m uvicorn backend.main:app ...` startbar.
 
+Die automatisch erzeugten API-Dokumentationsoberflächen `/docs` und `/redoc`
+sowie `/docs/oauth2-redirect` sind im gemeinsamen Backend für alle Startmodi
+deaktiviert (HTTP 404), da sie externe CDN-Ressourcen einbinden. Das lokale
+API-Schema bleibt unter `/openapi.json` verfügbar. Oberfläche und fachliche
+REST-Endpunkte verwenden weiterhin den lokalen Anwendungsdienst.
+
 ### Konfiguration
 
 Standard ist `http://127.0.0.1:8000/`, zentral in `electron/config.cjs`.

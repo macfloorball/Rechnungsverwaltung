@@ -45,6 +45,29 @@ def client(tmp_path: Path):
     app.dependency_overrides.clear()
 
 
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/docs/oauth2-redirect"])
+def test_external_documentation_pages_are_unavailable(client: TestClient, path: str) -> None:
+    response = client.get(path)
+    assert response.status_code == 404
+    assert "text/html" not in response.headers.get("content-type", "")
+
+
+def test_local_frontend_and_openapi_remain_available(client: TestClient) -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'src="js/app.js"' in response.text
+    assert client.get("/js/app.js").status_code == 200
+    assert client.get("/css/style.css").status_code == 200
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schema = response.json()
+    assert schema["info"]["title"] == "TTC-Rechnungsverwaltung"
+    for path in ("/api/health", "/api/calendar/{year}/{month}", "/api/invoices"):
+        assert path in schema["paths"]
+    assert not schema.get("servers")
+
+
 def test_health_and_request_validation(client: TestClient) -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
