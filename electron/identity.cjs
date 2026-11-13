@@ -5,7 +5,7 @@ const metadata = require('../package.json');
 const APP_NAME = metadata.productName;
 const WINDOW_SIZE = Object.freeze({ width: 1280, height: 800, minWidth: 1000, minHeight: 650 });
 
-function configureIdentity(app) {
+function configureIdentity(app, platform = process.platform) {
   // productName affects Electron's default cache/profile path. Keep the old
   // technical-name profile; preserve paths explicitly overridden by callers.
   for (const key of ['userData', 'sessionData']) {
@@ -17,6 +17,7 @@ function configureIdentity(app) {
     }
   }
   app.setName(APP_NAME);
+  if (platform === 'win32') app.setAppUserModelId(metadata.desktopAppId);
 }
 
 function getWindowOptions(workArea, platform = process.platform) {

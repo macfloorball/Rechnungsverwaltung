@@ -811,22 +811,32 @@ noch nicht vollständig plattformübergreifend abgenommen.
 **Ziel:** Die Anwendung lässt sich wie ein normales Windows-Programm
 installieren, starten und aktualisieren.
 
+**Implementierungsstand:** Neun technische Arbeitsschritte sind umgesetzt.
+Die nativen Installations-/Deinstallationstests (Schritt 5) und die Installation
+auf einem zweiten Windows-System (Schritt 10) sind auf Wunsch als nächste
+praktische Windows-Abnahmen zurückgestellt. Die vorhandene Windows-VM ist
+der nächste Schritt. Automatisierte Linux- und Wine-Prüfungen ersetzen diese
+Abnahmen nicht; **Phase 6 ist nach der allgemeinen Definition of Done noch
+nicht vollständig abgenommen**. Vorgehen und Plattformgrenzen stehen in der
+[README](../README.md#windows-installation-und-updates-phase-6), die native
+Prüfanleitung in [Windows_Installationspruefung.md](Windows_Installationspruefung.md).
+
 ## Entwicklungsschritte
 
--   [ ] Einen geeigneten Electron-Packager bzw. Installer konfigurieren.
--   [ ] Einen Windows-Installer erstellen, beispielsweise als `.exe`.
--   [ ] App-Name, Symbol, Versionsnummer und Herausgeberangaben
+-   [x] Einen geeigneten Electron-Packager bzw. Installer konfigurieren.
+-   [x] Einen Windows-Installer erstellen, beispielsweise als `.exe`.
+-   [x] App-Name, Symbol, Versionsnummer und Herausgeberangaben
     festlegen.
--   [ ] Desktop-Verknüpfung und Startmenü-Eintrag einrichten.
+-   [x] Desktop-Verknüpfung und Startmenü-Eintrag einrichten.
 -   [ ] Installations- und Deinstallationsverhalten testen.
--   [ ] Sicherstellen, dass eine Deinstallation lokale Nutzerdaten nicht
+-   [x] Sicherstellen, dass eine Deinstallation lokale Nutzerdaten nicht
     ungefragt löscht.
--   [ ] Update-Prozess festlegen.
--   [ ] Vor Updates sicherstellen, dass Datenbank und Dokumente erhalten
+-   [x] Update-Prozess festlegen.
+-   [x] Vor Updates sicherstellen, dass Datenbank und Dokumente erhalten
     bleiben.
--   [ ] Datenbankmigrationen beim Update kontrolliert ausführen.
+-   [x] Datenbankmigrationen beim Update kontrolliert ausführen.
 -   [ ] Installation auf einem zweiten Windows-PC testen.
--   [ ] Verhalten bei fehlenden Berechtigungen und unvollständigen
+-   [x] Verhalten bei fehlenden Berechtigungen und unvollständigen
     Installationen prüfen.
 
 ## Ergebnis / Abnahmekriterien

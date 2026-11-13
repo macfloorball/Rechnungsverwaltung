@@ -5,6 +5,20 @@ const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const net = require('node:net');
 const { launchConfig, checkPort, stopTree, spawnBackend } = require('./run.cjs');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+
+test('installed build uses embedded Python exclusively and rejects missing runtime', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-embedded-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'packaged-runtime.json'), '{}');
+  assert.throws(() => launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root), /Laufzeit fehlt/);
+  const directory = path.join(root, 'runtime', 'python');
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'python.exe'), 'fixture');
+  assert.equal(launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root).python, path.join(directory, 'python.exe'));
+});
 
 test('development uses one Uvicorn service and the development address', () => {
   const config = launchConfig('desktop-dev', { TTC_DESKTOP_URL: 'http://127.0.0.1:8123', TTC_FRONTEND_DIRECTORY: 'wrong' });

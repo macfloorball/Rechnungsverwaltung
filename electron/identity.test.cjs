@@ -10,7 +10,9 @@ test('name and title come from package metadata; old profile paths are preserved
   t.after(() => fs.rmSync(profile, { recursive: true, force: true }));
   const paths = { userData: path.join(profile, APP_NAME), sessionData: '/custom/session' };
   let name;
-  configureIdentity({ getPath: (key) => paths[key], setPath: (key, value) => { paths[key] = value; }, setName: (value) => { name = value; } });
+  let modelId;
+  configureIdentity({ getPath: (key) => paths[key], setPath: (key, value) => { paths[key] = value; }, setName: (value) => { name = value; }, setAppUserModelId: (value) => { modelId = value; } }, 'win32');
+  assert.equal(modelId, 'de.mac-floorball.ttc-rechnungsverwaltung');
   assert.equal(name, 'TTC Rechnungsverwaltung');
   assert.equal(paths.userData, path.join(profile, 'ttc-rechnungsverwaltung'));
   assert.ok(fs.statSync(paths.userData).isDirectory());

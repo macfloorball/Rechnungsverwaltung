@@ -10,6 +10,7 @@ async function prepareWindowsSource(root, target) {
   await fs.mkdir(target, { recursive: true });
   await fs.writeFile(path.join(target, 'package.json'), JSON.stringify({
     name: metadata.name, productName: metadata.productName, version: metadata.version,
+    desktopAppId: metadata.desktopAppId, description: metadata.description,
     main: metadata.main, author: metadata.author || metadata.productName, private: true,
   }, null, 2));
   // Positive selection: never copy runtime data, environments, Git, or node_modules.
@@ -50,8 +51,10 @@ async function packageWindows(root = path.join(__dirname, '..')) {
       dir: source, out: path.join(root, 'dist', 'windows'),
       name: metadata.productName, executableName: metadata.productName,
       platform: 'win32', arch: 'x64', electronVersion: metadata.devDependencies.electron,
+      electronZipDir: process.env.TTC_ELECTRON_ZIP_DIRECTORY,
       appVersion: metadata.version, icon: path.join(source, 'electron', 'assets', 'app-icon.ico'),
-      win32metadata: { ProductName: metadata.productName, FileDescription: metadata.productName },
+      win32metadata: { ProductName: metadata.productName, FileDescription: metadata.description || metadata.productName,
+        CompanyName: metadata.author || metadata.productName },
       asar: false, prune: false, overwrite: true,
     });
     for (const destination of output) console.log(`Windows-Testbuild: ${destination}`);

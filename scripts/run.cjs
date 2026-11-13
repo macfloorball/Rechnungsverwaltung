@@ -18,7 +18,13 @@ function launchConfig(mode, env = process.env, root = ROOT) {
   else if (production) config.buildDirectory = path.join(root, 'dist', 'frontend');
   const url = new URL(config.url);
   const venv = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-  const python = env.TTC_PYTHON || (fs.existsSync(venv) ? venv : process.platform === 'win32' ? 'python' : 'python3');
+  const packagedRuntime = fs.existsSync(path.join(root, 'packaged-runtime.json'));
+  const embedded = path.join(root, 'runtime', 'python', 'python.exe');
+  if (packagedRuntime && !fs.existsSync(embedded)) {
+    throw new Error('Die mitgelieferte Python-Laufzeit fehlt. Anwendung mit dem Installer reparieren; persönliche Daten bleiben erhalten.');
+  }
+  // Installed builds never fall back to an unrelated system Python or venv.
+  const python = packagedRuntime ? embedded : env.TTC_PYTHON || (fs.existsSync(venv) ? venv : process.platform === 'win32' ? 'python' : 'python3');
   const args = ['-m', 'scripts.managed_server', 'backend.main:app', '--host', url.hostname.replace(/[\[\]]/g, ''), '--port', url.port || '80'];
   if (!production) args.push('--reload', '--reload-dir', path.join(root, 'backend'));
   return { ...config, python, args, desktop: mode.startsWith('desktop-'),
@@ -102,7 +108,7 @@ function validateFrontend(config) {
 
 function spawnBackend(config, root, env) {
   const child = spawn(config.python, config.args, {
-    cwd: root, env: { ...env, TTC_FRONTEND_DIRECTORY: config.frontend },
+    cwd: root, env: { ...env, PYTHONIOENCODING: 'utf-8', TTC_FRONTEND_DIRECTORY: config.frontend },
     stdio: ['pipe', 'inherit', 'pipe'], detached: true, windowsHide: true,
   });
   let errorOutput = '';

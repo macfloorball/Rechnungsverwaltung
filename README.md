@@ -1082,3 +1082,163 @@ Downloadpfade. Native Windows-Bedienung, manuelle Speicherdialoge sowie reale
 Stromausfälle sind gesondert zu prüfen; ein Windows-Testbuild ersetzt diese
 Prüfungen nicht. Windows-Installer und eingebettete Python-Laufzeit bleiben den
 späteren Projektphasen zugeordnet.
+
+
+## Windows-Installation und Updates (Phase 6)
+
+Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
+Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
+NSIS-Installer für Windows x64, pro Benutzer ohne Administratorrechte. Ein fester
+Installationsort verhindert die Auswahl eines Daten- oder Dokumentenordners.
+Der Installer erhält keine Löschfunktion für persönliche Daten. Die eingebettete
+Python-Laufzeit wird mit ihren Paketen ausgeliefert; am Ziel-PC sind weder Python
+noch Node.js oder npm erforderlich. Linux-Entwicklungs- und Webstarts bleiben erhalten.
+
+Technische Grundlage: [NSIS-Konfiguration](https://www.electron.build/nsis/) und
+[Python Embedded Distribution](https://docs.python.org/3/using/windows.html#the-embeddable-package).
+Es gibt keinen automatischen Updateabruf und keine Veröffentlichung aus dem Build.
+
+### Installer bauen
+
+Voraussetzungen auf dem Build-Rechner: Node.js gemäß `package.json`, eine
+lokale Python-Umgebung mit pip und Internetzugang für die Build-Werkzeuge.
+Aus dem Projektverzeichnis:
+
+```sh
+npm ci
+python scripts/prepare_windows_runtime.py dist/python-windows
+npm run desktop:installer:win
+```
+
+Unter Linux kann statt `python` der Interpreter `.venv/bin/python` verwendet
+werden. Das Laufzeitziel muss neu sein; bei Paketänderungen einen frischen
+Build erstellen. Das Python-Archiv ist auf Version 3.13.17 und SHA-256 fixiert,
+Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
+Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
+Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
+Ergebnis: `dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-setup.exe`.
+Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
+ohne eingebettete Laufzeit. Nur `desktop:installer:win` erstellt das eigenständige
+Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
+
+### Produktidentität
+
+App-Name: **TTC Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
+Paketversion: **0.1.0** aus `package.json`. Das vorhandene TTC-Symbol wird
+für App, EXE und Installer verwendet. Der technische Profilname bleibt
+`ttc-rechnungsverwaltung`; eine Änderung der Herausgeberangabe verschiebt
+damit keine Bestandsdaten. AppUserModelID: `de.mac-floorball.ttc-rechnungsverwaltung`.
+Der Installer ist nicht digital signiert. Die Herausgeber-Metadaten ersetzen
+kein Zertifikat; eine SmartScreen-Anzeige eines unbekannten Herausgebers ist möglich.
+
+Der Installer legt für den aktuellen Benutzer eine Desktop-Verknüpfung und
+einen Startmenü-Eintrag **TTC Rechnungsverwaltung** an. Bei Neuinstallation
+beziehungsweise Update werden die Verknüpfungen bereitgestellt. Der Start
+benötigt weder ein Terminal noch einen separaten Backend-Aufruf. Die native
+Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
+
+### Persönliche Daten bei der Deinstallation
+
+Die Deinstallation entfernt Programmdateien, Registrierung und Verknüpfungen.
+Das Datenprofil `%APPDATA%\ttc-rechnungsverwaltung` mit Datenbank und Standard-
+Dokumentenordner bleibt erhalten; ebenso eigene Dokumentenordner und externe
+Backups. Auch der versteckte NSIS-Schalter `--delete-app-data` wird vor der
+Deinstallation abgelehnt (Exitcode 2). Persönliche Daten lassen sich nur separat
+und bewusst nach eigener Prüfung und Sicherung entfernen. Für einen späteren
+Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
+
+### Manueller Updateprozess
+
+1. In der laufenden App eine **vollständige Sicherung** erstellen (Datenbank,
+   Dokumente und Einstellungen), Erfolgsmeldung prüfen und Sicherung außerhalb
+   des Installationsordners aufbewahren. Eine reine Datenbankkopie reicht nicht.
+2. App vollständig schließen und das Ende ihres lokalen Servers abwarten.
+   Keine zweite Instanz oder Schreibprogramme auf dem Datenbestand offen lassen.
+3. Den neuen Installer aus derselben vertrauenswürdigen Bezugsquelle übernehmen,
+   SHA-256 vergleichen und unter demselben Windows-Benutzer starten.
+   App-ID, technischer Profilname und Herausgeber bleiben stabil.
+4. Über die vorhandene Installation installieren; nicht vorher Datenverzeichnisse
+   verschieben oder löschen. Gleichversionige Neuinstallation dient der Reparatur.
+5. App starten und Einstellungen, Termine, Rechnungsnummernkreis sowie gespeicherte
+   PDFs prüfen. Die vorhandene Datenbankinitialisierung prüft das Schema und
+   führt erforderliche Migrationen kontrolliert mit vorheriger SQLite-Sicherung aus.
+
+Es gibt keinen Hintergrunddownload, keine Update-URL und keinen automatischen
+Neustart. Der Installer blockiert ein Downgrade gegenüber der in Windows
+registrierten Version (Exitcode 3). Ein manuelles Austauschen von Dateien wird
+dadurch nicht abgesichert; zusätzlich lehnt das Backend neuere Datenbankschemata ab.
+Bei fehlgeschlagenem Update denselben oder einen neueren vollständigen Installer
+erneut ausführen. Originaldaten und Sicherungen behalten. Für einen notwendigen
+Rückfall eine zur Sicherung passende App-Version und den dokumentierten Offline-
+Wiederherstellungsprozess aus Phase 5 in einen neuen Datenordner verwenden. Niemals
+eine ältere App schreibend auf eine bereits migrierte Datenbank zwingen. Ein
+automatisches Zurückrollen sämtlicher Programmdateien bei Stromausfall ist nicht
+implementiert; die Reparatur erfolgt über den vollständigen Installer.
+
+### Trennung von Installation und Daten
+
+Der Installationsdialog bietet keine freie Pfadwahl. Auch der NSIS-Schalter
+`/D=` wird vor einer Installation abgelehnt (Exitcode 4), damit Programmdateien
+nicht versehentlich in einen bestehenden Daten- oder Dokumentenordner gelangen.
+Updates ersetzen die Programmdateien und die eingebettete Laufzeit, während
+das technische Benutzerprofil und konfigurierte Dokumentenpfade erhalten bleiben.
+Die vorhandenen Tests `tests/test_storage_update.py` prüfen den Wechsel zwischen
+getrennten Installationsverzeichnissen bei unveränderter Datenbank, Einstellungen,
+Logo, Nummernkreis, Rechnungssnapshots und PDFs, einschließlich eigener Ablage.
+Diese Regression wird wiederverwendet; es gibt keine zweite Datenmigration.
+
+### Datenbankmigration beim Update
+
+Der Installer öffnet und verändert die Datenbank nicht. Nach Installation startet
+das vorhandene Backend mit demselben Benutzerprofil. Die Initialisierung prüft
+Integrität, Migrationsreihenfolge und unterstützte Schemaversion. Vor einer
+erforderlichen Migration entsteht eine SQLite-Sicherung `ttc.db.before-migration-*.sqlite3`
+im Datenprofil. Bereits aktuelle Datenbanken werden nur validiert. Fehlerhafte
+Migrationsschritte rollen ihre Transaktion zurück; die Sicherung bleibt erhalten.
+Ein neuerer oder lückenhafter Schemastand wird ohne Überschreiben abgelehnt.
+Die SQLite-Sicherung ergänzt das vollständige Backup vor Updates und ersetzt
+dessen Dokumentensicherung nicht.
+
+`tests/packaged_migration_check.py` lässt sich mit dem ausgelieferten Interpreter
+ausführen. Es prüft in einem eigenen temporären Profil den Import der Laufzeitpakete,
+einen erzwungenen Migrationsfehler, die vorherige Sicherung, erfolgreichen
+Wiederholungsversuch, unveränderten Neustart und Ablehnung eines neueren Schemas.
+Die Paketprüfung verwendet bewusst einen fremden Arbeitsordner; der Windows-
+Suchpfad in `python313._pth` verweist ausdrücklich auf den Anwendungscode.
+
+### Fehlerbehandlung und Plattformgrenzen
+
+Installierte Builds verwenden einen eigenen Startprüfer: Bevor Anwendungs- oder
+Backendmodule geladen werden, werden Paketmetadaten und das Datei-Manifest
+kontrolliert. Fehlende, veränderte oder unlesbare Programmdateien führen zu einem
+Installationsfehler mit Reparaturhinweis. Dabei wird keine Ersatzdatenbank angelegt.
+Das Manifest schützt gegen unvollständige oder beschädigte Kopien; es ist keine
+digitale Signatur. Datenprofile werden weder gehasht noch in das Paket aufgenommen.
+Windows-Backendausgaben werden für die Electron-Prozessschnittstelle als UTF-8
+übertragen, auch bei einer anderen Windows-Konsolencodierung.
+
+Der Installer unterstützt Windows 10/11 x64. Native Installations-, Rechte-,
+SmartScreen-, Verknüpfungs- und Deinstallationstests sowie der Versionswechsel
+sind noch in der Windows-VM abzunehmen. Die unabhängige zweite Windows-Umgebung
+bleibt ebenfalls offen. Der nächste praktische Schritt ist die
+[Windows-Abnahmeanleitung](Planung/Windows_Installationspruefung.md).
+
+Linux bleibt für Entwicklung, Webbetrieb und Tests unterstützt. Ein Windows-
+Crossbuild benötigt unter Linux zusätzlich ein funktionsfähiges Wine. Es kann
+über `USE_SYSTEM_WINE=true` aus dem Suchpfad oder über
+`ELECTRON_BUILDER_WINE_TOOLSET_DIR` aus einer geeigneten Toolset-Installation
+verwendet werden. Ein auf diesem Rechner fehlerhaftes mitgeliefertes Wine-Bundle
+wurde für den Build durch temporär entpackte Fedora-Wine-Werkzeuge ersetzt.
+Auf einem Windows-Build-Rechner ist Wine nicht nötig.
+Für einen vorhandenen offiziellen Electron-ZIP-Cache lässt sich
+`TTC_ELECTRON_ZIP_DIRECTORY` angeben. Der Build veröffentlicht fertige Installer
+erst nach erfolgreicher Erstellung und Prüfung; fehlgeschlagene Zwischenbuilds
+ersetzen keinen zuvor fertig erstellten Installer.
+
+Die zusätzlichen Paketprüfungen sind optional aktivierbar: `TTC_WINDOWS_PYTHON`
+verweist auf den ausgelieferten Interpreter. Unter Linux werden zusätzlich
+`TTC_WINE` und ein separates `TTC_WINE_PREFIX` gesetzt. Die Prüfungen verwenden
+ausschließlich temporäre Profile und ein fremdes Arbeitsverzeichnis.
+Die NSIS-Compilerprüfung benötigt `TTC_MAKENSIS` und `TTC_NSIS_PLUGINS`
+(das Verzeichnis der x86-unicode-Plugins). Mit Wine führt sie auch die
+Schutzprüfungen für Datenlöschung, Installationspfad und Downgrade aus.
