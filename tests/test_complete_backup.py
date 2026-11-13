@@ -133,3 +133,51 @@ def test_document_changed_during_copy_aborts(inventory, monkeypatch):
     with pytest.raises(ValueError, match='geändert'):
         create_backup(*inventory)
     assert not list(inventory[2].glob('*.zip'))
+
+
+def test_restore_to_new_profile_and_no_overwrite(inventory, tmp_path):
+    from backend.backup_restore import restore_backup
+    archive = create_backup(*inventory)
+    target = tmp_path / 'anderer PC' / 'Profil'
+    with pytest.raises(ValueError, match='bestätigt'):
+        restore_backup(archive, target)
+    assert not target.exists()
+    restore_backup(archive, target, confirmed=True)
+    assert (target / 'documents/Beleg.pdf').read_bytes() == b'%PDF-test'
+    with sqlite3.connect(target / 'ttc.db') as connection:
+        assert connection.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+    with pytest.raises(FileExistsError):
+        restore_backup(archive, target, confirmed=True)
+
+
+@pytest.mark.parametrize('damage', ['hash', 'traversal', 'duplicate', 'version', 'database'])
+def test_invalid_restore_never_publishes_target(inventory, tmp_path, damage):
+    from backend.backup_restore import restore_backup
+    archive = create_backup(*inventory)
+    with zipfile.ZipFile(archive) as source:
+        files = {name: source.read(name) for name in source.namelist()}
+    manifest = json.loads(files['manifest.json'])
+    if damage == 'hash':
+        files['documents/Beleg.pdf'] = b'bad'
+    elif damage == 'traversal':
+        files['documents/../../escape'] = b'bad'
+        manifest['files']['documents/../../escape'] = {'size': 3, 'sha256': 'bad'}
+    elif damage == 'version':
+        manifest['format'] = 99
+    elif damage == 'database':
+        import hashlib
+        files['database/ttc.db'] = b'not sqlite'
+        manifest['files']['database/ttc.db'] = {'size': 10, 'sha256': hashlib.sha256(b'not sqlite').hexdigest()}
+    files['manifest.json'] = json.dumps(manifest).encode()
+    broken = tmp_path / 'broken.zip'
+    with zipfile.ZipFile(broken, 'w') as output:
+        for name, content in files.items():
+            output.writestr(name, content)
+        if damage == 'duplicate':
+            with pytest.warns(UserWarning):
+                output.writestr('manifest.json', files['manifest.json'])
+    target = tmp_path / 'restored'
+    with pytest.raises((ValueError, sqlite3.Error)):
+        restore_backup(broken, target, confirmed=True)
+    assert not target.exists()
+    assert (inventory[1] / 'Beleg.pdf').read_bytes() == b'%PDF-test'

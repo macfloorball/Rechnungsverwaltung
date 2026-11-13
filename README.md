@@ -997,3 +997,30 @@ Jede Sicherung erhält UTC-Zeitstempel und Zufallskennung; bestehende Archive
 werden auch bei einer Namenskollision niemals ersetzt. Temporäre Dateien werden
 bei gewöhnlichen Fehlern entfernt; nach einem Stromausfall können versteckte
 `.ttc-backup-*`-Arbeitsordner verbleiben. Nur veröffentlichte ZIP-Dateien verwenden.
+
+#### Wiederherstellung bei beendeter App
+
+App und sämtliche zugehörigen Backend-Prozesse auf beiden Geräten beenden.
+Zuerst den aktuellen Bestand vollständig sichern. Das Originalprofil bleibt
+als Rückfallmöglichkeit erhalten. Anschließend mit lokal eingerichteter
+Python-Umgebung im Projekt-/App-Verzeichnis ausführen:
+
+```bash
+python -m backend.backup_restore --archive "/absolut/Sicherungen/ttc-backup-….zip" --target "/absolut/NeuesProfil" --confirm
+```
+
+Der Zielordner darf noch nicht existieren. Erst nach erfolgreicher Prüfung
+aller Prüfsummen, SQLite-Integrität, Fremdschlüssel und PDF-Verweise werden
+Dateien im neuen Profil veröffentlicht. ZIP-Pfade werden nicht blind extrahiert.
+Bei Platz-/Rechtefehlern während der Veröffentlichung kann ein unvollständiges
+neues Profil verbleiben: nicht verwenden, Originalprofil behalten und mit einem
+anderen neuen Ziel erneut versuchen. Bestehende Profile werden niemals ersetzt.
+
+Danach `TTC_DATA_DIRECTORY` auf den neuen absoluten Profilpfad setzen und die App
+starten. Ein bisheriges `TTC_DOCUMENT_DIRECTORY` entfernen oder ausdrücklich auf
+`<NeuesProfil>/documents` ändern, damit keine alten PDFs verwendet werden.
+Unter PowerShell etwa `$env:TTC_DATA_DIRECTORY = 'D:\TTC\NeuesProfil'` setzen;
+Pfade mit Leerzeichen in Anführungszeichen einschließen. Die Sicherung ist
+zwischen Windows und Linux übertragbar; Startumgebung und Python müssen auf dem
+Zielgerät eingerichtet sein. Das Wiederherstellungslimit beträgt 8 GiB und
+100.000 Archiveinträge. Es gibt keine Zusammenführung bestehender Datenbestände.
