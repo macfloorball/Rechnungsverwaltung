@@ -745,6 +745,37 @@ Lesefehler mit HTTP 503 gemeldet werden. Bricht das Lesen nach bereits übertrag
 PDF-Daten ab, wird die Übertragung beendet; dann ist ein neuer Abruf erforderlich,
 weil Status und Header nicht mehr geändert werden können.
 
+### Fremde Dokumente beim Rechnungslöschen schützen (Phase 3, Schritt 9)
+
+Vor dem Löschen prüft die API weiterhin den verbindlichen Dateinamen, die
+eindeutige Rechnungszuordnung und die Identität der vorhandenen regulären Datei.
+`delete_final_invoice()` vergleicht die ausgewählte Rechnung innerhalb seiner
+SQLite-Schreibtransaktion erneut mit dem aktuellen Datensatz. Auch zwischenzeitlich
+hinzugekommene weitere Dateiverweise werden geprüft, einschließlich abweichender
+Groß-/Kleinschreibung. Bei einem Konflikt bleiben Rechnung und Dateien erhalten;
+die API fordert mit HTTP 409 zum erneuten Laden und Prüfen auf.
+
+Nach dem Löschen des Datensatzes prüft `invoice_document_deletion_guard()` vor
+der PDF-Bereinigung erneut, dass keine Rechnung mehr auf die Datei verweist.
+Die SQLite-Schreibsperre bleibt während der bedingten Dateioperation bestehen.
+Damit können parallele Datenbank-Schreibvorgänge die Zuordnung nicht zwischen
+dieser Prüfung und der Bereinigung ändern. Eine bereits anderweitig zugeordnete
+oder anhand der gespeicherten Identität als ersetzt erkannte Datei wird erhalten.
+Kann die Zuordnung nicht geprüft werden, bleibt die PDF ebenfalls erhalten und
+die API weist auf den bereits gelöschten Datensatz und die notwendige Kontrolle hin.
+
+Fehlt ein gespeicherter Dateiverweis, wird kein Dateiname zum Löschen hergeleitet.
+War die PDF schon bei der Auswahl nicht vorhanden, entfernt die API keine später
+unter diesem Namen erschienene Datei. Es gibt keine rekursive Löschung oder Suche
+nach ähnlichen Dateinamen. Andere Rechnungs-PDFs, nicht zugeordnete Dateien und
+Kopien in alten Ablagen bleiben erhalten. Wiederholtes Löschen einer nicht mehr
+vorhandenen Rechnung meldet HTTP 404 und führt keine Dateioperation aus.
+
+Datenbanklöschung und Dateientfernung bleiben zwei getrennte Schritte. Bei einem
+Fehler nach der Datenbanklöschung kann die PDF zurückbleiben; diese bestehende
+Einschränkung wird ausdrücklich gemeldet. Eine gemeinsame atomare Transaktion
+über SQLite und Dateisystem wird nicht zugesichert.
+
 ### Schemaänderungen
 
 Die bestehenden Migrationen 1–6 bleiben unverändert in ihrer fachlichen Wirkung.

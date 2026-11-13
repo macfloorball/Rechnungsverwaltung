@@ -121,3 +121,40 @@ def test_complete_target_remains_usable_without_a_valid_old_directory(tmp_path):
     assert pdf.read_bytes() == b"original"
     assert old.read_bytes() == b"not a directory"
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("reference", ["Rechnung_TTC_2026-11.pdf", "rechnung_ttc_2026-11.PDF"])
+def test_database_deletion_rechecks_document_ownership(tmp_path, reference):
+    from backend.database import InvoiceDeletionConflictError, delete_final_invoice
+
+    database = tmp_path / "ttc.db"
+    initialize_database(database)
+    invoice_id = create_invoice_with_items(invoice_values(), [], database)
+    create_record("invoices", invoice_values(12, reference), database)
+    before = database.read_bytes()
+    with pytest.raises(InvoiceDeletionConflictError):
+        delete_final_invoice(invoice_id, database)
+    assert database.read_bytes() == before
+
+
+def test_cleanup_guard_blocks_competing_database_writers(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+    from threading import Event
+    from backend.database import invoice_document_deletion_guard
+
+    database = tmp_path / "ttc.db"
+    initialize_database(database)
+    started = Event()
+
+    def assign_document():
+        started.set()
+        return create_record("invoices", invoice_values(), database)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with invoice_document_deletion_guard("Rechnung_TTC_2026-11.pdf", database):
+            assignment = pool.submit(assign_document)
+            assert started.wait(timeout=2)
+            with pytest.raises(TimeoutError):
+                assignment.result(timeout=0.2)
+        invoice_id = assignment.result(timeout=5)
+    assert get_invoice(invoice_id, database)["pdf_path"] == "Rechnung_TTC_2026-11.pdf"

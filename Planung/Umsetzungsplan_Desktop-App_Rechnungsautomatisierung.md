@@ -318,8 +318,12 @@ verwaltet.
     Electron erkennt auch Dokumenten-Startfehler des Reload-Workers. PDF-Abrufe
     behandeln Lesefehler vor Übertragungsbeginn; Fehlerbehebung und erneutes
     Speichern sind mit echten Electron-Fenstern geprüft.
--   [ ] Sicherstellen, dass das Löschen einer Rechnung nicht
-    versehentlich nicht zugehörige Dokumente entfernt.
+-   [x] Sicherstellen, dass das Löschen einer Rechnung nicht
+    versehentlich nicht zugehörige Dokumente entfernt. Auswahl und exklusive
+    Dateizuordnung werden beim Löschen unter SQLite-Schreibsperre erneut geprüft.
+    Vor der PDF-Bereinigung verhindert eine weitere geschützte Zuordnungsprüfung
+    konkurrierende Datenbankänderungen; geänderte Dateien und fremde Zuordnungen
+    bleiben erhalten. Fehler-, Manipulations- und Konkurrenzfälle sind getestet.
 -   [ ] Bestehende Rechnungs- und Vorschauabläufe vollständig testen.
 
 ## Ergebnis / Abnahmekriterien

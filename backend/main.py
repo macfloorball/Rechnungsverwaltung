@@ -42,6 +42,8 @@ from backend.database import (
     InvoiceAlreadyExistsError,
     InvoiceDocumentConflictError,
     InvoicePreviewDeletionError,
+    InvoiceDeletionConflictError,
+    invoice_document_deletion_guard,
     create_invoice_with_items,
     create_record,
     delete_final_invoice,
@@ -880,7 +882,12 @@ def delete_invoice(
                 pass
 
     try:
-        invoice = delete_final_invoice(invoice_id, database_path)
+        invoice = delete_final_invoice(invoice_id, database_path, expected_invoice=existing_invoice)
+    except InvoiceDeletionConflictError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Die Rechnung oder ihre Dateizuordnung wurde zwischenzeitlich geändert. Die Rechnung wurde nicht gelöscht; bitte den Bestand neu laden und prüfen.",
+        ) from error
     except InvoicePreviewDeletionError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -901,8 +908,18 @@ def delete_invoice(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Rechnung wurde gelöscht, die PDF-Datei konnte nicht sicher zugeordnet werden",
             ) from error
-        with document_operation("delete"):
-            documents.delete(expected_filename, expected=pdf_identity, missing_ok=True)
+        try:
+            with invoice_document_deletion_guard(expected_filename, database_path):
+                with document_operation("delete"):
+                    documents.delete(expected_filename, expected=pdf_identity, missing_ok=True)
+        except InvoiceDeletionConflictError:
+            raise DocumentOperationError("changed", "delete") from None
+        except sqlite3.DatabaseError as error:
+            logger.warning("Invoice document ownership check failed: %s", error_code(error))
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Die Rechnung wurde gelöscht, die PDF blieb erhalten, weil ihre Zuordnung nicht geprüft werden konnte. Datenbankverfügbarkeit und Dateibestand prüfen.",
+            ) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

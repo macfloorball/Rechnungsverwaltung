@@ -282,6 +282,182 @@ def test_delete_error_reports_whether_invoice_was_already_deleted(client, monkey
     assert file.read_bytes() == b"%PDF-original"
 
 
+@pytest.fixture
+def deletion_documents(client, stored_file_error_invoice):
+    from backend.database import create_record
+
+    invoice_id, selected = stored_file_error_invoice
+    other_id = create_record("invoices", {
+        "year": 2026, "month": 12, "invoice_date": "2026-12-31",
+        "total_amount_cents": 0, "pdf_path": "Rechnung_TTC_2026-12.pdf",
+    }, client.app.state.test_database_path)
+    legacy = selected.parent / "old-installation"
+    legacy.mkdir()
+    other_files = {
+        selected.with_name("Rechnung_TTC_2026-12.pdf"): b"other invoice",
+        selected.with_name("unassigned.pdf"): b"unassigned document",
+        selected.parent.parent / "outside.pdf": b"outside document",
+        legacy / selected.name: b"legacy original",
+    }
+    for file, content in other_files.items():
+        file.write_bytes(content)
+    return invoice_id, selected, other_id, other_files
+
+
+def _assert_other_documents_unchanged(files):
+    for file, content in files.items():
+        assert file.read_bytes() == content
+
+
+def test_deletion_removes_only_the_selected_active_pdf(client, deletion_documents):
+    invoice_id, selected, other_id, files = deletion_documents
+    other = get_invoice(other_id, client.app.state.test_database_path)
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 204
+    assert not selected.exists()
+    assert get_invoice(invoice_id, client.app.state.test_database_path) is None
+    assert get_invoice(other_id, client.app.state.test_database_path) == other
+    _assert_other_documents_unchanged(files)
+    selected.write_bytes(b"later unrelated document")
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 404
+    assert selected.read_bytes() == b"later unrelated document"
+
+
+@pytest.mark.parametrize("reference", [None, ""])
+def test_missing_database_reference_does_not_infer_a_file_to_delete(client, deletion_documents, reference):
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    database = client.app.state.test_database_path
+    update_record("invoices", invoice_id, {"pdf_path": reference}, database)
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 204
+    assert get_invoice(invoice_id, database) is None
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("reference", ["../outside.pdf", "absolute", "..\\outside.pdf", "Rechnung_TTC_2026-12.pdf", "Rechnung_TTC_2026-11.pdf "])
+def test_unsafe_invoice_reference_never_deletes_files(client, deletion_documents, reference):
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    if reference == "absolute":
+        reference = str(selected.parent.parent / "outside.pdf")
+    database = client.app.state.test_database_path
+    update_record("invoices", invoice_id, {"pdf_path": reference}, database)
+    before = database.read_bytes()
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 500
+    assert database.read_bytes() == before
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("kind", ["symlink", "directory"])
+def test_non_regular_invoice_path_is_preserved_before_database_deletion(client, deletion_documents, kind):
+    invoice_id, selected, other_id, files = deletion_documents
+    selected.unlink()
+    if kind == "symlink":
+        selected.symlink_to(selected.parent.parent / "outside.pdf")
+    else:
+        selected.mkdir()
+        (selected / "foreign.pdf").write_bytes(b"foreign")
+    database = client.app.state.test_database_path
+    before = database.read_bytes()
+    assert client.delete(f"/api/invoices/{invoice_id}").status_code == 503
+    assert database.read_bytes() == before
+    if kind == "symlink":
+        assert selected.is_symlink()
+    else:
+        assert (selected / "foreign.pdf").read_bytes() == b"foreign"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("change", ["invoice", "shared", "shared-case"])
+def test_changed_database_selection_prevents_deletion(client, monkeypatch, deletion_documents, change):
+    import backend.main as main
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    database = client.app.state.test_database_path
+    original_delete = main.delete_final_invoice
+    expected = {}
+
+    def concurrent_change(*args, **kwargs):
+        if change == "invoice":
+            update_record("invoices", invoice_id, {"invoice_number": "RE-CHANGED"}, database)
+        else:
+            update_record("invoices", other_id, {
+                "pdf_path": selected.name.lower() if change == "shared-case" else selected.name,
+            }, database)
+        expected["selected"] = get_invoice(invoice_id, database)
+        expected["other"] = get_invoice(other_id, database)
+        return original_delete(*args, **kwargs)
+
+    monkeypatch.setattr(main, "delete_final_invoice", concurrent_change)
+    response = client.delete(f"/api/invoices/{invoice_id}")
+    assert response.status_code == 409
+    assert "nicht gelöscht" in response.json()["detail"]
+    assert get_invoice(invoice_id, database) == expected["selected"]
+    assert get_invoice(other_id, database) == expected["other"]
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
+@pytest.mark.parametrize("change", ["replacement", "reassigned", "reassigned-case", "appeared"])
+def test_cleanup_preserves_replaced_new_or_reassigned_documents(client, monkeypatch, deletion_documents, change):
+    import backend.main as main
+    from backend.database import update_record
+
+    invoice_id, selected, other_id, files = deletion_documents
+    database = client.app.state.test_database_path
+    original_delete = main.delete_final_invoice
+    if change == "appeared":
+        selected.unlink()
+
+    def concurrent_change(*args, **kwargs):
+        result = original_delete(*args, **kwargs)
+        if change == "replacement":
+            replacement = selected.with_name("replacement.pdf")
+            replacement.write_bytes(b"foreign replacement")
+            replacement.replace(selected)
+        elif change == "appeared":
+            selected.write_bytes(b"new foreign document")
+        else:
+            update_record("invoices", other_id, {
+                "pdf_path": selected.name.lower() if change == "reassigned-case" else selected.name,
+            }, database)
+        return result
+
+    monkeypatch.setattr(main, "delete_final_invoice", concurrent_change)
+    response = client.delete(f"/api/invoices/{invoice_id}")
+    assert response.status_code == (204 if change == "appeared" else 409)
+    assert get_invoice(invoice_id, database) is None
+    assert get_invoice(other_id, database) is not None
+    expected = {"replacement": b"foreign replacement", "appeared": b"new foreign document"}.get(change, b"%PDF-original")
+    assert selected.read_bytes() == expected
+    _assert_other_documents_unchanged(files)
+
+
+def test_failed_cleanup_ownership_check_keeps_pdf(client, monkeypatch, deletion_documents):
+    from contextlib import contextmanager
+    import backend.main as main
+    from backend.storage_errors import DatabaseAccessError
+
+    invoice_id, selected, other_id, files = deletion_documents
+
+    @contextmanager
+    def unavailable(*args, **kwargs):
+        raise DatabaseAccessError("locked")
+        yield
+
+    monkeypatch.setattr(main, "invoice_document_deletion_guard", unavailable)
+    response = client.delete(f"/api/invoices/{invoice_id}")
+    assert response.status_code == 503
+    assert "PDF blieb erhalten" in response.json()["detail"]
+    assert get_invoice(invoice_id, client.app.state.test_database_path) is None
+    assert selected.read_bytes() == b"%PDF-original"
+    _assert_other_documents_unchanged(files)
+
+
 def test_hour_inputs_reject_fractional_and_comma_values(client: TestClient) -> None:
     settings = client.put(
         "/api/settings",

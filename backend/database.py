@@ -962,9 +962,29 @@ class InvoicePreviewDeletionError(ValueError):
     """Raised when attempting to delete a preview as a finalized invoice."""
 
 
+class InvoiceDeletionConflictError(ValueError):
+    """The selected invoice or its document ownership changed before deletion."""
+
+
+@contextmanager
+def invoice_document_deletion_guard(
+    reference: str, database_path: Path | None = None,
+) -> Iterator[None]:
+    """Keep database writers out while an unreferenced PDF is removed."""
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if connection.execute(
+            "SELECT 1 FROM invoices WHERE pdf_path = ? COLLATE NOCASE LIMIT 1",
+            (reference,),
+        ).fetchone():
+            raise InvoiceDeletionConflictError
+        yield
+
+
 def delete_final_invoice(
     invoice_id: int,
     database_path: Path | None = None,
+    *, expected_invoice: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -979,6 +999,15 @@ def delete_final_invoice(
         invoice = dict(row)
         if invoice["is_preview"]:
             raise InvoicePreviewDeletionError
+        if expected_invoice is not None and any(
+            expected_invoice.get(field) != value for field, value in invoice.items()
+        ):
+            raise InvoiceDeletionConflictError
+        if invoice["pdf_path"] and connection.execute(
+            "SELECT 1 FROM invoices WHERE pdf_path = ? COLLATE NOCASE AND id != ? LIMIT 1",
+            (invoice["pdf_path"], invoice_id),
+        ).fetchone():
+            raise InvoiceDeletionConflictError
 
         cursor = connection.execute(
             "DELETE FROM invoices WHERE id = ? AND is_preview = 0",
