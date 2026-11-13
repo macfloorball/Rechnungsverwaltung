@@ -620,6 +620,52 @@ Variable ändern beziehungsweise entfernen, neu starten und die PDFs prüfen.
 Eigene frühere Ordner werden nicht automatisch gesucht oder verschoben. Quellen
 erst nach vollständiger Prüfung beziehungsweise separater Sicherung entfernen.
 
+### PDF-Abläufe in Electron prüfen (Phase 3, Schritt 6)
+
+`tests/test_desktop_invoice.py` prüft die vorhandenen Abläufe mit echten
+Electron-Fenstern, Preload, Renderer und dem von Electron gestarteten Python-Backend.
+Der Test kopiert die App in temporäre Verzeichnisse und verwendet ausschließlich
+neue Testdaten und isolierte Profile. Entwicklung wird mit Standardablage,
+Produktion mit gebautem Frontend und eigenem Dokumentenordner geprüft.
+
+Geprüft werden die sichtbare HTML-Rechnungsvorschau, der Ausschluss geplanter
+Termine, die Finalisierung, PDF-Abruf mit passenden HTTP-Headern, der tatsächliche
+Electron-Download und der bytegleiche Inhalt der gespeicherten PDF. Eine neue
+Vorschau verändert die finale PDF nicht. Nach Neuladen wird die Rechnung über
+das Archiv geöffnet. Der Test prüft außerdem Sandbox, Context Isolation und die
+beschränkte Preload-Bridge. Browserübergaben werden ausschließlich im Test
+abgefangen; die produktive URL-Validierung bleibt aktiv.
+
+Voraussetzungen: installierte Projektabhängigkeiten, eine grafische Sitzung und
+eine Umgebung, die lokale Loopback-Verbindungen sowie Electron-Prozesse erlaubt.
+Die Tests werden ohne ausdrückliche Aktivierung übersprungen:
+
+```bash
+TTC_RUN_ELECTRON_TESTS=1 python -m pytest -q -s tests/test_desktop_invoice.py
+```
+
+PowerShell:
+
+```powershell
+$env:TTC_RUN_ELECTRON_TESTS = "1"
+python -m pytest -q -s tests/test_desktop_invoice.py
+```
+
+Die ausgegebenen temporären Artefaktverzeichnisse enthalten Vorschau-Screenshot,
+Test-PDF und Download. Unter Linux wurden beide Modi ohne Abschalten der
+Electron-Sandbox geprüft. Die HTML-Vorschau läuft im Electron-Fenster; finale
+PDFs werden gemäß bestehender Architektur an den Standardbrowser übergeben.
+Der Test ersetzt weder die native Windows-Abnahme noch die manuelle Kontrolle
+der PDF-Darstellung und des Druckdialogs im tatsächlichen Standardbrowser.
+
+Falls `node`/`npm` fehlen, die vorhandene Electron-Abhängigkeit aber installiert
+ist, kann ihre eingebettete Node-Laufzeit unter Linux für die JavaScript-Tests
+verwendet werden:
+
+```bash
+ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/electron --test --test-isolation=none electron/*.test.cjs scripts/*.test.cjs
+```
+
 ### Schemaänderungen
 
 Die bestehenden Migrationen 1–6 bleiben unverändert in ihrer fachlichen Wirkung.

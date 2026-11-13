@@ -299,8 +299,13 @@ verwaltet.
     absoluten Dokumentenpfad unabhängig von SQLite. Konfiguration erfolgt
     über die Startumgebung; sichere Übernahme aus der Standardablage und
     bewusster Wechsel zwischen eigenen Ordnern sind in der README beschrieben.
--   [ ] Prüfen, ob vorhandene PDF-Erstellung und PDF-Vorschau in
-    Electron funktionieren.
+-   [x] Prüfen, ob vorhandene PDF-Erstellung und PDF-Vorschau in
+    Electron funktionieren. Unter Linux mit echten Electron-Fenstern in
+    Entwicklung und Produktion geprüft: HTML-Vorschau, Finalisierung,
+    PDF-Download, erneute Vorschau und Archivöffnung. Reproduzierbarer
+    Opt-in-Test: `tests/test_desktop_invoice.py`. Die Standardbrowser-Übergabe
+    wird im Test abgefangen; native Windows-Ausführung sowie Darstellung
+    und Drucken im tatsächlichen Standardbrowser bleiben offene Abnahmen.
 -   [ ] Speichern, Öffnen, Umbenennen und Löschen von Dateien
     kontrolliert umsetzen.
 -   [ ] Fehlerfälle behandeln, etwa fehlende Dateien oder fehlende
