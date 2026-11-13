@@ -22,7 +22,8 @@ function installerConfig(root, metadata) {
       include: path.join(root, 'build', 'windows', 'installer.nsh'),
       allowElevation: false, allowToChangeInstallationDirectory: false,
       deleteAppDataOnUninstall: false,
-      createDesktopShortcut: false, createStartMenuShortcut: false,
+      createDesktopShortcut: 'always', createStartMenuShortcut: true,
+      shortcutName: metadata.productName,
       runAfterFinish: false, installerLanguages: ['de_DE'],
     },
   };

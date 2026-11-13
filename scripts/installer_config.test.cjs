@@ -15,6 +15,9 @@ test('NSIS installs per user without elevation or deleting user profiles', () =>
   assert.equal(config.nsis.allowElevation, false);
   assert.equal(config.nsis.deleteAppDataOnUninstall, false);
   assert.equal(config.nsis.allowToChangeInstallationDirectory, false);
+  assert.equal(config.nsis.createDesktopShortcut, 'always');
+  assert.equal(config.nsis.createStartMenuShortcut, true);
+  assert.equal(config.nsis.shortcutName, metadata.productName);
   assert.equal(config.publish, null);
   assert.equal(config.directories.output, path.join('/project', 'dist', 'installer'));
   assert.deepEqual(config.win.target, [{ target: 'nsis', arch: ['x64'] }]);

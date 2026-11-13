@@ -1130,3 +1130,9 @@ für App, EXE und Installer verwendet. Der technische Profilname bleibt
 damit keine Bestandsdaten. AppUserModelID: `de.mac-floorball.ttc-rechnungsverwaltung`.
 Der Installer ist nicht digital signiert. Die Herausgeber-Metadaten ersetzen
 kein Zertifikat; eine SmartScreen-Anzeige eines unbekannten Herausgebers ist möglich.
+
+Der Installer legt für den aktuellen Benutzer eine Desktop-Verknüpfung und
+einen Startmenü-Eintrag **TTC Rechnungsverwaltung** an. Bei Neuinstallation
+beziehungsweise Update werden die Verknüpfungen bereitgestellt. Der Start
+benötigt weder ein Terminal noch einen separaten Backend-Aufruf. Die native
+Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
