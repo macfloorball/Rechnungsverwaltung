@@ -972,3 +972,19 @@ Reload. Datenbank, Rechnungen und Testprotokolle liegen dabei in temporären
 Verzeichnissen. `npm run desktop:check` prüft zusätzlich Desktop-Datenpfad,
 Startfehler, IPC/Sandbox und den Ausschluss von Nutzerdaten aus dem Paket.
 Für Prozess- und HTTP-Tests muss die Testumgebung lokale Loopback-Sockets erlauben.
+
+### Vollständige Sicherungen (Phase 5)
+
+Eine vollständige Sicherung umfasst SQLite mit allen Tabellen, Nummernkreisen,
+Einstellungen, Logos und Rechnungssnapshots sowie sämtliche regulären Dateien
+im konfigurierten Dokumentenordner (auch nicht zugeordnete PDFs und Anhänge).
+Unterordner und symbolische Links werden sicherheitshalber abgelehnt, nicht
+unbemerkt ausgelassen. Installationsdateien, Cache, Protokolle, alte Sicherungen
+und Startumgebungsvariablen gehören nicht zum Nutzdatenbackup. Externe
+Logo-Quelldateien werden nicht benötigt: verwendete Logos liegen in SQLite.
+
+Format: ein privates, zeitgestempeltes ZIP mit `database/ttc.db`,
+`documents/<Dateiname>` und `manifest.json` (Formatversion, UTC-Zeitpunkt,
+Größe und SHA-256 jeder Nutzdatei). Absolute Quellpfade werden nicht gespeichert.
+Es gibt keine automatische Löschung vollständiger Sicherungen. Das bisherige
+`backup_database.py` samt Timer bleibt eine reine Datenbanksicherung.
