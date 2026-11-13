@@ -364,8 +364,11 @@ Internet und ohne Anmeldung unterstützen.
     Deaktivieren von `/docs`, `/redoc` und `/docs/oauth2-redirect` im gemeinsamen
     Backend (Desktop und Web). `/openapi.json`, Oberfläche und fachliche API
     bleiben verfügbar; Regressionstests sichern diese Abgrenzung ab.
--   [ ] Prüfen, ob Schriftarten, Bibliotheken und andere Ressourcen
+-   [x] Prüfen, ob Schriftarten, Bibliotheken und andere Ressourcen
     lokal verfügbar sind.
+    Quellfrontend, vorhandener Produktions-Build und Paketvorbereitung in
+    temporärer Kopie geprüft; Ressourcen und lokale Laufzeit verfügbar.
+    Details und Verteilungsgrenzen siehe Ressourcenprüfung unten.
 -   [ ] Die Anwendung mit deaktivierter Internetverbindung testen.
 -   [ ] Kundenverwaltung vollständig testen.
 -   [ ] Wochenplan und Terminverwaltung vollständig testen.
@@ -404,6 +407,47 @@ Lokale Schrift-/Bibliotheksverfügbarkeit wird erst in Schritt 4 vollständig
 geprüft. Diese Quellcodebewertung ersetzt weder den praktischen Offline-Test
 aus Schritt 5 noch die offene native Windows-Abnahme oder eine Messung möglichen
 Hintergrundverkehrs von Chromium, Betriebssystem und Standardbrowser.
+
+## Lokale Ressourcenprüfung (Schritt 4)
+
+Prüfung am 13.11.2026 unter Linux, ohne Änderung vorhandener Builds oder
+Nutzerdaten und ohne Download zusätzlicher Ressourcen:
+
+- **Frontend:** Beide HTML-Ressourcen (`css/style.css`, `js/app.js`) und alle
+  fünf ES-Module sind lokal vorhanden; sämtliche Modulimporte lassen sich
+  lokal auflösen. CSS enthält weder `@import`, `@font-face` noch `url(...)`.
+  Der vorhandene Produktions-Build stimmt für alle Quelldateien byteweise
+  mit `frontend/` überein.
+- **Oberflächenschriften:** `Inter` ist optional und wird nicht mitgeliefert
+  oder nachgeladen. Die vorhandene CSS-Fallback-Liste verwendet lokale
+  Systemschriften; `fc-match` löst hier sowohl `Inter` als auch `system-ui`
+  auf die installierte Noto Sans auf. Auf Windows ist die konkrete Schrift
+  systemabhängig; identische Darstellung über Betriebssysteme wird nicht
+  zugesichert.
+- **PDF und Logos:** ReportLabs Standardschriften `Helvetica` und
+  `Helvetica-Bold` samt lokaler Zeichenbreitenberechnung für Umlaute, ß und €
+  sind verfügbar. Es sind PDF-Standardschriften, keine nachzuladenden Webfonts.
+  Logos gelangen als Bildbytes über `BytesIO` in die PDF-Erzeugung; Pillow
+  ist lokal importierbar. PDF-/Logo-Verarbeitung wird zusätzlich durch die
+  vorhandenen Rechnungs- und API-Tests geprüft. Die tatsächliche Anzeige im
+  Standardbrowser bleibt eine separate Abnahme.
+- **Python:** FastAPI, Uvicorn, Pydantic, ReportLab, Pillow, SQLite sowie
+  die Testabhängigkeiten pytest und `httpx2` sind in der vorhandenen Umgebung
+  verfügbar. Die Anwendung benötigt beim Start keine Paketinstallation.
+- **Electron und Paketinhalt:** Die installierte Linux-Laufzeit enthält
+  Ressourcenpakete, ICU-Daten, Snapshots und `locales/de.pak`; `ldd` meldet
+  keine fehlenden Bibliotheken. `prepareWindowsSource()` wurde mit echten
+  Projektquellen in einer temporären Kopie ausgeführt: Frontend samt
+  Importkette und Build-Kennung, Backend-/Electron-Module, alle drei Icons,
+  Startskripte und `requirements.txt` sind vollständig enthalten.
+
+**Ergebnis:** Für die hier eingerichtete Umgebung fehlen keine benötigten
+lokalen Ressourcen; zusätzliche Webfonts oder Frontend-Bibliotheken sind
+nicht erforderlich. Der Windows-Testbuild enthält weiterhin keine Python-
+Laufzeit oder Python-Pakete. Diese müssen vor dem Offlinebetrieb lokal
+eingerichtet sein; eine eigenständig verteilbare Windows-Version oder native
+Windows-Ausführung wird durch diese Paketvorbereitung nicht nachgewiesen.
+Der Test mit tatsächlich deaktiviertem Internet bleibt Schritt 5.
 
 ## Ergebnis / Abnahmekriterien
 
