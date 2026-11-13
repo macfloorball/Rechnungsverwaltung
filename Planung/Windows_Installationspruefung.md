@@ -52,3 +52,29 @@ ersetzt diese native Abnahme nicht.
    Programm und Daten bleiben erhalten. Anschließend normal deinstallieren.
 6. Die Fälle mit einer eigenen Dokumentenablage wiederholen. PDFs, externe
    Sicherungen und Anhänge müssen auch nach Deinstallation erhalten bleiben.
+
+## Zweiter Windows-PC / unabhängige saubere VM (Schritt 10)
+
+Dieser Test bleibt ausdrücklich offen. Eine zweite Instanz derselben bereits
+eingerichteten Umgebung reicht als Nachweis einer sauberen Installation nicht.
+
+1. Auf einem unabhängigen Windows-10/11-x64-System ohne Entwicklungswerkzeuge
+   einen normalen Benutzer verwenden. Windows-Version und Architektur festhalten.
+2. Nur Installer und Hashdatei übertragen. Keine `.venv`, keine System-Python-
+   Installation, kein Node.js und keine Dateien aus dem Entwicklungscheckout
+   voraussetzen. Die Prüfsumme vor Ausführung vergleichen.
+3. Netzwerkzugang der Test-VM deaktivieren und Installation, Desktop-/Startmenü-
+   Start, Rechnungserstellung, PDF-Öffnen und vollständiges Backup durchspielen.
+   Der erste Start darf keine Pakete nachladen.
+4. Ein vollständiges Testbackup vom ersten PC nach dem dokumentierten Offline-
+   Wiederherstellungsverfahren aus Phase 5 in einen neuen Datenordner übernehmen.
+   Quelle, Backup und vorherige Sicherheitskopie behalten. Empfänger, Termine,
+   Entwürfe, finale Rechnungen, PDFs und Nummernkreis vergleichen.
+5. Update, Deinstallation und Neuinstallation wie oben wiederholen. Auch einen
+   Windows-Benutzernamen und Pfad mit Leerzeichen beziehungsweise Umlauten prüfen.
+6. Beide PCs verwenden eigene lokale SQLite-Dateien. Die Datenbank nicht über
+   einen gemeinsam geöffneten oder synchronisierten Ordner betreiben.
+
+Der nächste praktische Schritt ist die erste native Prüfung in der verfügbaren
+Windows-VM; danach folgt diese unabhängige zweite Umgebung. Bis beide Nachweise
+vorliegen, ist Phase 6 nach der allgemeinen Definition of Done nicht abgenommen.
