@@ -402,8 +402,12 @@ Internet und ohne Anmeldung unterstützen.
     erneute Vorschauen, Transaktionsfehler und Neu-Finalisierung nach Löschen
     ergänzt geprüft. Echte Offline-Electron-Tests sichern auch Monatswechsel,
     Löschfehler, erneuten Versuch und Datenerhalt nach App-Neustart ab.
--   [ ] Prüfen, dass nur abrechnungsfähige bzw. erledigte Leistungen in
+-   [x] Prüfen, dass nur abrechnungsfähige bzw. erledigte Leistungen in
     Rechnungen einfließen.
+    Filtermatrix für Status, manuelle/generierte Termine, Stunden/Pauschale
+    und Monats-/Jahresgrenzen ergänzt. Vorschau, finale Positionen, Snapshot und
+    PDF-Erzeugung enthalten ausschließlich erledigte Termine des gewählten Monats;
+    gespeicherte Preise bleiben auch nach Deaktivierung der Tätigkeit maßgeblich.
 -   [ ] Fehler- und Grenzfälle testen, etwa doppelte Aktionen, fehlende
     Daten und Programmabstürze.
 -   [ ] Bestehende automatisierte Tests ausführen und bei Bedarf
@@ -662,6 +666,41 @@ Offline-Varianten aus Entwicklung/Produktion und Standard-/eigener Ablage.
 Am Produktcode war keine Änderung erforderlich. Die vollständige Prüfung der
 Abrechnungsfilter folgt in Schritt 11. Native Windows-Ausführung, echte
 Standardbrowser-Darstellung und manuelle Betriebssystemdialoge bleiben offen.
+
+## Abrechnungsfähige Leistungen prüfen (Schritt 11)
+
+Die dokumentierte Geschäftsregel wird unverändert beibehalten: Nur gespeicherte
+Termine mit Status `completed` im ausgewählten Monat werden abgerechnet.
+Wochenplanvorkommen sind zunächst geplant; `planned` und `cancelled` werden
+nicht durch die Vorschau oder Finalisierung automatisch als erledigt behandelt.
+Ein zusätzliches Abrechenbarkeitsfeld wurde nicht eingeführt.
+
+39 zusätzliche API-Fälle prüfen:
+
+- Eine Matrix aus drei Statuswerten, manueller/generierter Herkunft,
+  Stunden/Pauschale sowie Terminen im vorherigen, ausgewählten und folgenden
+  Monat. Sie umfasst den Jahreswechsel. Positionen und Summen werden in der
+  Vorschau, der finalen Rechnung, dem gespeicherten Snapshot und den an den
+  tatsächlichen PDF-Renderer übergebenen Positionen verglichen. Nicht
+  abrechenbare Fälle erzeugen weder finale Rechnung noch PDF oder Nummernverbrauch.
+- Ein nach der Vorschau auf geplant oder ausgefallen geänderter Termin darf
+  nicht aus einem veralteten Entwurf finalisiert werden. Nur die anschließend
+  erneut bestätigte Leistung fließt ein.
+- Ein gemischter Monat enthält nur die ausdrücklich erwarteten erledigten
+  Leistungen, einschließlich erster/letzter Monatstage und Pauschale. Spätere
+  Preisänderung und Deaktivierung der Tätigkeit entfernen keine historischen
+  erledigten Leistungen und ändern deren gespeicherten Preis nicht.
+
+Die echten Electron-Tests ergänzen erledigte Testtermine außerhalb des Monats
+sowie den Wechsel der einzigen berechtigten Leistung auf geplant/ausgefallen
+und zurück. Leere Vorschau und gesperrte Finalisierung werden geprüft. Nach dem
+vollständigen Rechnungsablauf enthält die finale Monatsrechnung ausschließlich
+die erwartete erledigte Position; dies wird vor und nach App-Neustart direkt
+in SQLite geprüft. Alle vier Offline-Varianten aus Entwicklung/Produktion und
+Standard-/eigener Ablage sind einbezogen.
+
+Am Produktcode war keine Änderung erforderlich. Native Windows-Abnahme und
+tatsächliche Darstellung der PDF im Standardbrowser bleiben separat offen.
 
 ## Ergebnis / Abnahmekriterien
 

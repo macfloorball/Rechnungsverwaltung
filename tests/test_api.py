@@ -2592,6 +2592,112 @@ def test_calendar_and_invoice_preview_handle_month_and_year_boundaries(
     assert leap_calendar["days"][-1]["date"] == "2028-02-29"
 
 
+@pytest.mark.parametrize("status", ["planned", "completed", "cancelled"])
+@pytest.mark.parametrize("generated", [False, True])
+@pytest.mark.parametrize("hours", [2, None])
+@pytest.mark.parametrize("training_date", ["2031-11-30", "2031-12-01", "2032-01-01"])
+def test_billing_filter_matrix_applies_to_preview_final_snapshot_and_pdf(
+    client, calendar_activities, monkeypatch, status, generated, hours, training_date,
+):
+    from backend import main
+    from backend.database import get_organization, list_records
+
+    activity_id = calendar_activities[0]["id"]
+    if generated:
+        client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": activity_id, "hours": 1}])
+        training_id = client.get("/api/calendar/2031/12").json()["days"][0]["trainings"][0]["id"]
+        response = client.put(f"/api/trainings/{training_id}", json={"status": status, "hours": hours, "training_date": training_date})
+    else:
+        response = client.post("/api/trainings", json={"training_date": training_date, "activity_type_id": activity_id, "status": status, "hours": hours})
+        training_id = response.json()["id"]
+    assert response.status_code in (200, 201)
+    database = client.app.state.test_database_path
+    before = list_records("trainings", database_path=database)
+    sequence = get_organization(database)["next_invoice_number"]
+    lines = []
+    render_pdf = main.render_invoice_pdf
+    def capture_pdf(year, month, invoice_date, items, total, details):
+        lines.extend(items)
+        return render_pdf(year, month, invoice_date, items, total, details)
+    monkeypatch.setattr(main, "render_invoice_pdf", capture_pdf)
+    period = {"year": 2031, "month": 12}
+    billable = status == "completed" and training_date == "2031-12-01"
+    preview = client.post("/api/invoices/preview", json=period)
+    assert preview.status_code == 200
+    expected_ids = [training_id] if billable else []
+    expected_amount = (3000 if hours == 2 else 1500) if billable else 0
+    assert [item["training_id"] for item in preview.json()["items"]] == expected_ids
+    assert preview.json()["total_amount_cents"] == expected_amount
+    final = client.post("/api/invoices", json=period)
+    assert final.status_code == (201 if billable else 400)
+    if billable:
+        assert [item["training_id"] for item in final.json()["items"]] == expected_ids
+        snapshot = json.loads(get_invoice(final.json()["id"], database)["invoice_snapshot_json"])
+        assert [item["training_id"] for item in snapshot["items"]] == expected_ids
+        assert [(line.training_date.isoformat(), line.hours, line.amount_cents) for line in lines] == [(training_date, hours, expected_amount)]
+        assert client.get(f"/api/invoices/{final.json()['id']}/pdf").content.startswith(b"%PDF-")
+    else:
+        assert lines == []
+        assert client.get("/api/invoices").json() == []
+        assert not list(client.app.state.test_invoice_directory.glob("*"))
+    assert get_organization(database)["next_invoice_number"] == sequence + int(billable)
+    assert list_records("trainings", database_path=database) == before
+
+
+@pytest.mark.parametrize("status", ["planned", "cancelled"])
+def test_finalization_rechecks_completion_after_preview(client, invoice_draft, status):
+    from backend.database import get_organization
+
+    period, draft_id, trainings = invoice_draft
+    database = client.app.state.test_database_path
+    sequence = get_organization(database)["next_invoice_number"]
+    for training in trainings:
+        client.put(f"/api/trainings/{training['id']}", json={"status": status})
+    assert client.post("/api/invoices", json=period).status_code == 400
+    assert get_invoice(draft_id, database)["is_preview"] == 1
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert not list(client.app.state.test_invoice_directory.glob("*"))
+    client.put(f"/api/trainings/{trainings[0]['id']}", json={"status": "completed"})
+    final = client.post("/api/invoices", json=period)
+    assert final.status_code == 201
+    assert [item["training_id"] for item in final.json()["items"]] == [trainings[0]["id"]]
+    assert final.json()["total_amount_cents"] == 3000
+
+
+def test_mixed_billable_sources_keep_historical_prices_after_deactivation(client, calendar_activities, monkeypatch):
+    from backend import main
+
+    regular, flat = calendar_activities[:2]
+    client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": regular["id"], "hours": 1}])
+    generated = client.get("/api/calendar/2031/12").json()["days"][0]["trainings"][0]
+    client.put(f"/api/trainings/{generated['id']}", json={"status": "completed"})
+    expected = {generated["id"]: 1500}
+    for day, activity, hours in (("2031-12-31", regular, 2), ("2031-12-15", flat, None)):
+        response = client.post("/api/trainings", json={"training_date": day, "activity_type_id": activity["id"], "hours": hours, "status": "completed"})
+        expected[response.json()["id"]] = 3000 if hours else 2200
+    for day, status in (("2031-12-31", "planned"), ("2031-12-15", "cancelled"), ("2031-11-30", "completed"), ("2032-01-01", "completed")):
+        assert client.post("/api/trainings", json={"training_date": day, "activity_type_id": regular["id"], "hours": 99, "status": status}).status_code == 201
+    assert client.put("/api/settings", json={"activities": [
+        {"id": activity["id"], "name": activity["name"], "hourly_rate_cents": 9999, "is_active": False}
+        for activity in (regular, flat)
+    ]}).status_code == 200
+    lines = []
+    render_pdf = main.render_invoice_pdf
+    def capture_pdf(year, month, invoice_date, items, total, details):
+        lines.extend(items)
+        return render_pdf(year, month, invoice_date, items, total, details)
+    monkeypatch.setattr(main, "render_invoice_pdf", capture_pdf)
+    period = {"year": 2031, "month": 12}
+    preview = client.post("/api/invoices/preview", json=period).json()
+    assert {item["training_id"]: item["amount_cents"] for item in preview["items"]} == expected
+    assert preview["total_amount_cents"] == 6700
+    final = client.post("/api/invoices", json=period)
+    assert final.status_code == 201
+    assert {item["training_id"]: item["amount_cents"] for item in final.json()["items"]} == expected
+    assert sum(line.amount_cents for line in lines) == 6700
+    assert sorted(line.unit_rate_cents for line in lines) == [1500, 1500, 2200]
+
+
 def test_invoice_preview_only_includes_completed_trainings(
     client: TestClient,
 ) -> None:

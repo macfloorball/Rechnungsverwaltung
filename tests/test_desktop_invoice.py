@@ -102,6 +102,7 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
     assert "DESKTOP_STATUS_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_PREVIEW_CHECK saved" in stdout, stdout + stderr
     assert "DESKTOP_FINAL_CHECK saved" in stdout, stdout + stderr
+    assert "DESKTOP_BILLABLE_CHECK saved" in stdout, stdout + stderr
     if offline_namespace:
         assert "DESKTOP_OFFLINE_CHECK " in stdout, stdout + stderr
     result = next((line for line in stdout.splitlines() if line.startswith("DESKTOP_PDF_CHECK ")), None)
@@ -131,6 +132,17 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
             assert items == [("GUI Kostenfrei <Prüfung>", None, 0, 0)]
             return draft, items
     preview_before_restart = stored_preview()
+    def billable_final_positions():
+        with sqlite3.connect(profile / "ttc.db") as connection:
+            positions = connection.execute(
+                "SELECT items.description, items.hours, items.amount_cents, trainings.status "
+                "FROM invoice_items AS items JOIN invoices ON invoices.id = items.invoice_id "
+                "LEFT JOIN trainings ON trainings.id = items.training_id "
+                "WHERE invoices.year = 2020 AND invoices.month = 1 AND invoices.is_preview = 0"
+            ).fetchall()
+            assert positions == [("Electron Testtraining", 4, 6000, "completed")]
+            return positions
+    final_positions_before_restart = billable_final_positions()
     # A second complete Electron launch reuses the profile after the first
     # application's normal shutdown, including its managed Python backend.
     stdout, stderr = _run_electron(args, tmp_path, environment | {"TTC_TEST_RESUME": "1"})
@@ -146,4 +158,5 @@ def test_desktop_invoice_preview_creation_and_opening(tmp_path, mode, custom_doc
         "invoices": 2, "totalCents": 6000, "handoffs": 1,
     }
     assert stored_preview() == preview_before_restart
+    assert billable_final_positions() == final_positions_before_restart
     print(f"Electron {mode}, custom documents={custom_documents}: {output}")

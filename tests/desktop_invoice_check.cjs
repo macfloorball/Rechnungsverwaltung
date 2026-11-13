@@ -381,6 +381,9 @@ async function run() {
       const training = await request('/api/trainings', {training_date:'2020-01-15',activity_type_id:invoiceActivity.id,hours:2,status});
       if (status === 'completed') completedId = training.id;
     }
+    for (const training_date of ['2019-12-31', '2020-04-01']) {
+      await request('/api/trainings', {training_date,activity_type_id:invoiceActivity.id,hours:99,status:'completed'});
+    }
     const month = document.querySelector('#invoice-month');
     month.value='2020-01'; month.dispatchEvent(new Event('input',{bubbles:true}));
     document.querySelector('#invoice-preview-form').requestSubmit();
@@ -391,6 +394,23 @@ async function run() {
   assert.match(await js('document.querySelector("#invoice-items").textContent'), /Electron Testtraining/);
   assert.match(await js('document.querySelector("#invoice-total").textContent'), /30,00/);
   assert.equal(await js('document.querySelector("#create-invoice").disabled'), false);
+  for (const status of ['planned', 'cancelled']) {
+    const changed = await fetch(new URL(`/api/trainings/${seed.completedId}`, origin), {
+      method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status}),
+    });
+    assert.equal(changed.status, 200);
+    await loadPreview('2020-01');
+    assert.equal(await js('document.querySelectorAll("#invoice-items tr").length'), 0);
+    assert.equal(await js('document.querySelector("#invoice-empty").hidden'), false);
+    assert.equal(await js('document.querySelector("#create-invoice").disabled'), true);
+  }
+  assert.equal((await fetch(new URL(`/api/trainings/${seed.completedId}`, origin), {
+    method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'completed'}),
+  })).status, 200);
+  await loadPreview('2020-01');
+  assert.equal(await js('document.querySelectorAll("#invoice-items tr").length'), 1);
+  assert.match(await js('document.querySelector("#invoice-total").textContent'), /30,00/);
+  console.log('DESKTOP_BILLABLE_CHECK saved');
   await js(`(async () => {
     document.querySelector('#invoice-preview').scrollIntoView({behavior:'instant',block:'center'});
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
