@@ -348,7 +348,12 @@ Internet und ohne Anmeldung unterstützen.
 
 ## Entwicklungsschritte
 
--   [ ] Alle externen Netzwerkabhängigkeiten der Anwendung erfassen.
+-   [x] Alle externen Netzwerkabhängigkeiten der Anwendung erfassen.
+    Quellcodebasierte Bestandsaufnahme einschließlich lokaler HTTP-Kommunikation,
+    externer FastAPI-Dokumentationsressourcen, Einrichtung und Build sowie
+    konfigurationsabhängiger Netzablagen:
+    [Phase_4_Netzwerkabhaengigkeiten.md](Phase_4_Netzwerkabhaengigkeiten.md).
+    Praktische Offline-Prüfung und Bewertung folgen in den nächsten Schritten.
 -   [ ] Prüfen, welche davon für den lokalen Betrieb zwingend notwendig
     sind.
 -   [ ] Nicht notwendige Cloud- oder Serverabhängigkeiten für den
