@@ -7,16 +7,17 @@ const validVersion = (value) => typeof value === "string" && value.length <= 17 
 export function initializeDesktopUpdates({ document: doc = document, api = globalThis.window?.ttcDesktop } = {}) {
   if (instances.has(doc)) return instances.get(doc);
   const methods = ["getUpdateStatus", "checkForUpdates", "acknowledgeUpdate", "deferUpdate", "requestUpdate",
-    "setUpdateAccessToken", "clearUpdateAccessToken", "onUpdateStatus"];
+    "installUpdate", "setUpdateAccessToken", "clearUpdateAccessToken", "onUpdateStatus"];
   const section = doc.getElementById("desktop-updates");
   if (!section || api?.apiVersion !== 1 || !methods.every((name) => typeof api[name] === "function")) return () => {};
   const get = (id) => doc.getElementById(id);
   const dialog = get("desktop-update-dialog"), token = get("desktop-update-token");
   const checkButton = get("check-desktop-updates"), showButton = get("show-desktop-update");
+  const installButton = get("install-desktop-update");
   const nowButton = get("desktop-update-now"), laterButton = get("desktop-update-later");
   const saveButton = get("save-desktop-update-access"), clearButton = get("clear-desktop-update-access");
   const abort = new AbortController(), shown = new Set();
-  let status = null, dialogVersion = null, busy = false, accessBusy = false, closed = false;
+  let status = null, dialogVersion = null, busy = false, accessBusy = false, installBusy = false, closed = false;
   let unsubscribe = () => {};
   const listen = (node, event, callback, options = {}) => node.addEventListener(event, callback, { ...options, signal: abort.signal });
   function message(node, text) { node.textContent = text || ""; node.hidden = !text; }
@@ -58,7 +59,7 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
   }
   function render(next) {
     if (closed) return;
-    if (!next || typeof next !== "object" || !["disabled", "idle", "checking", "available", "up_to_date", "authentication_required", "error", "downloading", "downloaded"].includes(next.state)) {
+    if (!next || typeof next !== "object" || !["disabled", "idle", "checking", "available", "up_to_date", "authentication_required", "error", "downloading", "downloaded", "preparing_install", "install_handoff"].includes(next.state)) {
       problem(controlledFailure()); return;
     }
     status = next;
@@ -71,6 +72,9 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
       error: "Die Update-Prüfung konnte nicht abgeschlossen werden.", downloading: "Das Update wird heruntergeladen …",
       downloaded: "Das Update wurde heruntergeladen und geprüft. Die automatische Installation ist noch nicht verfügbar.",
     };
+    labels.preparing_install = "Die Windows-Installation wird vorbereitet …";
+    labels.install_handoff = "Die App wird für die Installation beendet …";
+    if (next.state === "downloaded" && next.canInstall) labels.downloaded = "Das Update ist geprüft und zur Installation bereit.";
     let label = labels[next.state];
     if (next.state === "downloading" && next.download?.phase === "verifying") label = "Das heruntergeladene Paket wird geprüft …";
     else if (next.state === "downloading" && Number.isFinite(next.download?.receivedBytes)
@@ -82,6 +86,7 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
     message(get("desktop-update-error"), next.state === "error" && typeof next.error?.message === "string" ? next.error.message.slice(0, 600) : "");
     checkButton.disabled = busy || accessBusy || ["disabled", "checking", "downloading"].includes(next.state);
     checkButton.setAttribute("aria-busy", String(busy || next.state === "checking"));
+    installButton.hidden = !next.canInstall; installButton.disabled = installBusy;
     showButton.hidden = !eligible(); showButton.disabled = busy || accessBusy;
     saveButton.disabled = accessBusy || !next.requiresAuthentication;
     clearButton.disabled = accessBusy;
@@ -90,10 +95,10 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
     get("desktop-update-access-hint").textContent = next.requiresAuthentication
       ? "Der Token wird nur für diese Update-Quelle verwendet. Du kannst den gespeicherten Zugang jederzeit entfernen."
       : "Für diese App-Version wird derzeit kein neuer GitHub-Zugang benötigt.";
-    nowButton.disabled = busy || !eligible() || next.canDownload !== true || (dialog.open && dialogVersion !== next.availableVersion);
+    nowButton.disabled = installBusy || busy || (!(eligible() && next.canDownload === true) && !next.canInstall) || (dialog.open && dialogVersion !== next.availableVersion);
     get("desktop-update-unavailable").hidden = next.canDownload === true || ["downloading", "downloaded"].includes(next.state);
     nowButton.textContent = next.state === "downloading" ? "Wird heruntergeladen …"
-      : next.state === "downloaded" ? "Download geprüft" : "Jetzt aktualisieren";
+      : next.canInstall ? "Jetzt installieren" : next.state === "downloaded" ? "Download geprüft" : "Jetzt aktualisieren";
     laterButton.textContent = next.state === "downloading" ? "Im Hintergrund weiterladen" : "Später";
     if (dialog.open && dialogVersion !== next.availableVersion && !["downloading", "downloaded"].includes(next.state)) {
       message(get("desktop-update-dialog-error"), "Diese Update-Freigabe ist nicht mehr aktuell. Bitte erneut prüfen.");
@@ -102,7 +107,7 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
       message(get("desktop-update-dialog-error"), next.error.message.slice(0, 600));
     }
     if (dialog.open && next.state === "downloaded") {
-      message(get("desktop-update-dialog-error"), "Das Paket wurde geprüft. Die automatische Installation ist noch nicht verfügbar.");
+      message(get("desktop-update-dialog-error"), next.canInstall ? "Das Paket ist geprüft. Zur Installation wird die App nach erneuter Bestätigung beendet." : "Das Paket wurde geprüft. Die automatische Installation ist noch nicht verfügbar.");
       laterButton.textContent = "Schließen";
     }
     renderProgress();
@@ -151,7 +156,16 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
   listen(showButton, "click", openDialog);
   listen(laterButton, "click", () => { void later(); });
   listen(dialog, "cancel", (event) => { event.preventDefault(); void later(); });
+  async function install(version) {
+    if (closed || installBusy || !status?.canInstall || !validVersion(version)) return;
+    installBusy = true; installButton.disabled = true; nowButton.disabled = true;
+    try { render(await invoke("installUpdate", version)); }
+    catch (error) { if (!closed) problem(error, dialog.open ? get("desktop-update-dialog-error") : get("desktop-update-error")); }
+    finally { installBusy = false; if (status) render(status); }
+  }
+  listen(installButton, "click", () => { void install(status?.availableVersion); });
   listen(nowButton, "click", async () => {
+    if (status?.canInstall) { await install(dialogVersion); return; }
     if (busy || nowButton.disabled || !validVersion(dialogVersion)) return;
     busy = true; nowButton.disabled = true;
     try { render(await invoke("requestUpdate", dialogVersion)); }

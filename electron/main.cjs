@@ -18,6 +18,7 @@ let stopping = false;
 let shutdownComplete = false;
 let shutdownPromise;
 let exitCode = 0;
+let updateExitApproved = false;
 
 function shutdown() {
   if (!shutdownPromise) {
@@ -58,6 +59,7 @@ function openMainWindow() {
     return;
   }
   mainWindow = createMainWindow(frontendURL, fail);
+  mainWindow.on('close', (event) => { if (updates?.installer?.isBusy() && !updateExitApproved) event.preventDefault(); });
   mainWindow.once('closed', () => { mainWindow = null; });
 }
 
@@ -66,6 +68,7 @@ process.on('unhandledRejection', fail);
 process.on('SIGINT', () => app.quit());
 process.on('SIGTERM', () => app.quit());
 app.on('before-quit', (event) => {
+  if (updates?.installer?.isBusy() && !updateExitApproved) { event.preventDefault(); return; }
   if (!shutdownComplete && primaryInstance) {
     event.preventDefault();
     shutdown();
@@ -86,7 +89,9 @@ app.on('second-instance', () => {
 if (!primaryInstance) app.quit();
 else app.whenReady().then(async () => {
   const config = getDesktopConfig(process.env, process.argv, app.isPackaged);
-  backend = createBackend({ config, root: app.getAppPath(), env: { ...process.env, TTC_DATA_DIRECTORY: process.env.TTC_DATA_DIRECTORY || app.getPath('userData') }, onFailure: fail });
+  if (process.platform === 'win32' && app.isPackaged) await require('./windows_update.cjs').checkWindowsUpdateLock(app.getPath('userData'));
+  const backendOptions = { config, root: app.getAppPath(), env: { ...process.env, TTC_DATA_DIRECTORY: process.env.TTC_DATA_DIRECTORY || app.getPath('userData') }, onFailure: fail };
+  backend = createBackend(backendOptions);
   await backend.start();
   if (stopping) return;
   frontendURL = config.url;
@@ -96,8 +101,12 @@ else app.whenReady().then(async () => {
   openMainWindow();
   if (stopping) return;
   try {
-    updates = createDesktopUpdates({ app, safeStorage });
+    updates = createDesktopUpdates({ app, safeStorage, installation: { dialog, getMainWindow: () => mainWindow, getBackend: () => backend,
+      async restartBackend() { try { await backend.stop(); } catch {} backend = createBackend(backendOptions); await backend.start(); },
+      exitForUpdate() { updateExitApproved = true; app.quit(); },
+    } });
     disposeIPC.bindUpdates?.(updates.controller);
+    await updates.installer?.recovery();
     updates.service.start();
   } catch {
     // Optional update failures must never enter the application's fatal handler.

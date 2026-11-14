@@ -1,6 +1,7 @@
 # Verifizierter Desktop-Paketdownload
 
-Stand: 15.11.2026, Umsetzungsschritt 7. Die automatische Installation gehört
+Stand: 15.11.2026, Umsetzungsschritt 7. Die inzwischen ergänzte
+[Windows-Installation aus Schritt 8](Desktop_Windows_Update.md) baut hierauf auf. Die automatische Installation gehört
 weiterhin zu Schritt 8 (Windows) und Schritt 9 (Linux). Dieser Schritt lädt nach
 Nutzerzustimmung das passende Paket herunter und prüft es; er startet keine
 Installationsdatei, ersetzt keine Programmdateien und verändert keine Nutzdaten.

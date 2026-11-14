@@ -46,3 +46,17 @@
     Quit
   ${EndIf}
 !macroend
+
+; Never kill a live app/backend during installation or uninstallation.
+!macro customCheckAppRunning
+  nsProcess::_FindProcess "${APP_EXECUTABLE_FILENAME}"
+  Pop $R0
+  ; nsProcess: only 603 positively confirms that no matching process exists.
+  ${If} $R0 != 603
+    ${IfNot} ${Silent}
+      MessageBox MB_OK|MB_ICONSTOP "Die App läuft noch oder ihr Prozessstatus ist nicht sicher prüfbar. Bitte Vorgänge abschließen und die App vollständig beenden. Es werden keine Prozesse erzwungen beendet."
+    ${EndIf}
+    SetErrorLevel 5
+    Quit
+  ${EndIf}
+!macroend

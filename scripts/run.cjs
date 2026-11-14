@@ -50,11 +50,14 @@ function checkPort(url) {
 const stoppingTrees = new WeakMap();
 function stopTree(child, options = {}) {
   if (!child) return Promise.resolve(false);
-  if (!stoppingTrees.has(child)) stoppingTrees.set(child, stopOwnedTree(child, options));
+  if (!stoppingTrees.has(child)) stoppingTrees.set(child, stopOwnedTree(child, options).catch((error) => {
+    if (options.force === false) stoppingTrees.delete(child);
+    throw error;
+  }));
   return stoppingTrees.get(child);
 }
 
-async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}) {
+async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000, force = true } = {}) {
   if (!child?.pid) return false;
   let forced = false;
   if (child.managedBackend && child.exitCode === null && child.signalCode === null) {
@@ -64,6 +67,7 @@ async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     if (child.exitCode === null && child.signalCode === null) {
+      if (!force) throw Error('Backend wartet noch auf laufende Vorgänge; Update abgebrochen.');
       forced = true;
       console.error('Server-Shutdown überschritten. Erzwinge Beenden eigener Prozesse; laufende Datenoperationen können unterbrochen werden.');
     }
@@ -72,6 +76,7 @@ async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}
     console.error('Anwendungsserver wurde nicht fehlerfrei beendet.');
     forced = true;
   }
+  if (!force) return forced;
   if (process.platform === 'win32') {
     if (child.exitCode !== null || child.signalCode !== null) return forced;
     await new Promise((resolve, reject) => {

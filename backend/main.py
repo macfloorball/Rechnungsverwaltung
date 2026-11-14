@@ -17,6 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.desktop_update_gate import DesktopUpdateGate
 from backend.paths import get_database_path as resolve_database_path
 from backend.paths import (
     get_document_directory, get_default_document_directory, get_legacy_document_directory,
@@ -107,6 +108,7 @@ app = FastAPI(
     redoc_url=None,
     swagger_ui_oauth2_redirect_url=None,
 )
+app.add_middleware(DesktopUpdateGate, token=os.environ.get("TTC_DESKTOP_UPDATE_CONTROL"))
 logger = logging.getLogger(__name__)
 
 

@@ -179,6 +179,10 @@ function createUpdateDownloader({ config, profile, getCandidate, getToken = asyn
     // Internal test/installer handoff. Never returned to Renderer; future
     // installation must revalidate file ownership, size, hash and platform trust.
     getVerified: () => retained && Object.freeze({ ...retained }),
+    releaseForInstall(file) {
+      if (!retained || retained.file !== file || pending) throw new UpdateError('UPDATE_CHANGED');
+      retained = null;
+    },
   };
 }
 module.exports = { createUpdateDownloader };

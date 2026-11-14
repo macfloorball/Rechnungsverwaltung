@@ -1102,8 +1102,11 @@ und benannte manuelle Prüf-IPC. Entwicklungsbuilds bleiben deaktiviert. Die
 [Update-Oberfläche](Planung/Desktop_Update_Oberflaeche.md) ergänzt Dialog,
 manuelle Prüfung und persönlichen GitHub-Zugang. Der
 [verifizierte Paketdownload](Planung/Desktop_Update_Download.md) ist nach
-Nutzerzustimmung implementiert. Die automatische Installation folgt separat;
-ohne konfigurierte Vertrauensdaten bleibt der Download gesperrt.
+Nutzerzustimmung implementiert. Die
+[Windows-Installationsübergabe](Planung/Desktop_Windows_Update.md) nutzt den
+vorhandenen sichtbaren NSIS-Installer nach erneuter Bestätigung. Native Windows-
+Abnahme und produktive Vertrauensinfrastruktur stehen aus; ohne konfigurierte
+Vertrauensdaten bleibt der Updateweg gesperrt. Linux-Installation folgt separat.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen

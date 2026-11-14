@@ -102,3 +102,15 @@ test('Dokumenten-Startmarker werden auch über mehrere Ausgabeblöcke erkannt', 
   assert.equal(child.documentError, 'space');
   assert.equal(child.databaseError, undefined);
 });
+
+test('update shutdown never escalates to signals while an owned backend is still busy', async () => {
+  const { EventEmitter } = require('node:events');
+  const child = new EventEmitter();
+  Object.assign(child, { pid: 999999999, exitCode: null, signalCode: null, managedBackend: true,
+    stdin: { end(value) { assert.equal(value, 'shutdown\n'); } } });
+  await assert.rejects(stopTree(child, { force: false, graceMs: 5 }), /Update abgebrochen/);
+  // A later controlled exit can be observed, so a failed update does not poison
+  // the normal backend shutdown cache forever.
+  child.exitCode = 0;
+  assert.equal(await stopTree(child, { force: false }), false);
+});

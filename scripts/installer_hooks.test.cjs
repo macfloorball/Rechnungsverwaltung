@@ -21,6 +21,7 @@ test('NSIS compiles installation and data-protection hooks', (t) => {
 !include "${path.join(__dirname, '..', 'node_modules', 'app-builder-lib', 'templates', 'nsis', 'include', 'StdUtils.nsh')}"
 !define UNINSTALL_REGISTRY_KEY "${registryKey}"
 !define VERSION "0.1.0"
+!define APP_EXECUTABLE_FILENAME "TTC-not-running-test.exe"
 !include "${path.join(__dirname, '..', 'build', 'windows', 'installer.nsh')}"
 Name "TTC hook compilation"
 Unicode true
@@ -29,9 +30,11 @@ Var isForceCurrentInstall
 Function .onInit
   !insertmacro customInstallMode
   !insertmacro customInit
+  !insertmacro customCheckAppRunning
 FunctionEnd
 Function un.onInit
   !insertmacro customUnInit
+  !insertmacro customCheckAppRunning
 FunctionEnd
 Section
   WriteUninstaller "$EXEDIR\\uninstall-check.exe"

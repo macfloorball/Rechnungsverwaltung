@@ -1,5 +1,6 @@
 'use strict';
 const path = require('node:path');
+const { randomBytes } = require('node:crypto');
 const fs = require('node:fs');
 const { launchConfig, validateFrontend, checkPort, spawnBackend, stopTree } = require('../scripts/run.cjs');
 const { waitForFrontend } = require('./startup.cjs');
@@ -31,6 +32,7 @@ function createBackend({ config, root, env, onFailure }) {
   const launch = launchConfig(config.mode === 'production' ? 'desktop-production' : 'desktop-dev', {
     ...env, TTC_DESKTOP_URL: config.url, TTC_DESKTOP_PRODUCTION_URL: config.url,
   }, root);
+  const ownerToken = randomBytes(32).toString('hex');
   let child;
   let starting;
   let stopping = false;
@@ -46,7 +48,7 @@ function createBackend({ config, root, env, onFailure }) {
         await checkPort(launch.url);
         if (stopping) return;
         child = spawnBackend(launch, root, {
-          ...env, TTC_LEGACY_DATABASE: env.TTC_LEGACY_DATABASE || path.join(root, 'data', 'ttc.db'),
+          ...env, TTC_DESKTOP_UPDATE_CONTROL: ownerToken, TTC_LEGACY_DATABASE: env.TTC_LEGACY_DATABASE || path.join(root, 'data', 'ttc.db'),
         });
         const failed = new Promise((_resolve, reject) => {
           function failure(message) {
@@ -70,6 +72,26 @@ function createBackend({ config, root, env, onFailure }) {
         if (!stopping) ready = true;
       })();
       return starting;
+    },
+    async pauseForUpdate() {
+      if (!ready || stopping) throw Error('Backend nicht bereit.');
+      const response = await fetch(new URL('/_desktop/update-control', launch.url), { method: 'POST',
+        headers: { 'X-TTC-Owner': ownerToken, 'X-TTC-Action': 'pause' }, signal: AbortSignal.timeout(25000), redirect: 'error' });
+      if (!response.ok) throw Error('Laufende Vorgänge sind noch nicht abgeschlossen.');
+      await response.body?.cancel();
+    },
+    async resumeAfterUpdate() {
+      if (stopping) return;
+      const response = await fetch(new URL('/_desktop/update-control', launch.url), { method: 'POST',
+        headers: { 'X-TTC-Owner': ownerToken, 'X-TTC-Action': 'resume' }, signal: AbortSignal.timeout(5000), redirect: 'error' });
+      await response.body?.cancel();
+      if (!response.ok) throw Error('Backend konnte nicht freigegeben werden.');
+    },
+    async stopForUpdate() {
+      if (!child || !ready || stopping) throw Error('Backend nicht bereit.');
+      stopping = true;
+      const forced = await stopTree(child, { force: false });
+      if (forced || child.exitCode !== 0) throw Error('Backend nicht fehlerfrei beendet.');
     },
     stop() {
       if (!shutdown) {

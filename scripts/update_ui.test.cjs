@@ -38,6 +38,7 @@ function fixture(initial = {}, enabled = true) {
     acknowledgeUpdate: async (version) => { calls.push(['ack', version]); status = { ...status, promptVersion: null }; return { ok: true, value: status }; },
     deferUpdate: async (version) => { calls.push(['later', version]); return { ok: true, value: status }; },
     requestUpdate: async (version) => { calls.push(['now', version]); return { ok: true, value: status }; },
+    installUpdate: async (version) => { calls.push(['install', version]); return { ok: true, value: status }; },
     setUpdateAccessToken: async (token) => { calls.push(['token', token]); return { ok: true, value: status }; },
     clearUpdateAccessToken: async () => { calls.push(['clear']); return { ok: true, value: status }; },
     onUpdateStatus(fn) { subscriber = fn; return () => { subscriber = null; }; },
@@ -123,4 +124,14 @@ test('manual IPC failures stay visible and user input is removed during disposal
   ui.get('desktop-update-token').value = 'github_pat_ephemeral_fixture_only';
   ui.dispose(); ui.dispose();
   assert.equal(ui.get('desktop-update-token').value, '');
+});
+
+test('verified Windows update offers a separate version-bound install action', async () => {
+  const ui = fixture({ ...available, state: 'downloaded', promptVersion: null, canInstall: true });
+  await ui.dispose.ready;
+  assert.equal(ui.get('install-desktop-update').hidden, false);
+  await ui.get('install-desktop-update').emit('click'); await flush();
+  assert.deepEqual(ui.calls.at(-1), ['install', '0.2.0']);
+  assert.equal(ui.get('check-desktop-updates').attributes.get('aria-busy'), 'false');
+  ui.dispose();
 });
