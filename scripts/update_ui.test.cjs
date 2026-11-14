@@ -84,13 +84,18 @@ test('automatic prompt waits while another dialog is open', async () => {
   ui.dispose();
 });
 
-test('future download capability requests only the displayed version and progress needs real numeric data', async () => {
+test('download capability requests only the displayed version and progress needs real numeric data', async () => {
   const ui = fixture({ ...available, canDownload: true }); await ui.dispose.ready; await flush();
   await ui.get('desktop-update-now').emit('click'); await flush();
   assert.deepEqual(ui.calls.at(-1), ['now', '0.2.0']);
   ui.publish({ state: 'downloading', download: { receivedBytes: 250, totalBytes: 1000 } });
   assert.equal(ui.get('desktop-update-progress').hidden, false);
   assert.equal(ui.get('desktop-update-progress-bar').value, 25);
+  assert.equal(ui.get('desktop-update-unavailable').hidden, true);
+  assert.equal(ui.get('desktop-update-now').textContent, 'Wird heruntergeladen …');
+  assert.match(ui.get('desktop-update-status').textContent, /25 %/);
+  ui.publish({ download: { phase: 'verifying', receivedBytes: 1000, totalBytes: 1000 } });
+  assert.equal(ui.get('desktop-update-progress-text').textContent, 'Download wird geprüft …');
   ui.publish({ download: { receivedBytes: 0, totalBytes: 0 } });
   assert.equal(ui.get('desktop-update-progress-text').textContent, 'Update wird heruntergeladen …');
   ui.dispose();

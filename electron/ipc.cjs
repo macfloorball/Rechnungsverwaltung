@@ -14,6 +14,7 @@ const CLEAR_UPDATE_ACCESS_CHANNEL = 'ttc:request:updates:clear-access';
 const UPDATE_STATUS_CHANNEL = 'ttc:event:updates:status';
 const ACTION_ERRORS = Object.freeze({
   UPDATE_CHANGED: 'Die Update-Freigabe hat sich geändert. Bitte erneut prüfen.',
+  DOWNLOAD_BUSY: 'Ein Download läuft bereits. Bitte dessen Abschluss abwarten.',
   UPDATE_BUSY: 'Der GitHub-Zugang wird bereits bearbeitet. Bitte kurz warten.',
   CREDENTIALS_NOT_REQUIRED: 'Für diese App-Version wird kein neuer GitHub-Zugang benötigt.',
   CREDENTIALS_UNAVAILABLE: 'Der geschützte Betriebssystem-Speicher ist nicht verfügbar. Der Zugang wurde nicht bestätigt.',

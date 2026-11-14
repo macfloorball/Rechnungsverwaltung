@@ -3,6 +3,7 @@ const { configuration, UpdateError, newestRelease, validateManifest } = require(
 const { compareVersions, parseVersion } = require('./version.cjs');
 const { createUpdateTransport } = require('./update_transport.cjs');
 const { createUpdateCredentials, validToken } = require('./update_credentials.cjs');
+const { createUpdateDownloader } = require('./update_download.cjs');
 const { createUpdateController } = require('./update_controller.cjs');
 
 const MESSAGES = Object.freeze({
@@ -72,7 +73,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
       catch (error) { throw error instanceof UpdateError ? error : new UpdateError('INVALID_METADATA'); }
       if (controller.signal.aborted) throw controller.signal.reason;
       candidate = Object.freeze({ manifest, artifact: manifest.artifacts.find((file) => file.platform === config.platform),
-        manifestBytes: Buffer.from(bytes), signature: Buffer.from(signature) });
+        manifestBytes: Buffer.from(bytes), signature: Buffer.from(signature), release: structuredClone(release) });
       return { state: 'available', availableVersion: manifest.version, releaseNotes: manifest.releaseNotes };
     }), aborted]).then((result) => stopped ? state : update({ ...result, checkedAt: new Date(now()).toISOString() }))
       .catch((error) => {
@@ -104,7 +105,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
     getStatus: () => state,
     getCandidate() {
       if (!candidate || Date.parse(candidate.manifest.expiresAt) <= now()) return null;
-      return Object.freeze({ ...candidate, manifestBytes: Buffer.from(candidate.manifestBytes), signature: Buffer.from(candidate.signature) });
+      return Object.freeze({ ...candidate, release: structuredClone(candidate.release), manifestBytes: Buffer.from(candidate.manifestBytes), signature: Buffer.from(candidate.signature) });
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     start() { if (!started && !stopped && config.enabled) { started = true; scheduleNext(3000); } },
@@ -126,6 +127,7 @@ function createDesktopUpdates({ app, safeStorage, metadata = require('../package
   catch { config = { enabled: false, currentVersion, reason: 'invalid_configuration' }; }
   const credentials = createUpdateCredentials({ safeStorage, profile: app.getPath('userData'), platform });
   const service = createUpdateService({ config, getToken: credentials.getToken });
-  return { credentials, service, controller: createUpdateController({ service, credentials }) };
+  const downloader = createUpdateDownloader({ config, profile: app.getPath('userData'), getCandidate: service.getCandidate, getToken: credentials.getToken });
+  return { credentials, service, downloader, controller: createUpdateController({ service, credentials, downloader }) };
 }
 module.exports = { createUpdateService, createDesktopUpdates };

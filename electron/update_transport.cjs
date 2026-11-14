@@ -32,11 +32,40 @@ function createUpdateTransport({ config, token, signal, fetchImpl = fetch }) {
     try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await readLimited(response, 5 * 1024 * 1024))); }
     catch (error) { if (error instanceof UpdateError || signal.aborted) throw error; throw new UpdateError('INVALID_METADATA'); }
   }
-  return {
-    async releases() {
+  async function repository() {
       const repo = await json(base);
       if (repo.id !== config.repositoryId || repo.full_name !== config.repository || repo.archived
           || repo.private !== (config.visibility === 'private')) throw new UpdateError('SOURCE_CHANGED');
+  }
+  async function assetResponse(id) {
+      if (!Number.isSafeInteger(id) || id <= 0) throw new UpdateError('INVALID_METADATA');
+      let url = `${base}/releases/assets/${id}`, authenticated = true;
+      for (let hop = 0; hop < 6; hop++) {
+        const response = await fetchImpl(url, { method: 'GET', headers: { ...headers(true, authenticated), 'Accept-Encoding': 'identity' }, signal, redirect: 'manual', credentials: 'omit' });
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          await response.body?.cancel();
+          let next;
+          try { next = new URL(response.headers.get('location'), url); } catch { throw new UpdateError('UNTRUSTED_SOURCE'); }
+          if (next.protocol !== 'https:' || next.username || next.password || next.hash || next.port
+              || !['release-assets.githubusercontent.com', 'objects.githubusercontent.com'].includes(next.hostname)) throw new UpdateError('UNTRUSTED_SOURCE');
+          url = next.href; authenticated = false;
+          continue;
+        }
+        try { checkResponse(response); } catch (error) { await response.body?.cancel(); throw error; }
+        return response;
+      }
+      throw new UpdateError('UNTRUSTED_SOURCE');
+  }
+  return {
+    async release(id) {
+      if (!Number.isSafeInteger(id) || id <= 0) throw new UpdateError('INVALID_METADATA');
+      await repository();
+      const release = await json(`${base}/releases/${id}`);
+      if (release.id !== id) throw new UpdateError('SOURCE_CHANGED');
+      return release;
+    },
+    async releases() {
+      await repository();
       const releases = [];
       for (let page = 1; page <= 10; page++) {
         const rows = await json(`${base}/releases?per_page=100&page=${page}`);
@@ -47,22 +76,35 @@ function createUpdateTransport({ config, token, signal, fetchImpl = fetch }) {
       throw new UpdateError('TOO_MANY_RELEASES');
     },
     async asset(id, maximum) {
-      if (!Number.isSafeInteger(id) || id <= 0) throw new UpdateError('INVALID_METADATA');
-      let url = `${base}/releases/assets/${id}`, authenticated = true;
-      for (let hop = 0; hop < 6; hop++) {
-        const response = await fetchImpl(url, { method: 'GET', headers: headers(true, authenticated), signal, redirect: 'manual', credentials: 'omit' });
-        if ([301, 302, 303, 307, 308].includes(response.status)) {
-          const next = new URL(response.headers.get('location'), url);
-          if (next.protocol !== 'https:' || next.username || next.password || next.hash || next.port
-              || !['release-assets.githubusercontent.com', 'objects.githubusercontent.com'].includes(next.hostname)) throw new UpdateError('UNTRUSTED_SOURCE');
-          await response.body?.cancel();
-          url = next.href; authenticated = false;
-          continue;
+      return readLimited(await assetResponse(id), maximum);
+    },
+    async streamAsset(id, size, consume) {
+      const response = await assetResponse(id);
+      let reader;
+      const abort = () => { void reader?.cancel(signal.reason).catch(() => {}); };
+      try {
+        const length = response.headers.get('content-length');
+        if (!response.body || response.status !== 200 || response.headers.has('content-range')
+            || (response.headers.get('content-encoding') && response.headers.get('content-encoding') !== 'identity')
+            || (length !== null && (!/^\d+$/.test(length) || Number(length) !== size))) throw new UpdateError('DOWNLOAD_SIZE');
+        let received = 0;
+        reader = response.body.getReader();
+        signal.addEventListener('abort', abort, { once: true });
+        signal.throwIfAborted();
+        while (true) {
+          const { done, value: chunk } = await reader.read();
+          signal.throwIfAborted();
+          if (done) break;
+          received += chunk.length;
+          if (received > size) throw new UpdateError('DOWNLOAD_SIZE');
+          await consume(Buffer.from(chunk));
         }
-        checkResponse(response);
-        return readLimited(response, maximum);
+        if (received !== size) throw new UpdateError('DOWNLOAD_SIZE');
+      } finally {
+        signal.removeEventListener('abort', abort);
+        if (reader) { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+        else await response.body?.cancel().catch(() => {});
       }
-      throw new UpdateError('UNTRUSTED_SOURCE');
     },
   };
 }

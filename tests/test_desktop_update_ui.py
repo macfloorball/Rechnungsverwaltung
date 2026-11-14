@@ -12,7 +12,8 @@ import pytest
 
 @pytest.mark.skipif(os.environ.get("TTC_RUN_ELECTRON_TESTS") != "1", reason="Opt-in Electron/GUI test")
 @pytest.mark.parametrize("mode", ["development", "production"])
-def test_desktop_update_dialog_and_session_decisions(tmp_path, mode):
+@pytest.mark.parametrize("flow", ["dialog", "download"])
+def test_desktop_update_dialog_and_session_decisions(tmp_path, mode, flow):
     root = Path(__file__).resolve().parent.parent
     executable = root / "node_modules/electron/dist" / ("electron.exe" if os.name == "nt" else "electron")
     installation = tmp_path / "Test Application"
@@ -35,7 +36,8 @@ def test_desktop_update_dialog_and_session_decisions(tmp_path, mode):
     env = {key: value for key, value in os.environ.items() if not key.startswith("TTC_")}
     env.pop("ELECTRON_RUN_AS_NODE", None)
     env.pop("PYTHONPATH", None)
-    env.update(TTC_PYTHON=sys.executable, TTC_DATA_DIRECTORY=str(profile),
+    env.update(TTC_TEST_DOWNLOAD="1" if flow == "download" else "0",
+               TTC_PYTHON=sys.executable, TTC_DATA_DIRECTORY=str(profile),
                TTC_LEGACY_DATABASE=str(tmp_path / "no-legacy.db"), TTC_TEST_OUTPUT=str(output),
                TTC_DESKTOP_URL=f"http://127.0.0.1:{port}", TTC_DESKTOP_PRODUCTION_URL=f"http://127.0.0.1:{port}")
     if mode == "production":

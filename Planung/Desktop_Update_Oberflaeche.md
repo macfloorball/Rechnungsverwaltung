@@ -3,6 +3,8 @@
 Stand: 14.11.2026, Umsetzungsschritt 6. Aufbauend auf der
 [Update-Erkennung](Desktop_Update_Erkennung.md) gibt es einen Dialog im bestehenden
 Design und einen Desktop-Abschnitt für manuelle Prüfungen und private Zugänge.
+Der sichere [Paketdownload aus Schritt 7](Desktop_Update_Download.md) erweitert
+inzwischen die unten dokumentierte ursprüngliche Oberfläche.
 Der produktive Release-Workflow bleibt gesperrt, bis die dokumentierte
 [Vertrauensinfrastruktur](Desktop_Release_Einrichtung.md) eingerichtet ist.
 

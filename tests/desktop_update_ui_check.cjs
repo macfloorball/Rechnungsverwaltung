@@ -4,6 +4,9 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
+const { createUpdateDownloader } = require('./electron/update_download.cjs');
+const { createUpdateTransport } = require('./electron/update_transport.cjs');
 const { app, BrowserWindow, dialog } = require('electron');
 const { updateFixture } = require('./tests/update_fixture.cjs');
 const { signedManifest } = require('./scripts/release_bundle.cjs');
@@ -15,11 +18,16 @@ assert.equal(path.dirname(output), path.dirname(root));
 app.setPath('userData', process.env.TTC_DATA_DIRECTORY);
 app.setPath('sessionData', process.env.TTC_DATA_DIRECTORY);
 const f = updateFixture();
+const downloadFlow = process.env.TTC_TEST_DOWNLOAD === '1';
+const payload = Buffer.alloc(1000001, 42);
+f.packages.find(a => a.platform === 'linux').sha256 = createHash('sha256').update(payload).digest('hex');
+let releaseStream;
+const streamGate = new Promise(resolve => { releaseStream = resolve; });
 const notes = '<img src=x onerror="window.__updatePwned=true">\nEin signierter Testhinweis – kein produktiver Release.';
 const packet = signedManifest(f.policy, f.release, f.packages, notes, f.privateKey, new Date(f.now));
 f.feedRelease.assets.find((asset) => asset.id === 30).size = packet.bytes.length;
 f.transport.asset = async (id) => id === 30 ? packet.bytes : packet.signature;
-let controller, service, token = f.token;
+let controller, service, downloader, token = f.token;
 const errors = [];
 dialog.showErrorBox = (_title, message) => errors.push(message);
 updates.createDesktopUpdates = () => {
@@ -28,8 +36,18 @@ updates.createDesktopUpdates = () => {
   // Deterministic UI fixture: driver controls status changes, not the 3s timer.
   service.start = () => {};
   const credentials = { setToken: async (value) => { token = value; }, clear: async () => { token = null; } };
-  controller = createUpdateController({ service, credentials });
-  return { service, credentials, controller };
+  if (downloadFlow) downloader = createUpdateDownloader({ config: f.config, profile: app.getPath('userData'),
+    getCandidate: service.getCandidate, getToken: async () => token, now: () => f.now,
+    transportFactory: options => createUpdateTransport({ ...options, fetchImpl: async url => {
+      if (url.endsWith('/releases/100')) return Response.json(f.feedRelease);
+      if (url.endsWith('/assets/20')) return new Response(new ReadableStream({ start(c) {
+        c.enqueue(payload.subarray(0, 400000));
+        streamGate.then(() => { c.enqueue(payload.subarray(400000)); c.close(); });
+      } }));
+      return Response.json({ id: f.config.repositoryId, full_name: f.config.repository, private: true, archived: false });
+    } }) });
+  controller = createUpdateController({ service, credentials, downloader });
+  return { service, credentials, controller, downloader };
 };
 require('./electron/main.cjs');
 
@@ -61,7 +79,7 @@ async function until(check, label) {
   assert.equal(await js('document.getElementById("desktop-update-dialog-title").textContent'), 'Update verfügbar – Version 0.2.0');
   assert.equal(await js('document.getElementById("desktop-update-notes").querySelector("img")'), null);
   assert.equal(await js('Boolean(window.__updatePwned)'), false);
-  assert.equal(await js('document.getElementById("desktop-update-now").disabled'), true);
+  assert.equal(await js('document.getElementById("desktop-update-now").disabled'), !downloadFlow);
   await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   await fs.writeFile(path.join(output, 'update-dialog.png'), (await contents.capturePage()).toPNG());
   await js('document.getElementById("desktop-update-later").click()');
@@ -76,6 +94,23 @@ async function until(check, label) {
   await until(() => js('document.getElementById("desktop-update-dialog").open'), 'manual dialog');
   await js('document.getElementById("desktop-update-dialog").dispatchEvent(new Event("cancel", { cancelable: true }))');
   await until(() => js('!document.getElementById("desktop-update-dialog").open'), 'escape acts as later');
+  if (downloadFlow) {
+    await js('document.getElementById("show-desktop-update").click()');
+    await until(() => js('document.getElementById("desktop-update-dialog").open'), 'download consent');
+    await js('document.getElementById("desktop-update-now").click()');
+    await until(() => downloader.getStatus()?.state === 'downloading', 'stream starts');
+    await until(() => js('!document.getElementById("desktop-update-progress").hidden'), 'real progress visible');
+    assert.equal(await js('document.getElementById("desktop-update-now").disabled'), true);
+    await until(() => js('document.getElementById("desktop-update-progress-bar").value === 39'), 'actual streamed byte progress');
+    await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    await fs.writeFile(path.join(output, 'download-progress.png'), (await contents.capturePage()).toPNG());
+    releaseStream();
+    await until(() => downloader.getStatus()?.state === 'downloaded', 'verified download');
+    await until(() => js('document.getElementById("desktop-update-status").textContent.includes("geprüft")'), 'verified UI');
+    assert.deepEqual(await fs.readFile(downloader.getVerified().file), payload);
+    assert.equal(await js('JSON.stringify(document.body.textContent).includes("package.part")'), false);
+    await js('document.getElementById("desktop-update-later").click()');
+  }
   const raw = 'github_pat_native_UI_fixture_only';
   await js(`document.getElementById("desktop-update-access").open = true; document.getElementById("desktop-update-token").value = ${JSON.stringify(raw)}; document.getElementById("desktop-update-access-form").requestSubmit();`);
   assert.equal(await js('document.getElementById("desktop-update-token").value'), '');

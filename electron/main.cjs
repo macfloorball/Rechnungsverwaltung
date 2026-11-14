@@ -24,7 +24,10 @@ function shutdown() {
     stopping = true;
     try { updates?.controller?.dispose(); } catch {}
     try { updates?.service.stop(); } catch {}
-    shutdownPromise = Promise.resolve().then(() => backend?.stop()).then((forced) => {
+    shutdownPromise = Promise.resolve().then(async () => {
+      try { await updates?.downloader?.stop(); }
+      catch { console.error('Updatecache konnte beim Beenden nicht vollständig bereinigt werden.'); }
+    }).then(() => backend?.stop()).then((forced) => {
       if (forced) exitCode = 1;
     }).catch(() => {
       exitCode = 1;

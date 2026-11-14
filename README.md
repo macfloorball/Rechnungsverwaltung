@@ -1100,8 +1100,10 @@ Die [Update-Erkennung](Planung/Desktop_Update_Erkennung.md) ist im Main-Prozess
 implementiert: verzögerte/wiederkehrende Prüfungen, verifizierte Release-Metadaten
 und benannte manuelle Prüf-IPC. Entwicklungsbuilds bleiben deaktiviert. Die
 [Update-Oberfläche](Planung/Desktop_Update_Oberflaeche.md) ergänzt Dialog,
-manuelle Prüfung und persönlichen GitHub-Zugang. Paketdownload und Installation
-folgen separat; „Jetzt aktualisieren“ bleibt bis dahin gesperrt.
+manuelle Prüfung und persönlichen GitHub-Zugang. Der
+[verifizierte Paketdownload](Planung/Desktop_Update_Download.md) ist nach
+Nutzerzustimmung implementiert. Die automatische Installation folgt separat;
+ohne konfigurierte Vertrauensdaten bleibt der Download gesperrt.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
@@ -1113,7 +1115,7 @@ noch Node.js oder npm erforderlich. Linux-Entwicklungs- und Webstarts bleiben er
 
 Technische Grundlage: [NSIS-Konfiguration](https://www.electron.build/nsis/) und
 [Python Embedded Distribution](https://docs.python.org/3/using/windows.html#the-embeddable-package).
-Es gibt keinen automatischen Updateabruf und keine Veröffentlichung aus dem Build.
+Der Build ruft keine Updates ab und veröffentlicht keine Releases.
 
 ### Installer bauen
 

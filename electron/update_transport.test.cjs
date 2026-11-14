@@ -55,3 +55,29 @@ test('missing access, API rate limits, oversized metadata and changed repository
     fetchImpl: async () => new Response(Buffer.alloc(65537)) });
   await assert.rejects(transport.asset(30, 65536), /INVALID_METADATA/);
 });
+
+test('streaming keeps credentials on the fixed GitHub API, strips them at CDN and rejects unsafe redirects', async () => {
+  const f = updateFixture(), payload = Buffer.from('verified-stream-fixture'), calls = [];
+  const transport = createUpdateTransport({ config: f.config, token: f.token, signal: new AbortController().signal,
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return calls.length === 1 ? new Response(null, { status: 302, headers: { location: 'https://release-assets.githubusercontent.com/package?signed=ephemeral' } })
+        : new Response(payload, { headers: { 'content-length': String(payload.length) } });
+    } });
+  const parts = [];
+  await transport.streamAsset(20, payload.length, async (part) => parts.push(part));
+  assert.deepEqual(Buffer.concat(parts), payload);
+  assert.equal(calls[0].url, `https://api.github.com/repos/${f.config.repository}/releases/assets/20`);
+  assert.equal(calls[0].options.headers.Authorization, `Bearer ${f.token}`);
+  assert.equal(calls[1].options.headers.Authorization, undefined);
+  assert.equal(calls[1].options.credentials, 'omit');
+  for (const location of ['http://release-assets.githubusercontent.com/package', 'https://attacker.invalid/package',
+    'https://user@objects.githubusercontent.com/package', 'https://api.github.com/repos/other/repo/releases/assets/20',
+    'https://release-assets.githubusercontent.com:444/package', 'https://objects.githubusercontent.com/package#fragment']) {
+    let count = 0;
+    const unsafe = createUpdateTransport({ config: f.config, token: f.token, signal: new AbortController().signal,
+      fetchImpl: async () => { count++; return new Response(null, { status: 302, headers: { location } }); } });
+    await assert.rejects(unsafe.streamAsset(20, 20, async () => {}), /UNTRUSTED_SOURCE/);
+    assert.equal(count, 1);
+  }
+});
