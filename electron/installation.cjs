@@ -11,10 +11,16 @@ const REQUIRED_FILES = [
   'runtime/python/python.exe', 'runtime/python/python313.dll', 'runtime/python/python313._pth',
   'runtime/python/Lib/site-packages/fastapi/__init__.py',
 ];
+function requiredFiles(platform) {
+  if (platform === 'win32') return REQUIRED_FILES;
+  if (platform !== 'linux') throw Error('Installationsplattform wird nicht unterstützt.');
+  return [...REQUIRED_FILES.filter((name) => !name.startsWith('runtime/python/')),
+    'runtime/python/bin/python3.13', 'runtime/python/lib/python3.13/site-packages/fastapi/__init__.py'];
+}
 const SELECTION = ['package.json', 'packaged-runtime.json', 'electron', 'scripts', 'backend', 'dist/frontend', 'runtime/python'];
 function digest(file) { return createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
 
-function createInstallationManifest(root) {
+function createInstallationManifest(root, platform = 'win32') {
   const files = {};
   function visit(name) {
     const file = path.join(root, name);
@@ -25,20 +31,22 @@ function createInstallationManifest(root) {
     else throw Error('Installationspaket enthält einen nicht regulären Dateieintrag.');
   }
   SELECTION.forEach(visit);
-  for (const name of REQUIRED_FILES) if (!files[name]) throw Error('Installationspaket ist unvollständig.');
-  return { formatVersion: 1, files };
+  for (const name of requiredFiles(platform)) if (!files[name]) throw Error('Installationspaket ist unvollständig.');
+  return { formatVersion: 1, platform, files };
 }
 
-function validateInstallation(root, installed = false) {
+function validateInstallation(root, installed = false, platform = process.platform) {
   if (!installed && !fs.existsSync(path.join(root, 'packaged-runtime.json'))) return false;
   try {
     const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-    if (metadata.ttcDistribution !== 'installer' || typeof metadata.desktopAppId !== 'string' ||
+    if (metadata.ttcDistribution !== (platform === 'linux' ? 'appimage' : 'installer') || typeof metadata.desktopAppId !== 'string' ||
         !metadata.desktopAppId || metadata.main !== 'electron/bootstrap.cjs') throw Error();
     validateReleaseMetadata(metadata.desktopRelease, metadata.version);
     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'installation-manifest.json'), 'utf8'));
     if (manifest.formatVersion !== 1 || !manifest.files || Array.isArray(manifest.files)) throw Error();
-    for (const name of REQUIRED_FILES) if (!manifest.files[name]) throw Error();
+    // Preserve compatibility with existing Windows format-1 manifests.
+    if ((manifest.platform || 'win32') !== platform) throw Error();
+    for (const name of requiredFiles(platform)) if (!manifest.files[name]) throw Error();
     const base = path.resolve(root) + path.sep;
     for (const [name, hash] of Object.entries(manifest.files)) {
       const file = path.resolve(root, name);

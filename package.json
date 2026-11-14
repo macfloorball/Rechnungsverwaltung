@@ -7,13 +7,14 @@
   "scripts": {
     "desktop:version": "node scripts/desktop_release.cjs",
     "desktop:dev": "node scripts/run.cjs desktop-dev",
-    "desktop:check": "node --check electron/version.cjs && node --check scripts/desktop_release.cjs && node --check electron/bootstrap.cjs && node --check electron/installation.cjs && node --check electron/identity.cjs && node --check electron/browser-links.cjs && node --check electron/ipc.cjs && node --check electron/backend.cjs && node --check electron/main.cjs && node --check electron/window.cjs && node --check electron/preload.cjs && node --check electron/startup.cjs && node --check scripts/build_frontend.cjs && node --check scripts/installer_config.cjs && node --check scripts/build_installer.cjs && node --check scripts/package_windows.cjs && node --check scripts/run.cjs && node --test electron/*.test.cjs scripts/*.test.cjs",
+    "desktop:check": "node --check scripts/check_appimage.cjs && node --check scripts/check_installer.cjs && node --check scripts/build_appimage.cjs && node --check electron/version.cjs && node --check scripts/desktop_release.cjs && node --check electron/bootstrap.cjs && node --check electron/installation.cjs && node --check electron/identity.cjs && node --check electron/browser-links.cjs && node --check electron/ipc.cjs && node --check electron/backend.cjs && node --check electron/main.cjs && node --check electron/window.cjs && node --check electron/preload.cjs && node --check electron/startup.cjs && node --check scripts/build_frontend.cjs && node --check scripts/installer_config.cjs && node --check scripts/build_installer.cjs && node --check scripts/package_windows.cjs && node --check scripts/run.cjs && node --test electron/*.test.cjs scripts/*.test.cjs",
     "frontend:build": "node scripts/build_frontend.cjs",
     "desktop:start": "node scripts/run.cjs desktop-production",
     "web:start": "node scripts/run.cjs web",
     "web:dev": "node scripts/run.cjs web-dev",
     "desktop:build:win": "node scripts/package_windows.cjs",
-    "desktop:installer:win": "node scripts/build_installer.cjs"
+    "desktop:installer:win": "node scripts/build_installer.cjs",
+    "desktop:build:linux": "node scripts/build_appimage.cjs"
   },
   "engines": {
     "node": ">=22.12.0"

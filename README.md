@@ -1086,6 +1086,11 @@ späteren Projektphasen zugeordnet.
 
 ## Windows-Installation und Updates (Phase 6)
 
+Die neue [Desktop-CI](Planung/Desktop_CI.md) prüft Python-/JavaScript-Tests,
+Windows-NSIS-Builds und Linux-AppImages bei Desktop-PRs und relevanten Pushes.
+Sie veröffentlicht keine produktiven Releases. Linux-Buildanleitung und
+Abnahmegrenzen stehen ebenfalls dort.
+
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
 NSIS-Installer für Windows x64, pro Benutzer ohne Administratorrechte. Ein fester

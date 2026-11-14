@@ -33,7 +33,7 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     appMetadata.main = 'electron/bootstrap.cjs';
     await fs.writeFile(path.join(appRoot, 'package.json'), JSON.stringify(appMetadata, null, 2));
     await fs.writeFile(path.join(appRoot, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(appRoot), null, 2));
-    validateInstallation(appRoot, true);
+    validateInstallation(appRoot, true, 'win32');
   }
   const { build, Platform, Arch } = require('electron-builder');
   const destination = config.directories.output;

@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { REQUIRED_FILES, createInstallationManifest, validateInstallation } = require('./installation.cjs');
+const { REQUIRED_FILES, createInstallationManifest, validateInstallation: validate } = require('./installation.cjs');
+const validateInstallation = (root, installed = false) => validate(root, installed, 'win32');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-installation-'));
@@ -79,4 +80,23 @@ test('inconsistent release versions fail even with a newly calculated file manif
   fs.writeFileSync(file, JSON.stringify(metadata));
   fs.writeFileSync(path.join(root, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(root)));
   assert.throws(() => validateInstallation(root, true), /beschädigt/);
+});
+
+test('AppImage validates its own runtime and rejects Windows or altered Linux files', (t) => {
+  const { root } = fixture(t);
+  const metadataFile = path.join(root, 'package.json');
+  const metadata = JSON.parse(fs.readFileSync(metadataFile, 'utf8'));
+  metadata.ttcDistribution = 'appimage';
+  fs.writeFileSync(metadataFile, JSON.stringify(metadata));
+  const interpreter = path.join(root, 'runtime/python/bin/python3.13');
+  const dependency = path.join(root, 'runtime/python/lib/python3.13/site-packages/fastapi/__init__.py');
+  for (const file of [interpreter, dependency]) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, 'linux fixture');
+  }
+  fs.writeFileSync(path.join(root, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(root, 'linux')));
+  assert.equal(validate(root, true, 'linux'), true);
+  assert.throws(() => validate(root, true, 'win32'), /beschädigt/);
+  fs.writeFileSync(interpreter, 'changed interpreter');
+  assert.throws(() => validate(root, true, 'linux'), /beschädigt/);
 });
