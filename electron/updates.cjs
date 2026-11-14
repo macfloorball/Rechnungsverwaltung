@@ -3,6 +3,7 @@ const { configuration, UpdateError, newestRelease, validateManifest } = require(
 const { compareVersions, parseVersion } = require('./version.cjs');
 const { createUpdateTransport } = require('./update_transport.cjs');
 const { createUpdateCredentials, validToken } = require('./update_credentials.cjs');
+const { createUpdateController } = require('./update_controller.cjs');
 
 const MESSAGES = Object.freeze({
   AUTH_REQUIRED: 'Für private Updates ist ein eigener GitHub-Zugang mit Leserecht erforderlich.',
@@ -23,6 +24,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
   transportFactory = createUpdateTransport, now = Date.now, random = Math.random,
   timers = { setTimeout, clearTimeout }, timeoutMs = 15000, minimumIntervalMs = 30000 } = {}) {
   let state = Object.freeze({ state: config.enabled ? 'idle' : 'disabled', currentVersion: config.currentVersion,
+    requiresAuthentication: Boolean(config.enabled && config.visibility === 'private'), repository: config.enabled ? config.repository : null,
     availableVersion: null, releaseNotes: '', checkedAt: null, reason: config.reason || null, error: null });
   let pending = null, active = null, schedule = null, started = false, stopped = false, candidate = null, lastStarted = null;
   const listeners = new Set();
@@ -75,7 +77,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
     }), aborted]).then((result) => stopped ? state : update({ ...result, checkedAt: new Date(now()).toISOString() }))
       .catch((error) => {
         candidate = null;
-        if (stopped) return state;
+        if (stopped || error?.code === 'RESET') return state;
         const code = error instanceof UpdateError && MESSAGES[error.code] ? error.code : 'NETWORK';
         return update({ state: code === 'AUTH_REQUIRED' ? 'authentication_required' : 'error', availableVersion: null,
           releaseNotes: '', checkedAt: new Date(now()).toISOString(), error: Object.freeze({ code, message: MESSAGES[code] }) });
@@ -93,6 +95,12 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
   }
   return {
     check,
+    async invalidate() {
+      active?.abort(new UpdateError('RESET'));
+      if (pending) await pending;
+      candidate = null; lastStarted = null;
+      if (!stopped) update({ state: config.enabled ? 'idle' : 'disabled', availableVersion: null, releaseNotes: '', error: null, checkedAt: null });
+    },
     getStatus: () => state,
     getCandidate() {
       if (!candidate || Date.parse(candidate.manifest.expiresAt) <= now()) return null;
@@ -117,6 +125,7 @@ function createDesktopUpdates({ app, safeStorage, metadata = require('../package
   try { config = { currentVersion, ...configuration(metadata, { packaged: app.isPackaged, currentVersion, platform, arch }) }; }
   catch { config = { enabled: false, currentVersion, reason: 'invalid_configuration' }; }
   const credentials = createUpdateCredentials({ safeStorage, profile: app.getPath('userData'), platform });
-  return { credentials, service: createUpdateService({ config, getToken: credentials.getToken }) };
+  const service = createUpdateService({ config, getToken: credentials.getToken });
+  return { credentials, service, controller: createUpdateController({ service, credentials }) };
 }
 module.exports = { createUpdateService, createDesktopUpdates };

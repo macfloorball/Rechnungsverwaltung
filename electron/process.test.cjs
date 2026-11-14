@@ -12,7 +12,7 @@ function run(file, requireMock, globals = {}) {
   }, { filename: file });
 }
 
-test('preload exposes only named version and read-only update methods', () => {
+test('preload exposes only named update methods without generic IPC', () => {
   let exposed;
   run('preload.cjs', (name) => {
     assert.equal(name, 'electron');
@@ -20,7 +20,7 @@ test('preload exposes only named version and read-only update methods', () => {
   });
   assert.equal(exposed.key, 'ttcDesktop');
   assert.equal(exposed.api.apiVersion, 1);
-  assert.deepEqual(Object.keys(exposed.api), ['apiVersion', 'getVersion', 'getUpdateStatus', 'checkForUpdates']);
+  assert.deepEqual(Object.keys(exposed.api), ['apiVersion', 'getVersion', 'getUpdateStatus', 'checkForUpdates', 'acknowledgeUpdate', 'deferUpdate', 'requestUpdate', 'setUpdateAccessToken', 'clearUpdateAccessToken', 'onUpdateStatus']);
   assert.equal(typeof exposed.api.getVersion, 'function');
   assert.ok(Object.isFrozen(exposed.api));
 });

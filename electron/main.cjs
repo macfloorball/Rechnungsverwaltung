@@ -22,6 +22,7 @@ let exitCode = 0;
 function shutdown() {
   if (!shutdownPromise) {
     stopping = true;
+    try { updates?.controller?.dispose(); } catch {}
     try { updates?.service.stop(); } catch {}
     shutdownPromise = Promise.resolve().then(() => backend?.stop()).then((forced) => {
       if (forced) exitCode = 1;
@@ -87,12 +88,13 @@ else app.whenReady().then(async () => {
   if (stopping) return;
   frontendURL = config.url;
   const disposeIPC = registerAppIPC({ ipcMain, app, getMainWindow: () => mainWindow, getFrontendURL: () => frontendURL,
-    getUpdateService: () => updates?.service });
+    getUpdateService: () => updates?.service, getUpdateController: () => updates?.controller });
   app.once('will-quit', disposeIPC);
   openMainWindow();
   if (stopping) return;
   try {
     updates = createDesktopUpdates({ app, safeStorage });
+    disposeIPC.bindUpdates?.(updates.controller);
     updates.service.start();
   } catch {
     // Optional update failures must never enter the application's fatal handler.

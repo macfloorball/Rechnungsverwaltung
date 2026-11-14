@@ -1098,8 +1098,10 @@ Einrichtung echter Signaturen und geschützter Freigaben gesperrt.
 
 Die [Update-Erkennung](Planung/Desktop_Update_Erkennung.md) ist im Main-Prozess
 implementiert: verzögerte/wiederkehrende Prüfungen, verifizierte Release-Metadaten
-und benannte manuelle Prüf-IPC. Entwicklungsbuilds bleiben deaktiviert. Dialog,
-GitHub-Zugangsoberfläche, Paketdownload und Installation folgen separat.
+und benannte manuelle Prüf-IPC. Entwicklungsbuilds bleiben deaktiviert. Die
+[Update-Oberfläche](Planung/Desktop_Update_Oberflaeche.md) ergänzt Dialog,
+manuelle Prüfung und persönlichen GitHub-Zugang. Paketdownload und Installation
+folgen separat; „Jetzt aktualisieren“ bleibt bis dahin gesperrt.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen

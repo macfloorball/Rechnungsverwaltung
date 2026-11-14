@@ -1,10 +1,12 @@
 import { initializeCalendar } from "./calendar.js";
 import { initializeInvoicePreview } from "./invoice.js";
 import { initializeSettings } from "./settings.js";
+import { initializeDesktopUpdates } from "./updates.js";
 
 initializeCalendar();
 initializeInvoicePreview();
 initializeSettings();
+initializeDesktopUpdates();
 
 const backupButton = document.getElementById("create-backup");
 backupButton.addEventListener("click", async () => {

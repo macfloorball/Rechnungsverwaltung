@@ -81,6 +81,8 @@ async function run() {
   assert.equal(updateStatus.value.state, 'disabled');
   assert.equal((await js('window.ttcDesktop.checkForUpdates()')).value.state, 'disabled');
   assert.equal(await js('typeof window.ttcDesktop.getToken'), 'undefined');
+  await until(() => js('!document.getElementById("desktop-updates").hidden'), 'desktop update controls');
+  assert.equal(await js('document.getElementById("desktop-update-token").disabled'), true);
 
   const origin = new URL('/', contents.getURL()).href;
   const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');

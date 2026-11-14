@@ -118,3 +118,22 @@ test('throwing or rejecting status listeners cannot fail the app or update check
   await new Promise(setImmediate);
   dispose(); s.stop();
 });
+
+test('changing access cancels old checks and resets throttling without reviving stale offers', async () => {
+  const f = updateFixture(); let resolve;
+  f.transport.releases = () => new Promise((done) => { resolve = done; });
+  const s = service(f, { minimumIntervalMs: 30000 });
+  const pending = s.check();
+  await new Promise(setImmediate);
+  await s.invalidate();
+  await pending;
+  assert.equal(s.getStatus().state, 'idle');
+  assert.equal(s.getCandidate(), null);
+  f.transport.releases = async () => [f.feedRelease];
+  assert.equal((await s.check()).state, 'available');
+  resolve([f.feedRelease]);
+  await new Promise(setImmediate);
+  assert.equal(s.getStatus().state, 'available');
+  assert.equal(s.getCandidate().manifest.version, '0.2.0');
+  s.stop();
+});

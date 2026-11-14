@@ -56,6 +56,35 @@
           <button id="export-data" class="secondary-button" type="button">CSV und Dokumente exportieren</button>
           <p id="backup-message" role="status" aria-live="polite"></p>
         </section>
+        <section id="desktop-updates" class="settings-section desktop-updates" aria-labelledby="desktop-updates-title" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Desktop-App</p>
+              <h2 id="desktop-updates-title">App-Updates</h2>
+            </div>
+            <button id="check-desktop-updates" class="secondary-button" type="button">Nach Updates suchen</button>
+          </div>
+          <p>Installierte Version: <strong id="desktop-current-version">–</strong></p>
+          <p id="desktop-update-status" role="status" aria-live="polite">Update-Status wird geladen …</p>
+          <p id="desktop-update-error" class="error-message" role="alert" hidden></p>
+          <button id="show-desktop-update" class="primary-button" type="button" hidden>Verfügbares Update ansehen</button>
+          <details id="desktop-update-access" class="update-access">
+            <summary>Persönlichen GitHub-Zugang verwalten</summary>
+            <p>Für private Downloads benötigt dein GitHub-Konto Zugriff auf <strong id="desktop-update-repository">das Release-Repository</strong>.</p>
+            <p>Erstelle in GitHub unter Settings → Developer settings → Personal access tokens → Fine-grained tokens einen zeitlich begrenzten Token nur für dieses Repository mit <strong>Contents: Read-only</strong>. Metadata-Leserechte werden von GitHub ergänzt.</p>
+            <p>Der Zugang wird im geschützten Betriebssystem-Speicher verwaltet und nicht an den lokalen Rechnungsserver geschickt.</p>
+            <form id="desktop-update-access-form" autocomplete="off">
+              <label for="desktop-update-token">Persönlicher GitHub-Token</label>
+              <input id="desktop-update-token" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="512" aria-describedby="desktop-update-access-hint">
+              <p id="desktop-update-access-hint" class="section-description"></p>
+              <div class="update-actions">
+                <button id="save-desktop-update-access" class="primary-button" type="submit">Zugang speichern und prüfen</button>
+                <button id="clear-desktop-update-access" class="secondary-button" type="button">Gespeicherten Zugang entfernen</button>
+              </div>
+            </form>
+            <p id="desktop-update-access-message" role="status" aria-live="polite"></p>
+          </details>
+        </section>
         <section class="settings-section" aria-labelledby="settings-title">
           <div class="section-heading">
             <div>
@@ -347,6 +376,33 @@
         </section>
       </main>
     </div>
+
+    <dialog id="desktop-update-dialog" class="update-dialog" aria-labelledby="desktop-update-dialog-title" aria-describedby="desktop-update-question">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">TTC Rechnungsverwaltung</p>
+          <h2 id="desktop-update-dialog-title">Update verfügbar</h2>
+        </div>
+      </div>
+      <p>Eine neue Version der TTC Rechnungsverwaltung ist verfügbar.</p>
+      <p id="desktop-update-question">Möchtest du jetzt aktualisieren oder später?</p>
+      <p id="desktop-update-versions" class="section-description"></p>
+      <details class="update-release-notes">
+        <summary>Änderungen dieser Version anzeigen</summary>
+        <pre id="desktop-update-notes"></pre>
+      </details>
+      <p id="desktop-update-unavailable" class="section-description" hidden>Automatisches Aktualisieren ist derzeit nicht verfügbar. Bitte verwende einen geprüften Installer oder verschiebe das Update.</p>
+      <div id="desktop-update-progress" class="update-progress" hidden>
+        <label for="desktop-update-progress-bar">Downloadfortschritt</label>
+        <progress id="desktop-update-progress-bar" max="100"></progress>
+        <p id="desktop-update-progress-text" role="status" aria-live="polite"></p>
+      </div>
+      <p id="desktop-update-dialog-error" class="error-message" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button id="desktop-update-later" class="secondary-button" type="button" autofocus>Später</button>
+        <button id="desktop-update-now" class="primary-button" type="button">Jetzt aktualisieren</button>
+      </div>
+    </dialog>
 
     <dialog id="training-dialog" aria-labelledby="training-dialog-title">
       <form id="training-form">
