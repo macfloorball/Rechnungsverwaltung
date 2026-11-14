@@ -8,6 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 const { checkReleaseVersion, getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
 const { installerConfig } = require('./installer_config.cjs');
+const { releaseFixture } = require('../tests/release_fixture.cjs');
 
 function fixture(t, withGit = false) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-release-'));
@@ -75,7 +76,12 @@ test('installer version and packaged metadata derive from the same release; deve
   assert.equal(config.buildVersion, '1.2.3.0');
   assert.match(config.artifactName, /-development-setup/);
   const stable = { ...release, channel: 'stable', tag: 'desktop-v1.2.3', commit: 'a'.repeat(40) };
+  assert.throws(() => installerConfig(root, metadata, stable));
+  const { policy } = releaseFixture();
+  fs.writeFileSync(path.join(root, 'desktop-release-policy.json'), JSON.stringify(policy));
   assert.doesNotMatch(installerConfig(root, metadata, stable).artifactName, /development/);
+  assert.equal(installerConfig(root, metadata, stable).forceCodeSigning, true);
+  assert.equal(installerConfig(root, metadata, stable).win.signtoolOptions.certificateSha1, policy.windows.certificateSha1);
   assert.throws(() => assertPackageRelease(root, stable), /geprüften/);
   assert.throws(() => installerConfig(root, { ...metadata, version: '1.2.4' }, release), /stimmen/);
 });

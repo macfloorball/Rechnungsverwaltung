@@ -6,10 +6,14 @@ const { packageWindows } = require('./package_windows.cjs');
 const { installerConfig } = require('./installer_config.cjs');
 const { createInstallationManifest, validateInstallation } = require('../electron/installation.cjs');
 const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
+const { loadPolicy } = require('./release_policy.cjs');
+const { authenticode } = require('./windows_signing.cjs');
 
 async function buildInstaller(root = path.join(__dirname, '..')) {
   const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
   const release = getDesktopRelease(root);
+  const policy = release.channel === 'stable' ? loadPolicy(root) : null;
+  if (policy && process.platform !== 'win32') throw Error('Produktive Windows-Installer benötigen einen nativen Windows-Signierrechner.');
   const config = installerConfig(root, metadata, release);
   const runtime = path.join(root, 'dist', 'python-windows');
   const manifest = JSON.parse(await fs.readFile(path.join(runtime, 'runtime-manifest.json'), 'utf8'));
@@ -24,6 +28,8 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
   if (createHash('sha256').update(requirements).digest('hex') !== manifest.requirementsSha256) throw Error('Windows-Python-Pakete sind veraltet. Laufzeit neu erstellen.');
   const output = await packageWindows(root, release);
   for (const destination of output) {
+    // electron-builder skips app executable signing for prepackaged inputs.
+    if (policy) authenticode(path.join(destination, `${metadata.productName}.exe`), policy, true, release.version);
     await fs.cp(runtime, path.join(destination, 'resources', 'app', 'runtime', 'python'), { recursive: true });
     await fs.writeFile(path.join(destination, 'resources', 'app', 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
     const appRoot = path.join(destination, 'resources', 'app');
@@ -48,6 +54,7 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     if (!installers.length) throw Error('Installer wurde nicht erzeugt.');
     const checksums = [];
     for (const file of installers) {
+      const windowsSignature = policy ? authenticode(file, policy, false, release.version) : null;
       const bytes = await fs.readFile(file);
       if (bytes[0] !== 0x4d || bytes[1] !== 0x5a || bytes.length < 1000000) throw Error('Installer-Datei fehlt oder ist unvollständig.');
       const sha256 = createHash('sha256').update(bytes).digest('hex');
@@ -55,7 +62,7 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
       // Unsigned build information, not an authorization to install an update.
       await fs.writeFile(file + '.release.json', JSON.stringify({ ...release,
         appId: metadata.desktopAppId, platform: 'win32', arch: 'x64', packageFormat: 'nsis',
-        fileName: path.basename(file), size: bytes.length, sha256,
+        fileName: path.basename(file), size: bytes.length, sha256, windowsSignature,
       }, null, 2) + '\n');
       checksums.push(file + '.sha256');
       checksums.push(file + '.release.json');

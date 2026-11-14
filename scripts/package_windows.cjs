@@ -5,10 +5,12 @@ const path = require('node:path');
 const { buildFrontend } = require('./build_frontend.cjs');
 const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
 const { validateReleaseMetadata } = require('../electron/version.cjs');
+const { buildTrust } = require('./release_policy.cjs');
 
 async function prepareWindowsSource(root, target, release = getDesktopRelease(root)) {
   const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
   validateReleaseMetadata(release, metadata.version);
+  const desktopUpdateTrust = buildTrust(root, release);
   await buildFrontend(root);
   await fs.mkdir(target, { recursive: true });
   await fs.writeFile(path.join(target, 'package.json'), JSON.stringify({
@@ -16,6 +18,7 @@ async function prepareWindowsSource(root, target, release = getDesktopRelease(ro
     desktopAppId: metadata.desktopAppId, description: metadata.description,
     main: metadata.main, author: metadata.author || metadata.productName, private: true,
     desktopRelease: release,
+    desktopUpdateTrust,
   }, null, 2));
   // Positive selection: never copy runtime data, environments, Git, or node_modules.
   for (const folder of ['electron', 'backend']) {

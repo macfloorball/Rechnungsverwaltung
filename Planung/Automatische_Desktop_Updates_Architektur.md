@@ -4,6 +4,12 @@ Stand: 14.11.2026. **Schritt 1: Bestandsaufnahme und Entwurf, noch keine
 Implementierung oder Release-Freigabe.** Die folgenden Soll-Abläufe müssen in
 den nachfolgenden einzeln freizugebenden Schritten umgesetzt und geprüft werden.
 
+**Fortschreibung in Schritt 4:** Auf ausdrücklichen Anwenderwunsch werden
+Releases zunächst im bestehenden **privaten** Repository bereitgestellt. Das
+ursprünglich erwogene separate öffentliche Binärrepository entfällt. Konkrete
+Einrichtung und der gesperrte Implementierungsstand stehen in
+[Desktop_Release_Einrichtung.md](Desktop_Release_Einrichtung.md).
+
 ## Ausgangspunkt und Arbeitszweig
 
 - Repository: `macfloorball/Rechnungsverwaltung`, Remote über SSH.
@@ -93,10 +99,11 @@ Releases, falsche Plattform, Teilpakete und Pfadmanipulation. Vollständig
 kompromittierte Benutzerkonten, lokale Administratoren oder ein gestohlener
 Release-Signierschlüssel lassen sich durch diesen Updater allein nicht absichern.
 
-1. Ein separates öffentliches Release-Repository liefert nur explizit
-   freigegebene Distributionsartefakte. Eigentümer/Name werden vor Implementierung
-   verbindlich festgelegt und im Build verankert; kein vom Renderer wählbarer
-   Feed und kein Token auf Clients.
+1. Dasselbe private Repository `macfloorball/Rechnungsverwaltung`, fest auf ID
+   `1447003404` gebunden, liefert explizit freigegebene Release-Artefakte.
+   Kein vom Renderer wählbarer Feed und kein eingebettetes gemeinsames Token.
+   Endnutzer benötigen eigenen GitHub-Lesezugriff; die sichere optionale
+   Client-Anmeldung ist in den folgenden Update-Schritten umzusetzen.
 2. `desktop-update.json` (UTF-8, begrenzte Größe) und eine getrennte
    `desktop-update.json.sig` enthalten die Freigabe. Die Signatur gilt für die
    **exakten Manifestbytes**, nicht für neu serialisiertes JSON. Der erste
@@ -198,43 +205,44 @@ signieren und nur vollständige Artefaktliste in einen neuen Release-Entwurf
 Aktion veröffentlichen. Bestehende Tags/Assets niemals automatisch überschreiben.
 Fehlschlag lässt den Entwurf unveröffentlicht; normale Merges erzeugen keinen Release.
 
-Vor Schritt 4 sind die folgenden konkreten Einrichtungen erforderlich; hier
+Vor Aktivierung des in Schritt 4 vorbereiteten Workflows sind diese Einrichtungen erforderlich; hier
 werden weder Repositories angelegt noch Secrets oder Berechtigungen verändert:
 
-1. Separates öffentliches Binär-Repository im gewählten GitHub-Konto anlegen,
-   privaten Quellcode nicht kopieren; Eigentümer/Name bestätigen. Veröffentlichte
-   Artefakte vor Upload anhand einer Positivliste prüfen: keine `.git`, Tests,
-   Entwicklungsdaten, Backups, Secrets oder Quellarchive aus CI.
+1. Bestehendes Repository privat lassen; die Release-Pipeline auf seine geprüfte
+   Identität binden. Artefakte vor Upload anhand einer Positivliste prüfen:
+   keine `.git`, Tests, Entwicklungsdaten, Backups, Secrets oder Quellarchive
+   aus CI. Ein separates öffentliches Repository wird derzeit nicht angelegt.
 2. Im privaten Repository `Entwicklung-App` durch PR-Pflicht und erfolgreiche
    Checks schützen; Tag-Ruleset für `desktop-v*` nur für Release-Verantwortliche.
    Geschützte Release-Environment mit Freigabe einrichten und deren Verfügbarkeit
    im verwendeten GitHub-Tarif prüfen. Release-Verantwortliche und Wiederanlauf
    nach fehlgeschlagener Freigabe festlegen.
-3. Bevorzugt GitHub App ausschließlich für das Binär-Repository installieren,
-   Berechtigung `Contents: write`. App-ID und privaten App-Schlüssel nur in der
-   geschützten Environment hinterlegen; kurzlebiges Installationstoken im
-   Publishjob erzeugen. Das normale `GITHUB_TOKEN` reicht nicht zum Schreiben
-   in ein anderes Repository. Buildjobs benötigen nur `contents: read`.
+3. Nur der letzte Publishjob erhält das eingebaute `GITHUB_TOKEN` mit
+   `contents: write` auf dasselbe Repository. Buildjobs erhalten Leserechte.
+   Für nicht lesbare Schutzkonfiguration kann ein separat begrenzter
+   `DESKTOP_POLICY_READ_TOKEN` erforderlich sein. Keine GitHub App und kein
+   Cross-Repository-Schreibrecht nötig; kein Workflowtoken gelangt in die App.
 4. Ed25519-Release-Schlüsselpaar in kontrollierter Umgebung erzeugen,
    Public-Key/Fingerprint unabhängig prüfen und im Build verankern. Privatschlüssel
    in geschütztem Secret/Signierdienst hinterlegen, sicheren Offline-Backup- und
    Rotationsprozess festlegen. Vorgesehener Secretname: `DESKTOP_UPDATE_PRIVATE_KEY`;
-   konkrete Bindung erst in Schritt 4, kein Schlüsselmaterial im Repository.
+   Bindung nur im geschützten Publishjob, kein privates Schlüsselmaterial im Repository.
 5. Windows-Code-Signing-Zertifikat bzw. geeigneten Hardware-/Cloud-Signierdienst
    beschaffen, Herausgeber, Zugriff, Zeitstempelserver und Zertifikatswechsel
-   festlegen; Berechtigungen nur für den freigegebenen Signierjob. Den aktuellen
-   Schalter `signAndEditExecutable: false` erst mit getesteter Infrastruktur ersetzen.
+   festlegen; Berechtigungen nur für den freigegebenen Signierjob. Stabile Builds
+   erzwingen Signierung, Entwicklungsbuilds bleiben ausdrücklich unsigniert.
+   Ohne reale Vertrauenskonfiguration werden stabile Builds abgelehnt.
 6. Erstinstallation und bestehende 0.1.0-Installationen einmalig manuell über
    einen unabhängig verifizierten, updaterfähigen Installer aktualisieren.
    Die bisherige Version kann keinen neuen Public-Key automatisch kennenlernen.
 
 **Grenze der Quellcode-Vertraulichkeit:** Das heutige Paket enthält notwendige
 Python-/JS-Programmdateien unverschlüsselt (`asar: false`). Auch Electron-ASAR
-ist kein Geheimnisschutz. Ein öffentliches Binär-Repository veröffentlicht nicht
-die Git-Historie, erlaubt aber die Extraktion des ausgelieferten Anwendungscodes.
-Falls „privaten Quellcode nicht veröffentlichen“ auch diese Extraktion ausschließen
-soll, muss vor öffentlicher Veröffentlichung eine andere Distributionspolitik
-vereinbart werden. Es werden bis dahin keine öffentlichen Artefakte hochgeladen.
+ist kein Geheimnisschutz. Derzeit bleiben Repository, Releases und Pakete privat.
+Eine spätere öffentliche Repository-Sichtbarkeit würde auch Git-Historie und
+Quellarchive öffentlich machen und wird nicht automatisch geändert. Die
+Release-Richtlinie lehnt unerwartete Änderungen der Sichtbarkeit ab. Eine
+öffentliche Verteilung benötigt eine eigene bewusste Freigabe.
 
 ## Datenerhalt, Wiederanlauf und Abnahmegrenzen
 

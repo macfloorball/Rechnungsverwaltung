@@ -4,6 +4,8 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { getDesktopRelease } = require('./desktop_release.cjs');
 const { validateReleaseMetadata } = require('../electron/version.cjs');
+const { loadPolicy } = require('./release_policy.cjs');
+const { authenticode } = require('./windows_signing.cjs');
 
 function checkInstaller(root) {
   const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -20,6 +22,12 @@ function checkInstaller(root) {
       || info.packageFormat !== 'nsis' || info.fileName !== name || info.size !== bytes.length || info.sha256 !== sha256
       || fs.readFileSync(installer + '.sha256', 'utf8') !== `${sha256}  ${name}\n`) {
     throw Error('Windows-Installer oder Build-Metadaten sind unvollständig oder inkonsistent.');
+  }
+  if (release.channel === 'stable') {
+    const verified = authenticode(installer, loadPolicy(root), false, release.version);
+    for (const field of ['status', 'certificateSha256', 'publisherSubject', 'timestamped', 'version']) {
+      if (info.windowsSignature?.[field] !== verified[field]) throw Error('Windows-Signaturnachweis stimmt nicht überein.');
+    }
   }
   return info;
 }

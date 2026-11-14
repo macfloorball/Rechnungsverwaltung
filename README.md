@@ -1091,6 +1091,11 @@ Windows-NSIS-Builds und Linux-AppImages bei Desktop-PRs und relevanten Pushes.
 Sie veröffentlicht keine produktiven Releases. Linux-Buildanleitung und
 Abnahmegrenzen stehen ebenfalls dort.
 
+Der getrennte [Desktop-Release-Workflow](Planung/Desktop_Release_Einrichtung.md)
+ist für ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags vorbereitet. Er verwendet
+auf Wunsch dasselbe private Repository. Produktive Releases bleiben bis zur
+Einrichtung echter Signaturen und geschützter Freigaben gesperrt.
+
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
 NSIS-Installer für Windows x64, pro Benutzer ohne Administratorrechte. Ein fester
