@@ -12,7 +12,7 @@ function run(file, requireMock, globals = {}) {
   }, { filename: file });
 }
 
-test('preload exposes only metadata and the named version method', () => {
+test('preload exposes only named version and read-only update methods', () => {
   let exposed;
   run('preload.cjs', (name) => {
     assert.equal(name, 'electron');
@@ -20,7 +20,7 @@ test('preload exposes only metadata and the named version method', () => {
   });
   assert.equal(exposed.key, 'ttcDesktop');
   assert.equal(exposed.api.apiVersion, 1);
-  assert.deepEqual(Object.keys(exposed.api), ['apiVersion', 'getVersion']);
+  assert.deepEqual(Object.keys(exposed.api), ['apiVersion', 'getVersion', 'getUpdateStatus', 'checkForUpdates']);
   assert.equal(typeof exposed.api.getVersion, 'function');
   assert.ok(Object.isFrozen(exposed.api));
 });
@@ -47,6 +47,7 @@ test('main owns one window, clears closed reference and quits on Windows', async
   const windows = [];
   run('main.cjs', (name) => {
     if (name === 'electron') return { app, dialog: { showErrorBox: () => {} } };
+    if (name === './updates.cjs') return { createDesktopUpdates: () => ({ service: { start() {}, stop() {} } }) };
     if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
     if (name === './identity.cjs') return { APP_NAME: 'TTC Rechnungsverwaltung', configureIdentity: () => {} };
     if (name === './backend.cjs') return { createBackend: (options) => {
@@ -119,6 +120,7 @@ for (const scenario of ['startup-failure', 'runtime-failure', 'cleanup-failure',
       if (name === 'electron') return { app, dialog: { showErrorBox() { prompts++; } } };
       if (name === './identity.cjs') return { APP_NAME: 'Test', configureIdentity() {} };
       if (name === './config.cjs') return { getDesktopConfig: () => ({ url: 'http://127.0.0.1:8000/' }) };
+      if (name === './updates.cjs') return { createDesktopUpdates: () => ({ service: { start() {}, stop() {} } }) };
       if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
       if (name === './window.cjs') return { createMainWindow: () => new EventEmitter() };
       if (name === './backend.cjs') return { createBackend(options) {
@@ -144,5 +146,41 @@ for (const scenario of ['startup-failure', 'runtime-failure', 'cleanup-failure',
     assert.equal(shutdowns, 1);
     assert.deepEqual(exits, [1]);
     assert.equal(prompts, ['startup-failure', 'runtime-failure'].includes(scenario) ? 1 : 0);
+  });
+}
+
+for (const scenario of ['factory', 'start']) {
+  test(`optional update ${scenario} failure leaves main window and backend usable`, async () => {
+    const app = new EventEmitter(), proc = new EventEmitter();
+    let windows = 0, stops = 0, updateStops = 0;
+    const messages = [], exits = [], logs = [];
+    Object.assign(app, { requestSingleInstanceLock: () => true, whenReady: async () => {},
+      getAppPath: () => __dirname, getPath: () => '/unused-test-profile', exit: (code) => exits.push(code),
+      quit() { app.emit('before-quit', { preventDefault() {} }); } });
+    Object.assign(proc, { platform: 'linux', env: {}, argv: [] });
+    run('main.cjs', (name) => {
+      if (name === 'electron') return { app, dialog: { showErrorBox: (...args) => messages.push(args) } };
+      if (name === './identity.cjs') return { APP_NAME: 'Test', configureIdentity() {} };
+      if (name === './config.cjs') return { getDesktopConfig: () => ({ url: 'http://127.0.0.1:8000/' }) };
+      if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
+      if (name === './backend.cjs') return { createBackend: () => ({ start: async () => {}, stop: async () => { stops++; return false; } }) };
+      if (name === './window.cjs') return { createMainWindow: () => { windows++; return new EventEmitter(); } };
+      if (name === './updates.cjs') return { createDesktopUpdates() {
+        assert.equal(windows, 1, 'window opens before update initialization');
+        if (scenario === 'factory') throw Error('secret token /private/path');
+        return { service: { start() { throw Error('secret token /private/path'); }, stop() { updateStops++; } } };
+      } };
+      throw Error(name);
+    }, { process: proc, console: { error: (...args) => logs.push(args.join(' ')) } });
+    await new Promise(setImmediate);
+    assert.equal(windows, 1);
+    assert.equal(stops, 0);
+    assert.deepEqual(exits, []);
+    assert.deepEqual(messages, []);
+    assert.equal(logs.join('\n').includes('secret token'), false);
+    app.quit();
+    await new Promise(setImmediate);
+    assert.equal(stops, 1);
+    assert.equal(updateStops, scenario === 'start' ? 1 : 0);
   });
 }

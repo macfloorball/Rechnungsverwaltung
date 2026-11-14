@@ -76,6 +76,11 @@ async function run() {
   assert.equal(preferences.nodeIntegration, false);
   assert.equal(await js('typeof require'), 'undefined');
   assert.equal((await js('window.ttcDesktop.getVersion()')).ok, true);
+  const updateStatus = await js('window.ttcDesktop.getUpdateStatus()');
+  assert.equal(updateStatus.ok, true);
+  assert.equal(updateStatus.value.state, 'disabled');
+  assert.equal((await js('window.ttcDesktop.checkForUpdates()')).value.state, 'disabled');
+  assert.equal(await js('typeof window.ttcDesktop.getToken'), 'undefined');
 
   const origin = new URL('/', contents.getURL()).href;
   const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');

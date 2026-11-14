@@ -6,6 +6,7 @@ const { validateReleaseMetadata } = require('./version.cjs');
 
 const REQUIRED_FILES = [
   'package.json', 'packaged-runtime.json', 'electron/bootstrap.cjs', 'electron/main.cjs', 'electron/installation.cjs', 'electron/version.cjs',
+  'electron/updates.cjs', 'electron/update_manifest.cjs', 'electron/update_transport.cjs', 'electron/update_credentials.cjs',
   'scripts/run.cjs', 'scripts/managed_server.py', 'backend/main.py',
   'dist/frontend/index.html', 'dist/frontend/desktop-build.json',
   'runtime/python/python.exe', 'runtime/python/python313.dll', 'runtime/python/python313._pth',

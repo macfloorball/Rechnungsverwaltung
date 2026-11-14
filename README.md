@@ -1096,6 +1096,11 @@ ist für ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags vorbereitet. Er verwen
 auf Wunsch dasselbe private Repository. Produktive Releases bleiben bis zur
 Einrichtung echter Signaturen und geschützter Freigaben gesperrt.
 
+Die [Update-Erkennung](Planung/Desktop_Update_Erkennung.md) ist im Main-Prozess
+implementiert: verzögerte/wiederkehrende Prüfungen, verifizierte Release-Metadaten
+und benannte manuelle Prüf-IPC. Entwicklungsbuilds bleiben deaktiviert. Dialog,
+GitHub-Zugangsoberfläche, Paketdownload und Installation folgen separat.
+
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
 NSIS-Installer für Windows x64, pro Benutzer ohne Administratorrechte. Ein fester
