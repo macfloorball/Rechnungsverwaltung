@@ -47,7 +47,7 @@ def create_export(database: Path, documents: Path, destination: Path) -> Path:
                         shutil.copyfileobj(reader, writer)
             output.writestr('HINWEISE.txt', 'CSV: UTF-8 mit BOM, Semikolon, ISO-Datumswerte, Geldbeträge in Cent.\nBinärwerte: base64:-Präfix. Formelfähige Texte erhalten ein vorangestelltes Apostroph.\nExport dient zur Auswertung, nicht zur Wiederherstellung. Dafür vollständiges Backup verwenden.\n')
         result.chmod(0o600)
-        with result.open('rb') as stream:
+        with result.open('r+b') as stream:
             os.fsync(stream.fileno())
         target = destination / 'ttc-datenexport.zip'
         os.link(result, target)

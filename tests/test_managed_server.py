@@ -46,7 +46,7 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control:
                         break
                 except OSError:
                     assert process.poll() is None, (tmp_path / "server.log").read_text()
-                    assert time.monotonic() < deadline, "Server startup timed out"
+                    assert time.monotonic() < deadline, (tmp_path / "server.log").read_text(errors="replace")
                     time.sleep(0.05)
 
             def write():
@@ -58,7 +58,7 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control:
                 response = executor.submit(write)
                 deadline = time.monotonic() + 5
                 while not (tmp_path / "started").exists():
-                    assert time.monotonic() < deadline
+                    assert time.monotonic() < deadline, (tmp_path / "server.log").read_text(errors="replace")
                     time.sleep(0.01)
                 if control == "command":
                     process.stdin.write(b"shutdown\n")
@@ -110,7 +110,7 @@ main()
                         break
                 except OSError:
                     assert process.poll() is None, (tmp_path / "server.log").read_text()
-                    assert time.monotonic() < deadline
+                    assert time.monotonic() < deadline, (tmp_path / "server.log").read_text(errors="replace")
                     time.sleep(0.05)
             if control == "command":
                 process.stdin.write(b"shutdown\n")

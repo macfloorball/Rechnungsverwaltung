@@ -94,6 +94,25 @@ def test_publication_failure_leaves_no_partial_backup(inventory, monkeypatch):
     assert list(inventory[2].iterdir()) == []
 
 
+@pytest.mark.parametrize("operation", ["backup", "export"])
+def test_sync_failure_never_publishes_archive_or_changes_inputs(inventory, monkeypatch, operation):
+    import os
+    from backend.data_export import create_export
+    database, documents, destination = inventory
+    original_database = database.read_bytes()
+    original_document = (documents / 'Beleg.pdf').read_bytes()
+
+    def fail(_fd):
+        raise OSError('synchronization failed')
+
+    monkeypatch.setattr(os, 'fsync', fail)
+    with pytest.raises(OSError, match='synchronization failed'):
+        (create_backup if operation == 'backup' else create_export)(*inventory)
+    assert list(destination.iterdir()) == []
+    assert database.read_bytes() == original_database
+    assert (documents / 'Beleg.pdf').read_bytes() == original_document
+
+
 def test_online_backup_preserves_wal_and_blocks_concurrent_writes(inventory, monkeypatch):
     import backend.backup_service as service
     database, documents, destination = inventory

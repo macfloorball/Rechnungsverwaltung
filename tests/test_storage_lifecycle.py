@@ -47,7 +47,7 @@ def backend_process(tmp_path, *, damaged=False, reload=False, document_directory
                         break
                 except OSError:
                     assert process.poll() is None, (tmp_path / "process.log").read_text()
-                    assert time.monotonic() < deadline
+                    assert time.monotonic() < deadline, (tmp_path / "process.log").read_text(errors="replace")
                     time.sleep(0.05)
 
             def request(method, endpoint, payload=None, expected=200):

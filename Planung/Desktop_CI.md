@@ -86,6 +86,33 @@ Ein neuer vollständiger GitHub-Lauf einschließlich Windows bleibt nach dem
 erneuten Push erforderlich; beide Paketbuilds des verlinkten Laufs wurden wegen
 der Testfehler übersprungen.
 
+Der [Lauf für 6e01579](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43722880049)
+bestätigte anschließend den vollständigen Ubuntu-Testjob und die Windows-
+JavaScript-Prüfung. Die Windows-Python-Suite meldete 26 Fehler, 367 bestandene
+und 29 übersprungene Tests; beide Paketbuilds blieben dadurch übersprungen.
+Die Fehlergruppen werden getrennt behandelt:
+
+- Sicherung, Export und Altdatenimport öffneten ihre eigenen temporären Dateien
+  vor `os.fsync` nur lesend. Windows benötigt dafür einen schreibbaren Handle;
+  die drei Stellen verwenden jetzt `r+b`, ohne Trunkierung. Synchronisierung
+  und anschließende Veröffentlichung bleiben verpflichtend. Neue Regressionen
+  verlangen bei Synchronisierungsfehlern unveränderte Quelldaten und kein
+  veröffentlichtes Ergebnis.
+- Die POSIX-Rechteassertions im Datenbank-Backuptest gelten jetzt nur unter
+  POSIX. Unter Windows bleibt die Integritäts-/Inhaltsprüfung aktiv; POSIX-
+  Modusbits sind dort kein Nachweis für private NTFS-ACLs.
+- Sechs Reload-/Lebenszyklustests erreichten unter Windows ihr Startlimit.
+  Der bisherige Fehlerbericht enthielt die Serverlogs nicht. Die unveränderten
+  Limits geben jetzt den jeweiligen temporären Serverlog mit aus. Die Ursache
+  des Windows-Reload-Startfehlers ist noch nicht bestätigt; diese Diagnose-
+  ergänzung wird nicht als behobener Reload-Fehler gewertet.
+
+Nach diesen Änderungen bestanden lokal unter Python 3.13.18 **412 Tests mit
+13 optionalen/plattformabhängigen Skips** sowie **vier echte Offline-Electron-
+Rechnungs-/Sicherungs-/Export-/Wiederherstellungsszenarien** unter Linux. Die
+Windows-Bestätigung und die weiterhin offene Reload-Diagnose benötigen den
+nächsten Remote-Lauf. Produktive Releasefreigaben bleiben deaktiviert.
+
 Versionspins ersetzen keine Lieferkettenprüfung. Updates dieser Pins sollen in
 eigenen geprüften Änderungen erfolgen. Die Hosted-Runner-Images werden trotz
 festgelegter OS-Generation von GitHub aktualisiert; Signaturen und Zeitstempel

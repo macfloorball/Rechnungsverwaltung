@@ -51,7 +51,7 @@ def import_database(source: Path, target: Path) -> Path:
         with closing(sqlite3.connect(staged.resolve().as_uri() + "?mode=ro", uri=True)) as copy:
             validate_database(copy, current=True)
         staged.chmod(0o600)
-        with staged.open("rb") as file:
+        with staged.open("r+b") as file:
             os.fsync(file.fileno())
         # Atomic no-clobber publication, even if another process created target.
         os.link(staged, target)
