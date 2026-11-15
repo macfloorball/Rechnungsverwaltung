@@ -72,6 +72,8 @@ if sys.argv[3] == "change":
     with open(context["target"], "ab") as f: f.write(b"changed")
 p.stdin.write("commit\n"); p.stdin.flush()
 assert p.stdout.readline().strip() == "TTC_UPDATE_COMMITTED"
+if sys.argv[3] == "after-commit":
+    os._exit(0)
 p.stdin.write("launch\n"); p.stdin.flush()
 os._exit(0)
 '''
@@ -105,11 +107,11 @@ def test_native_atomic_replacement_and_restart_preserve_personal_data(tmp_path):
     assert target.stat().st_mode & 0o777 == 0o700
     journal = json.loads((Path(context["profile"]) / "updates/linux-install-state.json").read_text())
     assert journal["phase"] == "replaced"
-    assert not list(target.parent.glob(".ttc-update-*"))
+    assert not list(target.parent.glob(".ttc-rechnungsverwaltung-update-*"))
     probe_lock(Path(context["profile"]) / "updates/linux-install.lock")
 
 
-@pytest.mark.parametrize("action", ["cancel", "change", "hash", "expired", "symlink", "permissions"])
+@pytest.mark.parametrize("action", ["cancel", "change", "hash", "expired", "symlink", "permissions", "after-commit"])
 def test_rejected_handoff_never_executes_or_silently_replaces_original(tmp_path, action):
     context, target, incoming, marker, data = fixture(tmp_path)
     before = target.read_bytes()
@@ -126,12 +128,12 @@ def test_rejected_handoff_never_executes_or_silently_replaces_original(tmp_path,
     result = run_owner(context, marker, action)
     assert result.returncode in (0, 3), result.stdout + result.stderr
     # Parent can exit before the rejecting helper; wait for its lock release/cleanup.
-    if action in ("change", "expired"):
+    if action in ("change", "expired", "after-commit"):
         journal = Path(context["profile"]) / "updates/linux-install-state.json"
         until(lambda: journal.exists() and json.loads(journal.read_text())["phase"] == "failed")
     assert not marker.exists()
     assert target.read_bytes() == before + (b"changed" if action == "change" else b"")
-    until(lambda: not list(target.parent.glob(".ttc-update-*")))
+    until(lambda: not list(target.parent.glob(".ttc-rechnungsverwaltung-update-*")))
 
 
 def test_native_copy_crosses_filesystems_before_atomic_replace(tmp_path):
@@ -149,7 +151,7 @@ def test_native_copy_crosses_filesystems_before_atomic_replace(tmp_path):
         until(marker.exists)
         assert other.read_bytes() == data
         assert target.read_bytes() == data + b"old"
-        assert not list(other.parent.glob(".ttc-update-*"))
+        assert not list(other.parent.glob(".ttc-rechnungsverwaltung-update-*"))
 
 
 def test_parallel_app_start_is_blocked_by_live_update_lock(tmp_path):

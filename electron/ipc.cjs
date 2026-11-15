@@ -9,6 +9,7 @@ const CHECK_UPDATES_CHANNEL = 'ttc:request:updates:check';
 const ACK_UPDATE_CHANNEL = 'ttc:request:updates:acknowledge';
 const DEFER_UPDATE_CHANNEL = 'ttc:request:updates:defer';
 const REQUEST_UPDATE_CHANNEL = 'ttc:request:updates:request';
+const CANCEL_DOWNLOAD_CHANNEL = 'ttc:request:updates:cancel-download';
 const INSTALL_UPDATE_CHANNEL = 'ttc:request:updates:install';
 const SET_UPDATE_ACCESS_CHANNEL = 'ttc:request:updates:set-access';
 const CLEAR_UPDATE_ACCESS_CHANNEL = 'ttc:request:updates:clear-access';
@@ -18,7 +19,7 @@ const ACTION_ERRORS = Object.freeze({
   INSTALL_UNAVAILABLE: 'Die sichere automatische Installation ist hier nicht verfügbar. Bitte einen vollständigen geprüften Installer verwenden.',
   UPDATE_CHANGED: 'Die Update-Freigabe hat sich geändert. Bitte erneut prüfen.',
   DOWNLOAD_BUSY: 'Ein Download läuft bereits. Bitte dessen Abschluss abwarten.',
-  UPDATE_BUSY: 'Der GitHub-Zugang wird bereits bearbeitet. Bitte kurz warten.',
+  UPDATE_BUSY: 'Ein Update-Vorgang läuft bereits. Bitte kurz warten.',
   CREDENTIALS_NOT_REQUIRED: 'Für diese App-Version wird kein neuer GitHub-Zugang benötigt.',
   CREDENTIALS_UNAVAILABLE: 'Der geschützte Betriebssystem-Speicher ist nicht verfügbar. Der Zugang wurde nicht bestätigt.',
   INVALID_TOKEN: 'Bitte einen gültigen persönlichen GitHub-Zugang eingeben.',
@@ -74,6 +75,7 @@ function registerAppIPC({ ipcMain, app, getMainWindow, getFrontendURL, getUpdate
     handle(ACK_UPDATE_CHANNEL, action('acknowledge'), versionArgument);
     handle(DEFER_UPDATE_CHANNEL, action('defer'), versionArgument);
     handle(REQUEST_UPDATE_CHANNEL, action('request'), versionArgument);
+    handle(CANCEL_DOWNLOAD_CHANNEL, action('cancel'), versionArgument);
     handle(INSTALL_UPDATE_CHANNEL, action('install'), versionArgument);
     handle(SET_UPDATE_ACCESS_CHANNEL, action('setAccess'), (args) => args.length === 1 && validToken(args[0]));
     handle(CLEAR_UPDATE_ACCESS_CHANNEL, action('clearAccess'));
@@ -97,4 +99,4 @@ function registerAppIPC({ ipcMain, app, getMainWindow, getFrontendURL, getUpdate
   };
   return dispose;
 }
-module.exports = { registerAppIPC, GET_VERSION_CHANNEL, GET_UPDATE_STATUS_CHANNEL, CHECK_UPDATES_CHANNEL, ACK_UPDATE_CHANNEL, DEFER_UPDATE_CHANNEL, REQUEST_UPDATE_CHANNEL, SET_UPDATE_ACCESS_CHANNEL, CLEAR_UPDATE_ACCESS_CHANNEL, UPDATE_STATUS_CHANNEL, INSTALL_UPDATE_CHANNEL };
+module.exports = { registerAppIPC, GET_VERSION_CHANNEL, GET_UPDATE_STATUS_CHANNEL, CHECK_UPDATES_CHANNEL, ACK_UPDATE_CHANNEL, DEFER_UPDATE_CHANNEL, REQUEST_UPDATE_CHANNEL, SET_UPDATE_ACCESS_CHANNEL, CLEAR_UPDATE_ACCESS_CHANNEL, UPDATE_STATUS_CHANNEL, INSTALL_UPDATE_CHANNEL, CANCEL_DOWNLOAD_CHANNEL };

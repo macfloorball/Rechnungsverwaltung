@@ -137,10 +137,15 @@ def run(context):
         space = os.fstatvfs(parent)
         if space.f_bavail * space.f_frsize < context["size"] + 16 * 1024 * 1024:
             raise OSError("space")
-        candidate_name = ".ttc-update-" + os.urandom(12).hex()
+        candidate_name = ".ttc-rechnungsverwaltung-update-" + os.urandom(12).hex()
         os.mkdir(candidate_name, 0o700, dir_fd=parent)
         stage_name = candidate_name
         stage_dir = os.open(stage_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        owner = os.open(".owner.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=stage_dir)
+        with os.fdopen(owner, "w", encoding="utf-8") as stream:
+            json.dump({"formatVersion": 1, "appId": "de.mac-floorball.ttc-rechnungsverwaltung", "originalName": target.name}, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
         staged = os.open("image.part", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=stage_dir)
         position = 0
         while data := os.pread(incoming, 256 * 1024, position):
@@ -192,6 +197,7 @@ def run(context):
         journal(context, "replaced")
         os.close(staged)
         staged = None
+        os.unlink(".owner.json", dir_fd=stage_dir)
         os.close(stage_dir)
         stage_dir = None
         os.rmdir(stage_name, dir_fd=parent)
@@ -209,10 +215,11 @@ def run(context):
         raise
     finally:
         if stage_dir is not None:
-            try:
-                os.unlink("image.part", dir_fd=stage_dir)
-            except FileNotFoundError:
-                pass
+            for name in ("image.part", ".owner.json"):
+                try:
+                    os.unlink(name, dir_fd=stage_dir)
+                except FileNotFoundError:
+                    pass
         if stage_name:
             os.rmdir(stage_name, dir_fd=parent)
         for fd in (staged, stage_dir, incoming, original, lock, pid, helpers, updates, profile, parent):

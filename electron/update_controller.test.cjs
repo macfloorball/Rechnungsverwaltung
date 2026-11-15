@@ -60,3 +60,23 @@ test('parallel credential writes are rejected rather than queued through the ren
   await assert.rejects(f.controller.clearAccess(), /UPDATE_BUSY/);
   resolve(); await first;
 });
+
+test('manual checks share a lock before any reset; download and credential writes cannot race that reset', async () => {
+  let finish, checks = 0, starts = 0;
+  const candidate = { manifest: { version: '0.2.0' } };
+  const service = { getStatus: () => ({ state: 'available', availableVersion: '0.2.0', requiresAuthentication: true }),
+    getCandidate: () => candidate, subscribe: () => () => {}, check: async () => { checks++; await new Promise(r => { finish = r; }); } };
+  const downloader = { getStatus: () => null, isBusy: () => false, subscribe: () => () => {}, reset: async () => {}, start: () => { starts++; } };
+  const controller = createUpdateController({ service, downloader, credentials: { clear: async () => {} } });
+  const first = controller.check(), second = controller.check();
+  assert.equal(first, second);
+  assert.throws(() => controller.request('0.2.0'), /DOWNLOAD_BUSY/);
+  await assert.rejects(controller.clearAccess(), /UPDATE_BUSY/);
+  await new Promise(setImmediate);
+  assert.equal(checks, 1); assert.equal(starts, 0);
+  finish();
+  const result = await first;
+  assert.equal(result.canDownload, true);
+  assert.equal(result.actionBusy, false);
+  assert.ok(result.revision > 0);
+});

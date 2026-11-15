@@ -1110,6 +1110,8 @@ Vertrauensdaten bleibt der Updateweg gesperrt. Der
 [Linux-AppImage-Updateweg](Planung/Desktop_Linux_Update.md) ersetzt benutzereigene,
 sicher beschreibbare AppImages nach Bestätigung atomar. Bei ungeeigneten Pfaden
 bleibt die manuelle Aktualisierung vorgesehen; DEB/RPM werden nicht eingeführt.
+[Offlinebetrieb und Fehlerbehandlung](Planung/Desktop_Update_Fehlerbehandlung.md)
+sichern Abbruch, konkurrierende Aktionen und Neustart-Bereinigung ab.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen

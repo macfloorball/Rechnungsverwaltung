@@ -30,7 +30,7 @@ const MESSAGES = Object.freeze({
 
 function createUpdateDownloader({ config, profile, getCandidate, getToken = async () => null,
   transportFactory = createUpdateTransport, now = Date.now, timeoutMs = 10 * 60000, idleTimeoutMs = 30000,
-  statfs = fs.statfs } = {}) {
+  statfs = fs.statfs, write = (handle, ...args) => handle.write(...args) } = {}) {
   const root = path.resolve(profile), cache = path.join(root, 'updates', 'downloads');
   let status = null, pending = null, active = null, retained = null, disposed = false;
   const listeners = new Set();
@@ -79,7 +79,7 @@ function createUpdateDownloader({ config, profile, getCandidate, getToken = asyn
     const abort = new AbortController(); active = abort;
     let idle;
     const total = setTimeout(() => abort.abort(new UpdateError('DOWNLOAD_TIMEOUT')), timeoutMs);
-    function touch() { clearTimeout(idle); idle = setTimeout(() => abort.abort(new UpdateError('DOWNLOAD_TIMEOUT')), idleTimeoutMs); }
+    function touch() { if (abort.signal.aborted) return; clearTimeout(idle); idle = setTimeout(() => abort.abort(new UpdateError('DOWNLOAD_TIMEOUT')), idleTimeoutMs); }
     touch();
     const aborted = new Promise((_resolve, reject) => abort.signal.addEventListener('abort', () => reject(abort.signal.reason), { once: true }));
     aborted.catch(() => {});
@@ -93,7 +93,6 @@ function createUpdateDownloader({ config, profile, getCandidate, getToken = asyn
           download: Object.freeze({ receivedBytes: received, totalBytes: artifact.size, phase }) });
       }
     };
-    progress(true);
     pending = Promise.resolve().then(async () => {
       let slot, handle;
       try {
@@ -118,11 +117,11 @@ function createUpdateDownloader({ config, profile, getCandidate, getToken = asyn
           let offset = 0;
           while (offset < chunk.length) {
             check();
-            const { bytesWritten } = await handle.write(chunk, offset, chunk.length - offset, received + offset);
+            const { bytesWritten } = await write(handle, chunk, offset, chunk.length - offset, received + offset);
             if (!bytesWritten) throw new UpdateError('DOWNLOAD_STORAGE');
             offset += bytesWritten;
           }
-          received += chunk.length; touch(); progress();
+          check(); received += chunk.length; touch(); progress();
         }));
         check();
         if (received !== artifact.size) throw new UpdateError('DOWNLOAD_SIZE');
@@ -134,6 +133,7 @@ function createUpdateDownloader({ config, profile, getCandidate, getToken = asyn
           check();
           const { bytesRead } = await handle.read(block, 0, Math.min(block.length, artifact.size - position), position);
           if (!bytesRead) throw new UpdateError('DOWNLOAD_SIZE');
+          check();
           hash.update(block.subarray(0, bytesRead)); position += bytesRead; touch();
         }
         const stat = await handle.stat(), onDisk = await fs.lstat(partial);
@@ -156,7 +156,7 @@ function createUpdateDownloader({ config, profile, getCandidate, getToken = asyn
         else if (['EACCES', 'EPERM', 'ELOOP', 'ENOTDIR', 'ENOENT', 'EIO', 'EROFS'].includes(code)) code = 'DOWNLOAD_STORAGE';
         if (!Object.hasOwn(MESSAGES, code)) code = 'NETWORK';
         // No paths, tokens, remote exception messages or URLs cross IPC.
-        status = Object.freeze({ state: 'error', version, download: null, error: Object.freeze({ code, message: MESSAGES[code] }) });
+        status = Object.freeze({ state: code === 'DOWNLOAD_CANCELLED' ? 'cancelled' : 'error', version, download: null, error: code === 'DOWNLOAD_CANCELLED' ? null : Object.freeze({ code, message: MESSAGES[code] }) });
       } finally {
         clearTimeout(total); clearTimeout(idle);
         await handle?.close().catch(() => {});
@@ -165,15 +165,27 @@ function createUpdateDownloader({ config, profile, getCandidate, getToken = asyn
           catch { status = Object.freeze({ state: 'error', version, download: null, error: Object.freeze({ code: 'DOWNLOAD_STORAGE', message: MESSAGES.DOWNLOAD_STORAGE }) }); }
         }
         pending = null; active = null;
-        if (status?.state === 'error') emit(status);
+        if (['error', 'cancelled'].includes(status?.state)) emit(status);
       }
     });
+    progress(true);
     return status;
   }
   return {
     start, getStatus: () => status,
     isBusy: () => Boolean(pending),
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    async cancel(version) {
+      if (!pending || status?.state !== 'downloading' || status.version !== version) throw new UpdateError('UPDATE_CHANGED');
+      active.abort(new UpdateError('DOWNLOAD_CANCELLED')); await pending; return status;
+    },
+    async recover() {
+      if (!config.enabled || pending || retained) return;
+      try {
+        try { await fs.lstat(cache); } catch (error) { if (error.code === 'ENOENT') return; throw error; }
+        await prepare();
+      } catch { emit(Object.freeze({ state: 'error', version: null, download: null, error: Object.freeze({ code: 'DOWNLOAD_STORAGE', message: MESSAGES.DOWNLOAD_STORAGE }) })); }
+    },
     async reset() { active?.abort(new UpdateError('DOWNLOAD_CANCELLED')); if (pending) await pending; await discard(); emit(null); },
     async stop() { disposed = true; await this.reset(); listeners.clear(); },
     // Internal test/installer handoff. Never returned to Renderer; future

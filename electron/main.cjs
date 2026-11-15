@@ -108,6 +108,7 @@ else app.whenReady().then(async () => {
     } });
     disposeIPC.bindUpdates?.(updates.controller);
     await updates.installer?.recovery();
+    await updates.downloader?.recover();
     updates.service.start();
   } catch {
     // Optional update failures must never enter the application's fatal handler.

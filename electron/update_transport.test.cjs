@@ -81,3 +81,18 @@ test('streaming keeps credentials on the fixed GitHub API, strips them at CDN an
     assert.equal(count, 1);
   }
 });
+
+test('metadata deadlines cancel a stalled reader and HTTP failures discard unread bodies', async () => {
+  const f = updateFixture(); let cancelled = 0;
+  const controller = new AbortController();
+  const transport = createUpdateTransport({ config: f.config, signal: controller.signal,
+    fetchImpl: async () => new Response(new ReadableStream({ start(c) { c.enqueue(Buffer.from('{')); }, cancel() { cancelled++; } })) });
+  const pending = transport.releases();
+  await new Promise(setImmediate); controller.abort(Error('deadline'));
+  await assert.rejects(pending);
+  assert.equal(cancelled, 1);
+  const rejected = createUpdateTransport({ config: f.config, signal: new AbortController().signal,
+    fetchImpl: async () => new Response(new ReadableStream({ cancel() { cancelled++; } }), { status: 401 }) });
+  await assert.rejects(rejected.releases(), /AUTH_REQUIRED/);
+  assert.equal(cancelled, 2);
+});

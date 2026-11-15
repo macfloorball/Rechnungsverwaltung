@@ -102,3 +102,18 @@ test('successful version confirmation removes only its private helper and downlo
   await assert.rejects(fs.stat(path.join(updates, 'downloads/download-AbC123')), { code: 'ENOENT' });
   assert.equal(await fs.readFile(path.join(f.root, 'personal.db'), 'utf8'), 'unchanged');
 });
+
+test('startup removes only private staging directories with matching app and target markers', linux, async (t) => {
+  const { cleanupLinuxStages } = require('./linux_update.cjs');
+  const f = await location(t);
+  const own = path.join(f.root, '.ttc-rechnungsverwaltung-update-' + 'a'.repeat(24));
+  const foreign = path.join(f.root, '.ttc-rechnungsverwaltung-update-' + 'b'.repeat(24));
+  for (const directory of [own, foreign]) {
+    await fs.mkdir(directory, { mode: 0o700 });
+    await fs.writeFile(path.join(directory, 'image.part'), 'partial', { mode: 0o600 });
+    await fs.writeFile(path.join(directory, '.owner.json'), JSON.stringify({ formatVersion: 1, appId: 'de.mac-floorball.ttc-rechnungsverwaltung', originalName: directory === own ? path.basename(f.target) : 'another.AppImage' }), { mode: 0o600 });
+  }
+  await cleanupLinuxStages(f.target);
+  await assert.rejects(fs.stat(own), { code: 'ENOENT' });
+  assert.equal(await fs.readFile(path.join(foreign, 'image.part'), 'utf8'), 'partial');
+});

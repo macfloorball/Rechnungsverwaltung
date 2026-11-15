@@ -21,6 +21,7 @@ const desktopAPI = Object.freeze({
   acknowledgeUpdate(...args) { return request('ttc:request:updates:acknowledge', args, versionArgument(args)); },
   deferUpdate(...args) { return request('ttc:request:updates:defer', args, versionArgument(args)); },
   requestUpdate(...args) { return request('ttc:request:updates:request', args, versionArgument(args)); },
+  cancelUpdateDownload(...args) { return request('ttc:request:updates:cancel-download', args, versionArgument(args)); },
   installUpdate(...args) { return request('ttc:request:updates:install', args, versionArgument(args)); },
   setUpdateAccessToken(...args) {
     const valid = args.length === 1 && typeof args[0] === 'string' && args[0].length >= 20

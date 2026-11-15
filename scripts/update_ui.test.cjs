@@ -38,6 +38,7 @@ function fixture(initial = {}, enabled = true) {
     acknowledgeUpdate: async (version) => { calls.push(['ack', version]); status = { ...status, promptVersion: null }; return { ok: true, value: status }; },
     deferUpdate: async (version) => { calls.push(['later', version]); return { ok: true, value: status }; },
     requestUpdate: async (version) => { calls.push(['now', version]); return { ok: true, value: status }; },
+    cancelUpdateDownload: async (version) => { calls.push(['cancel', version]); status = { ...status, state: 'cancelled' }; return { ok: true, value: status }; },
     installUpdate: async (version) => { calls.push(['install', version]); return { ok: true, value: status }; },
     setUpdateAccessToken: async (token) => { calls.push(['token', token]); return { ok: true, value: status }; },
     clearUpdateAccessToken: async () => { calls.push(['clear']); return { ok: true, value: status }; },
@@ -144,5 +145,19 @@ test('unsupported AppImage location explains manual fallback before a download i
   assert.equal(ui.get('desktop-update-unavailable').hidden, false);
   assert.equal(ui.get('desktop-update-unavailable').textContent, hint);
   assert.equal(ui.get('desktop-update-now').textContent, 'Update herunterladen');
+  ui.dispose();
+});
+
+test('old RPC snapshots cannot replace newer download progress and cancellation is version bound', async () => {
+  const ui = fixture({ ...available, canDownload: true, revision: 1 }); await ui.dispose.ready; await flush();
+  ui.publish({ state: 'downloading', revision: 5, download: { receivedBytes: 500, totalBytes: 1000 } });
+  ui.publish({ state: 'available', revision: 2, canDownload: true });
+  assert.equal(ui.get('desktop-update-progress').hidden, false);
+  assert.equal(ui.get('desktop-update-progress-bar').value, 50);
+  ui.api.cancelUpdateDownload = async (version) => { ui.calls.push(['cancel', version]); return { ok: true, value: { ...available, revision: 6, state: 'cancelled', canDownload: false } }; };
+  await ui.get('cancel-desktop-download').emit('click'); await flush();
+  assert.deepEqual(ui.calls.at(-1), ['cancel', '0.2.0']);
+  assert.match(ui.get('desktop-update-status').textContent, /abgebrochen/);
+  assert.equal(ui.get('desktop-update-cancel').hidden, true);
   ui.dispose();
 });

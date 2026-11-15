@@ -1,16 +1,29 @@
 'use strict';
 const { UpdateError } = require('./update_manifest.cjs');
 
-async function readLimited(response, maximum) {
-  if (!response.body || Number(response.headers.get('content-length')) > maximum) throw new UpdateError('INVALID_METADATA');
-  const parts = [];
-  let size = 0;
-  for await (const chunk of response.body) {
-    size += chunk.length;
-    if (size > maximum) throw new UpdateError('INVALID_METADATA');
-    parts.push(Buffer.from(chunk));
+async function readLimited(response, maximum, signal) {
+  let reader;
+  const abort = () => { void reader?.cancel(signal.reason).catch(() => {}); };
+  try {
+    if (!response.body || Number(response.headers.get('content-length')) > maximum) throw new UpdateError('INVALID_METADATA');
+    reader = response.body.getReader();
+    signal?.addEventListener('abort', abort, { once: true });
+    signal?.throwIfAborted();
+    const parts = []; let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      signal?.throwIfAborted();
+      if (done) break;
+      size += value.length;
+      if (size > maximum) throw new UpdateError('INVALID_METADATA');
+      parts.push(Buffer.from(value));
+    }
+    return Buffer.concat(parts);
+  } finally {
+    signal?.removeEventListener('abort', abort);
+    if (reader) { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+    else await response.body?.cancel().catch(() => {});
   }
-  return Buffer.concat(parts);
 }
 
 function createUpdateTransport({ config, token, signal, fetchImpl = fetch }) {
@@ -27,10 +40,11 @@ function createUpdateTransport({ config, token, signal, fetchImpl = fetch }) {
     if (!response.ok) throw new UpdateError('NETWORK');
   }
   async function json(url) {
+    signal?.throwIfAborted();
     const response = await fetchImpl(url, { method: 'GET', headers: headers(false), signal, redirect: 'error', credentials: 'omit' });
-    checkResponse(response);
-    try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await readLimited(response, 5 * 1024 * 1024))); }
-    catch (error) { if (error instanceof UpdateError || signal.aborted) throw error; throw new UpdateError('INVALID_METADATA'); }
+    try { checkResponse(response); } catch (error) { await response.body?.cancel(); throw error; }
+    try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await readLimited(response, 5 * 1024 * 1024, signal))); }
+    catch (error) { if (error instanceof UpdateError || signal?.aborted) throw error; throw new UpdateError('INVALID_METADATA'); }
   }
   async function repository() {
       const repo = await json(base);
@@ -41,6 +55,7 @@ function createUpdateTransport({ config, token, signal, fetchImpl = fetch }) {
       if (!Number.isSafeInteger(id) || id <= 0) throw new UpdateError('INVALID_METADATA');
       let url = `${base}/releases/assets/${id}`, authenticated = true;
       for (let hop = 0; hop < 6; hop++) {
+        signal?.throwIfAborted();
         const response = await fetchImpl(url, { method: 'GET', headers: { ...headers(true, authenticated), 'Accept-Encoding': 'identity' }, signal, redirect: 'manual', credentials: 'omit' });
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           await response.body?.cancel();
@@ -76,7 +91,7 @@ function createUpdateTransport({ config, token, signal, fetchImpl = fetch }) {
       throw new UpdateError('TOO_MANY_RELEASES');
     },
     async asset(id, maximum) {
-      return readLimited(await assetResponse(id), maximum);
+      return readLimited(await assetResponse(id), maximum, signal);
     },
     async streamAsset(id, size, consume) {
       const response = await assetResponse(id);

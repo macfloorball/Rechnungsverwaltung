@@ -34,6 +34,17 @@ app.on('browser-window-created', (_event, window) => {
   });
 });
 
+if (process.env.TTC_TEST_OFFLINE_NAMESPACE) {
+  const updates = require('./electron/updates.cjs');
+  const { createUpdateController } = require('./electron/update_controller.cjs');
+  updates.createDesktopUpdates = () => {
+    // Explicit test configuration; real fetch/DNS, no production token or package.
+    const config = { enabled: true, currentVersion: '0.1.0', platform: 'linux', arch: 'x64',
+      repository: 'example/ttc-offline-fixture', repositoryId: 1, visibility: 'public' };
+    const service = updates.createUpdateService({ config, timeoutMs: 1500, minimumIntervalMs: 0 });
+    return { service, controller: createUpdateController({ service, credentials: {} }) };
+  };
+}
 require('./electron/main.cjs');
 
 async function until(check, description) {
@@ -78,8 +89,15 @@ async function run() {
   assert.equal((await js('window.ttcDesktop.getVersion()')).ok, true);
   const updateStatus = await js('window.ttcDesktop.getUpdateStatus()');
   assert.equal(updateStatus.ok, true);
-  assert.equal(updateStatus.value.state, 'disabled');
-  assert.equal((await js('window.ttcDesktop.checkForUpdates()')).value.state, 'disabled');
+  if (process.env.TTC_TEST_OFFLINE_NAMESPACE) {
+    const checked = await js('window.ttcDesktop.checkForUpdates()');
+    assert.equal(checked.value.state, 'error');
+    assert.ok(['NETWORK', 'TIMEOUT'].includes(checked.value.error.code));
+    console.log('Real offline update request failed safely; continuing invoice/data checks');
+  } else {
+    assert.equal(updateStatus.value.state, 'disabled');
+    assert.equal((await js('window.ttcDesktop.checkForUpdates()')).value.state, 'disabled');
+  }
   assert.equal(await js('typeof window.ttcDesktop.getToken'), 'undefined');
   await until(() => js('!document.getElementById("desktop-updates").hidden'), 'desktop update controls');
   assert.equal(await js('document.getElementById("desktop-update-token").disabled'), true);

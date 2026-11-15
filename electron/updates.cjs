@@ -24,7 +24,7 @@ const MESSAGES = Object.freeze({
 });
 
 function createUpdateService({ config, getToken = async () => null, getHighestVersion = () => config.currentVersion,
-  transportFactory = createUpdateTransport, now = Date.now, random = Math.random,
+  transportFactory = createUpdateTransport, canCheck = () => true, now = Date.now, random = Math.random,
   timers = { setTimeout, clearTimeout }, timeoutMs = 15000, minimumIntervalMs = 30000 } = {}) {
   let state = Object.freeze({ state: config.enabled ? 'idle' : 'disabled', currentVersion: config.currentVersion,
     requiresAuthentication: Boolean(config.enabled && config.visibility === 'private'), repository: config.enabled ? config.repository : null,
@@ -37,7 +37,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
     return state;
   }
   function check() {
-    if (stopped || !config.enabled) return Promise.resolve(state);
+    if (stopped || !config.enabled || !canCheck()) return Promise.resolve(state);
     if (pending) return pending;
     const instant = now();
     if (lastStarted !== null && instant >= lastStarted && instant - lastStarted < minimumIntervalMs) return Promise.resolve(state);
@@ -48,6 +48,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
     const aborted = new Promise((_resolve, reject) => controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true }));
     pending = Promise.race([Promise.resolve().then(async () => {
       if (stopped) throw new UpdateError('STOPPED');
+      controller.signal.throwIfAborted();
       candidate = null;
       update({ state: 'checking', availableVersion: null, releaseNotes: '', error: null });
       const token = config.visibility === 'private' ? await getToken() : null;
@@ -56,6 +57,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
       if (token && !validToken(token)) throw new UpdateError('INVALID_TOKEN');
       const transport = transportFactory({ config, token, signal: controller.signal });
       const highest = await getHighestVersion();
+      controller.signal.throwIfAborted();
       parseVersion(highest);
       const baseline = compareVersions(highest, config.currentVersion) > 0 ? highest : config.currentVersion;
       const release = newestRelease(await transport.releases(), baseline);
@@ -68,6 +70,7 @@ function createUpdateService({ config, getToken = async () => null, getHighestVe
           || signatureAsset[0].state !== 'uploaded' || !Number.isInteger(manifestAsset[0].size) || manifestAsset[0].size < 1
           || manifestAsset[0].size > 65536 || signatureAsset[0].size !== 64) throw new UpdateError('INVALID_METADATA');
       const bytes = await transport.asset(manifestAsset[0].id, 65536);
+      controller.signal.throwIfAborted();
       const signature = await transport.asset(signatureAsset[0].id, 64);
       if (bytes.length !== manifestAsset[0].size || signature.length !== 64) throw new UpdateError('INVALID_METADATA');
       let manifest;
@@ -128,9 +131,10 @@ function createDesktopUpdates({ app, safeStorage, metadata = require('../package
   try { config = { currentVersion, ...configuration(metadata, { packaged: app.isPackaged, currentVersion, platform, arch }) }; }
   catch { config = { enabled: false, currentVersion, reason: 'invalid_configuration' }; }
   const credentials = createUpdateCredentials({ safeStorage, profile: app.getPath('userData'), platform });
-  const service = createUpdateService({ config, getToken: credentials.getToken });
-  const downloader = createUpdateDownloader({ config, profile: app.getPath('userData'), getCandidate: service.getCandidate, getToken: credentials.getToken });
-  const installer = (platform === 'linux' ? createLinuxInstaller : createWindowsInstaller)({ config, app, downloader, platform, getCandidate: service.getCandidate, ...installation });
+  let downloader, installer;
+  const service = createUpdateService({ config, getToken: credentials.getToken, canCheck: () => !downloader?.isBusy() && !installer?.isBusy() });
+  downloader = createUpdateDownloader({ config, profile: app.getPath('userData'), getCandidate: service.getCandidate, getToken: credentials.getToken });
+  installer = (platform === 'linux' ? createLinuxInstaller : createWindowsInstaller)({ config, app, downloader, platform, getCandidate: service.getCandidate, ...installation });
   return { credentials, service, downloader, installer, controller: createUpdateController({ service, credentials, downloader, installer }) };
 }
 module.exports = { createUpdateService, createDesktopUpdates };

@@ -67,6 +67,7 @@
           <p>Installierte Version: <strong id="desktop-current-version">–</strong></p>
           <p id="desktop-update-status" role="status" aria-live="polite">Update-Status wird geladen …</p>
           <p id="desktop-update-error" class="error-message" role="alert" hidden></p>
+          <button id="cancel-desktop-download" class="secondary-button" type="button" hidden>Download abbrechen</button>
           <button id="install-desktop-update" class="primary-button" type="button" hidden>Update installieren und App neu starten</button>
           <button id="show-desktop-update" class="primary-button" type="button" hidden>Verfügbares Update ansehen</button>
           <details id="desktop-update-access" class="update-access">
@@ -398,8 +399,10 @@
         <progress id="desktop-update-progress-bar" max="100"></progress>
         <p id="desktop-update-progress-text" role="status" aria-live="polite"></p>
       </div>
+      <p id="desktop-update-action-status" role="status" aria-live="polite" hidden></p>
       <p id="desktop-update-dialog-error" class="error-message" role="alert" hidden></p>
       <div class="dialog-actions">
+        <button id="desktop-update-cancel" class="secondary-button" type="button" hidden>Download abbrechen</button>
         <button id="desktop-update-later" class="secondary-button" type="button" autofocus>Später</button>
         <button id="desktop-update-now" class="primary-button" type="button">Jetzt aktualisieren</button>
       </div>

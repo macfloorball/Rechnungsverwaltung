@@ -210,3 +210,92 @@ test('total deadline limits active transfers too, and a credential removal cance
   assert.equal(other.controller.getStatus().state, 'idle'); await empty(other);
   assert.equal(other.calls.filter((a) => a.url.endsWith('/assets/20')).length, 1);
 });
+
+test('user cancellation removes partial bytes, keeps local status usable and requires a fresh retry', async (t) => {
+  const f = await fixture(t); let cancelled = false;
+  f.holder.response = () => new Response(new ReadableStream({ start(c) { c.enqueue(f.payload.subarray(0, 20)); }, cancel() { cancelled = true; } }));
+  f.controller.request('0.2.0');
+  await new Promise(r => setTimeout(r, 15));
+  const status = await f.controller.cancel('0.2.0');
+  assert.equal(status.state, 'cancelled'); assert.equal(status.error, null);
+  assert.equal(cancelled, true); await empty(f);
+  await assert.rejects(f.controller.cancel('0.1.0'), /UPDATE_CHANGED/);
+  f.holder.response = () => new Response(f.payload);
+  await f.controller.check(); f.controller.request('0.2.0');
+  assert.equal((await settled(f.downloader)).state, 'downloaded');
+});
+
+test('a restart discards interrupted cache slots without touching credentials or personal files', async (t) => {
+  const f = await fixture(t);
+  await fs.mkdir(path.join(f.cache, 'download-AbC123'), { recursive: true, mode: 0o700 });
+  await fs.chmod(path.dirname(f.cache), 0o700);
+  await fs.writeFile(path.join(f.cache, 'download-AbC123/package.part'), 'interrupted');
+  const credentials = path.join(f.profile, 'updates/github-access.enc');
+  await fs.writeFile(credentials, 'encrypted sentinel');
+  await fs.writeFile(path.join(f.profile, 'personal.db'), 'unchanged');
+  await f.downloader.recover();
+  await empty(f);
+  assert.equal(await fs.readFile(credentials, 'utf8'), 'encrypted sentinel');
+  assert.equal(await fs.readFile(path.join(f.profile, 'personal.db'), 'utf8'), 'unchanged');
+  assert.equal(f.downloader.getVerified(), null);
+});
+
+test('a killed downloader leaves no resumable trust and the next instance cleans its partial package', async (t) => {
+  const { spawn } = require('node:child_process');
+  const f = await fixture(t);
+  await fs.mkdir(path.join(f.profile, 'updates'), { mode: 0o700 });
+  await fs.writeFile(path.join(f.profile, 'updates/github-access.enc'), 'encrypted sentinel');
+  await fs.writeFile(path.join(f.profile, 'personal.db'), 'untouched');
+  const worker = String.raw`
+    const {updateFixture}=require('./tests/update_fixture.cjs');
+    const {createUpdateService}=require('./electron/updates.cjs');
+    const {createUpdateDownloader}=require('./electron/update_download.cjs');
+    (async()=>{
+      const f=updateFixture();
+      const service=createUpdateService({config:f.config,now:()=>f.now,getToken:async()=>f.token,transportFactory:()=>f.transport});
+      await service.check();
+      const downloader=createUpdateDownloader({config:f.config,profile:process.argv[1],now:()=>f.now,getToken:async()=>f.token,getCandidate:service.getCandidate,
+        transportFactory:()=>({release:async()=>f.feedRelease,streamAsset:async(_id,_size,consume)=>{await consume(Buffer.alloc(100));process.stdout.write('PARTIAL_READY');await new Promise(()=>{});}})});
+      downloader.start('0.2.0');
+    })().catch(()=>process.exit(1));`;
+  const child = spawn(process.execPath, ['-e', worker, f.profile], { cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'ignore'] });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
+  await new Promise((resolve, reject) => {
+    let output = '';
+    const timer = setTimeout(() => reject(Error('partial not written')), 5000);
+    child.once('error', reject); child.once('exit', () => { clearTimeout(timer); reject(Error('worker exited early')); });
+    child.stdout.on('data', data => { output += data; if (output.includes('PARTIAL_READY')) { clearTimeout(timer); resolve(); } });
+  });
+  const exited = new Promise(resolve => child.once('exit', resolve)); child.kill('SIGKILL'); await exited;
+  assert.equal((await fs.readdir(f.cache)).length, 1);
+  await f.downloader.recover(); await empty(f);
+  assert.equal(f.downloader.getVerified(), null);
+  assert.equal(await fs.readFile(path.join(f.profile, 'updates/github-access.enc'), 'utf8'), 'encrypted sentinel');
+  assert.equal(await fs.readFile(path.join(f.profile, 'personal.db'), 'utf8'), 'untouched');
+});
+
+test('synchronous status observers cannot start a second download before the first pending task is registered', async (t) => {
+  const f = await fixture(t); let attempted = false, code;
+  f.downloader.subscribe(status => {
+    if (attempted || status?.state !== 'downloading') return;
+    attempted = true;
+    try { f.downloader.start('0.2.0'); } catch (error) { code = error.code; }
+  });
+  f.controller.request('0.2.0');
+  assert.equal((await settled(f.downloader)).state, 'downloaded');
+  assert.equal(code, 'DOWNLOAD_BUSY');
+  assert.equal(f.calls.filter(c => c.url.endsWith('/assets/20')).length, 1);
+});
+
+test('a write callback finishing after cancellation cannot resurrect progress or a completed package', async (t) => {
+  let finish, entered;
+  const gate = new Promise(resolve => { finish = resolve; }), started = new Promise(resolve => { entered = resolve; });
+  const f = await fixture(t, 'linux', { write: async (handle, ...args) => {
+    const result = await handle.write(...args); entered(); await gate; return result;
+  } });
+  f.controller.request('0.2.0'); await started;
+  assert.equal((await f.controller.cancel('0.2.0')).state, 'cancelled');
+  finish(); await new Promise(setImmediate);
+  assert.equal(f.downloader.getStatus().state, 'cancelled');
+  assert.equal(f.downloader.isBusy(), false); assert.equal(f.downloader.getVerified(), null); await empty(f);
+});

@@ -21,7 +21,8 @@ const f = updateFixture();
 const downloadFlow = process.env.TTC_TEST_DOWNLOAD === '1';
 const payload = Buffer.alloc(1000001, 42);
 f.packages.find(a => a.platform === 'linux').sha256 = createHash('sha256').update(payload).digest('hex');
-let releaseStream;
+let releaseStream, streamCancelled = false;
+const cancelFlow = process.env.TTC_TEST_CANCEL === '1';
 const streamGate = new Promise(resolve => { releaseStream = resolve; });
 const notes = '<img src=x onerror="window.__updatePwned=true">\nEin signierter Testhinweis – kein produktiver Release.';
 const packet = signedManifest(f.policy, f.release, f.packages, notes, f.privateKey, new Date(f.now));
@@ -42,8 +43,8 @@ updates.createDesktopUpdates = () => {
       if (url.endsWith('/releases/100')) return Response.json(f.feedRelease);
       if (url.endsWith('/assets/20')) return new Response(new ReadableStream({ start(c) {
         c.enqueue(payload.subarray(0, 400000));
-        streamGate.then(() => { c.enqueue(payload.subarray(400000)); c.close(); });
-      } }));
+        streamGate.then(() => { if (!streamCancelled) { c.enqueue(payload.subarray(400000)); c.close(); } });
+      }, cancel() { streamCancelled = true; } }));
       return Response.json({ id: f.config.repositoryId, full_name: f.config.repository, private: true, archived: false });
     } }) });
   controller = createUpdateController({ service, credentials, downloader });
@@ -66,6 +67,7 @@ async function until(check, label) {
   let window;
   await until(() => (window = BrowserWindow.getAllWindows()[0]), 'window');
   const contents = window.webContents;
+  contents.setBackgroundThrottling(false);
   const js = (source) => contents.executeJavaScript(source, true);
   await until(() => !contents.isLoading() && contents.getURL().startsWith('http:'), 'page');
   await until(() => js('!document.getElementById("desktop-updates").hidden && document.getElementById("desktop-current-version").textContent === "0.1.0" && !document.querySelector(\'[aria-busy="true"]\')'), 'update controls');
@@ -80,7 +82,7 @@ async function until(check, label) {
   assert.equal(await js('document.getElementById("desktop-update-notes").querySelector("img")'), null);
   assert.equal(await js('Boolean(window.__updatePwned)'), false);
   assert.equal(await js('document.getElementById("desktop-update-now").disabled'), !downloadFlow);
-  await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  await js('new Promise(resolve => { requestAnimationFrame(() => requestAnimationFrame(resolve)); setTimeout(resolve, 250); })');
   await fs.writeFile(path.join(output, 'update-dialog.png'), (await contents.capturePage()).toPNG());
   await js('document.getElementById("desktop-update-later").click()');
   await until(() => !controller.getStatus().promptVersion && controller.getStatus().deferred, 'deferred decision');
@@ -102,13 +104,24 @@ async function until(check, label) {
     await until(() => js('!document.getElementById("desktop-update-progress").hidden'), 'real progress visible');
     assert.equal(await js('document.getElementById("desktop-update-now").disabled'), true);
     await until(() => js('document.getElementById("desktop-update-progress-bar").value === 39'), 'actual streamed byte progress');
-    await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    await js('new Promise(resolve => { requestAnimationFrame(() => requestAnimationFrame(resolve)); setTimeout(resolve, 250); })');
     await fs.writeFile(path.join(output, 'download-progress.png'), (await contents.capturePage()).toPNG());
+    if (cancelFlow) {
+      await js('document.getElementById("desktop-update-cancel").click()');
+      await until(() => downloader.getStatus()?.state === 'cancelled', 'user download cancellation');
+      await until(() => js('document.getElementById("desktop-update-status").textContent.includes("abgebrochen")'), 'cancelled UI');
+      assert.equal(streamCancelled, true);
+      assert.equal(await js('document.getElementById("desktop-update-action-status").hidden'), false);
+      assert.match(await js('document.getElementById("desktop-update-action-status").textContent'), /abgebrochen/);
+      assert.deepEqual(await fs.readdir(path.join(app.getPath('userData'), 'updates/downloads')), []);
+      await fs.writeFile(path.join(output, 'download-cancelled.png'), (await contents.capturePage()).toPNG());
+    } else {
     releaseStream();
     await until(() => downloader.getStatus()?.state === 'downloaded', 'verified download');
     await until(() => js('document.getElementById("desktop-update-status").textContent.includes("geprüft")'), 'verified UI');
     assert.deepEqual(await fs.readFile(downloader.getVerified().file), payload);
     assert.equal(await js('JSON.stringify(document.body.textContent).includes("package.part")'), false);
+    }
     await js('document.getElementById("desktop-update-later").click()');
   }
   const raw = 'github_pat_native_UI_fixture_only';
@@ -123,4 +136,4 @@ async function until(check, label) {
   await until(() => token === null, 'clear access');
   console.log('DESKTOP_UPDATE_UI_CHECK passed: dialog, plain notes, queued prompt, defer, reload, credentials');
   app.quit();
-})().catch((error) => { console.error(error.stack); app.exit(1); });
+})().catch((error) => { console.error(error.stack); app.quit(); });

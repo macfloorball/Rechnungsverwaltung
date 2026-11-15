@@ -46,6 +46,29 @@ async function probeAppImage({ app, env = process.env, mountInfo = () => fs.read
   } finally { await handle.close(); }
   return { target, identity: Object.fromEntries(['dev', 'ino', 'size'].map((key) => [key, String(stat[key])]).concat([['mtime', String(stat.mtimeNs)], ['ctime', String(stat.ctimeNs)]])) };
 }
+async function cleanupLinuxStages(target) {
+  const parent = path.dirname(target);
+  await secureDirectory(parent, true);
+  for (const name of await fs.readdir(parent)) {
+    if (!/^\.ttc-rechnungsverwaltung-update-[a-f0-9]{24}$/.test(name)) continue;
+    const directory = path.join(parent, name), stat = await fs.lstat(directory);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)) continue;
+    const files = await fs.readdir(directory);
+    if (!files.includes('.owner.json') || files.some((file) => !['.owner.json', 'image.part'].includes(file))) continue;
+    let safe = true;
+    for (const file of files) {
+      const entry = await fs.lstat(path.join(directory, file));
+      if (!entry.isFile() || entry.isSymbolicLink() || entry.uid !== process.getuid() || entry.nlink !== 1
+          || (entry.mode & 0o7077) || (file === '.owner.json' && entry.size > 1024)) safe = false;
+    }
+    if (!safe) continue;
+    let marker;
+    try { marker = JSON.parse(await fs.readFile(path.join(directory, '.owner.json'), 'utf8')); } catch { continue; }
+    if (marker.formatVersion === 1 && marker.appId === 'de.mac-floorball.ttc-rechnungsverwaltung' && marker.originalName === path.basename(target)) {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  }
+}
 async function prepareHelper(appRoot, profile) {
   validateInstallation(appRoot, true, 'linux');
   await secureDirectory(profile, true);
@@ -183,10 +206,19 @@ function createLinuxInstaller({ config, app, downloader, dialog, getMainWindow, 
     },
     async recovery() {
       if (!enabled) return;
+      await checkLinuxUpdateLock(app);
       try { capability = await probe({ app }); } catch { capability = null; }
+      if (capability) {
+        try { await cleanupLinuxStages(capability.target); } catch { capability = null; }
+      }
       const file = path.join(profile, 'updates/linux-install-state.json');
       try {
         await secureDirectory(path.dirname(file), true, true);
+        for (const name of await fs.readdir(path.dirname(file))) {
+          if (!/^linux-helper-[A-Za-z0-9]{6}$/.test(name)) continue;
+          const helper = path.join(path.dirname(file), name), entry = await fs.lstat(helper);
+          if (entry.isDirectory() && !entry.isSymbolicLink() && entry.uid === process.getuid() && !(entry.mode & 0o077)) await fs.rm(helper, { recursive: true, force: true });
+        }
         const stat = await fs.lstat(file);
         if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) throw Error('journal');
         const journal = JSON.parse(await fs.readFile(file, 'utf8'));
@@ -201,4 +233,4 @@ function createLinuxInstaller({ config, app, downloader, dialog, getMainWindow, 
     },
   };
 }
-module.exports = { createLinuxInstaller, probeAppImage, prepareHelper, startLinuxHelper, checkLinuxUpdateLock };
+module.exports = { createLinuxInstaller, probeAppImage, prepareHelper, startLinuxHelper, checkLinuxUpdateLock, cleanupLinuxStages };

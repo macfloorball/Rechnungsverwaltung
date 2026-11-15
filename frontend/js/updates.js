@@ -7,17 +7,18 @@ const validVersion = (value) => typeof value === "string" && value.length <= 17 
 export function initializeDesktopUpdates({ document: doc = document, api = globalThis.window?.ttcDesktop } = {}) {
   if (instances.has(doc)) return instances.get(doc);
   const methods = ["getUpdateStatus", "checkForUpdates", "acknowledgeUpdate", "deferUpdate", "requestUpdate",
-    "installUpdate", "setUpdateAccessToken", "clearUpdateAccessToken", "onUpdateStatus"];
+    "installUpdate", "cancelUpdateDownload", "setUpdateAccessToken", "clearUpdateAccessToken", "onUpdateStatus"];
   const section = doc.getElementById("desktop-updates");
   if (!section || api?.apiVersion !== 1 || !methods.every((name) => typeof api[name] === "function")) return () => {};
   const get = (id) => doc.getElementById(id);
   const dialog = get("desktop-update-dialog"), token = get("desktop-update-token");
   const checkButton = get("check-desktop-updates"), showButton = get("show-desktop-update");
+  const cancelButton = get("desktop-update-cancel"), backgroundCancel = get("cancel-desktop-download");
   const installButton = get("install-desktop-update");
   const nowButton = get("desktop-update-now"), laterButton = get("desktop-update-later");
   const saveButton = get("save-desktop-update-access"), clearButton = get("clear-desktop-update-access");
   const abort = new AbortController(), shown = new Set();
-  let status = null, dialogVersion = null, busy = false, accessBusy = false, installBusy = false, closed = false;
+  let status = null, dialogVersion = null, busy = false, accessBusy = false, installBusy = false, closed = false, lastRevision = -1;
   let unsubscribe = () => {};
   const listen = (node, event, callback, options = {}) => node.addEventListener(event, callback, { ...options, signal: abort.signal });
   function message(node, text) { node.textContent = text || ""; node.hidden = !text; }
@@ -53,14 +54,18 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
     }
   }
   function maybePrompt() {
-    if (closed || busy || accessBusy || !eligible() || status.promptVersion !== status.availableVersion
+    if (closed || busy || accessBusy || status?.actionBusy || !eligible() || status.promptVersion !== status.availableVersion
         || shown.has(status.availableVersion) || blockedByWork()) return;
     openDialog();
   }
   function render(next) {
     if (closed) return;
-    if (!next || typeof next !== "object" || !["disabled", "idle", "checking", "available", "up_to_date", "authentication_required", "error", "downloading", "downloaded", "preparing_install", "install_handoff"].includes(next.state)) {
+    if (!next || typeof next !== "object" || !["disabled", "idle", "checking", "available", "up_to_date", "authentication_required", "error", "downloading", "downloaded", "preparing_install", "install_handoff", "cancelled"].includes(next.state)) {
       problem(controlledFailure()); return;
+    }
+    if (Number.isSafeInteger(next.revision)) {
+      if (next.revision < lastRevision) return;
+      lastRevision = next.revision;
     }
     status = next;
     get("desktop-current-version").textContent = validVersion(next.currentVersion) ? next.currentVersion : "–";
@@ -72,6 +77,7 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
       error: "Die Update-Prüfung konnte nicht abgeschlossen werden.", downloading: "Das Update wird heruntergeladen …",
       downloaded: "Das Update wurde heruntergeladen und geprüft. Die automatische Installation ist noch nicht verfügbar.",
     };
+    labels.cancelled = "Der Download wurde abgebrochen. Die App bleibt lokal nutzbar.";
     labels.preparing_install = "Die Installation wird vorbereitet …";
     labels.install_handoff = "Die App wird für die Installation beendet …";
     if (next.state === "downloaded" && next.installationHint) labels.downloaded = next.installationHint;
@@ -85,13 +91,14 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
     }
     get("desktop-update-status").textContent = label;
     message(get("desktop-update-error"), next.state === "error" && typeof next.error?.message === "string" ? next.error.message.slice(0, 600) : "");
-    checkButton.disabled = busy || accessBusy || ["disabled", "checking", "downloading"].includes(next.state);
+    checkButton.disabled = Boolean(next.actionBusy) || busy || accessBusy || ["disabled", "checking", "downloading"].includes(next.state);
     checkButton.setAttribute("aria-busy", String(busy || next.state === "checking"));
+    for (const button of [cancelButton, backgroundCancel]) { button.hidden = next.state !== "downloading"; button.disabled = Boolean(next.actionBusy); }
     installButton.hidden = !next.canInstall; installButton.disabled = installBusy;
-    showButton.hidden = !eligible(); showButton.disabled = busy || accessBusy;
-    saveButton.disabled = accessBusy || !next.requiresAuthentication;
-    clearButton.disabled = accessBusy;
-    token.disabled = accessBusy || !next.requiresAuthentication;
+    showButton.hidden = !eligible(); showButton.disabled = Boolean(next.actionBusy) || busy || accessBusy;
+    saveButton.disabled = Boolean(next.actionBusy) || accessBusy || !next.requiresAuthentication;
+    clearButton.disabled = Boolean(next.actionBusy) || accessBusy;
+    token.disabled = Boolean(next.actionBusy) || accessBusy || !next.requiresAuthentication;
     get("desktop-update-repository").textContent = typeof next.repository === "string" ? next.repository : "das Release-Repository";
     get("desktop-update-access-hint").textContent = next.requiresAuthentication
       ? "Der Token wird nur für diese Update-Quelle verwendet. Du kannst den gespeicherten Zugang jederzeit entfernen."
@@ -113,6 +120,8 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
       message(get("desktop-update-dialog-error"), next.canInstall ? "Das Paket ist geprüft. Zur Installation wird die App nach erneuter Bestätigung beendet." : (next.installationHint || "Das Paket wurde geprüft. Die automatische Installation ist noch nicht verfügbar."));
       laterButton.textContent = "Schließen";
     }
+    message(get("desktop-update-action-status"), next.state === "cancelled" ? "Der Download wurde abgebrochen. Du kannst die App weiterverwenden und später erneut prüfen." : "");
+    if (next.state === "cancelled") laterButton.textContent = "Schließen";
     renderProgress();
     maybePrompt();
   }
@@ -159,6 +168,16 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
   listen(showButton, "click", openDialog);
   listen(laterButton, "click", () => { void later(); });
   listen(dialog, "cancel", (event) => { event.preventDefault(); void later(); });
+  async function cancelDownload() {
+    const version = status?.availableVersion;
+    if (cancelButton.disabled || status?.state !== "downloading" || !validVersion(version)) return;
+    cancelButton.disabled = true; backgroundCancel.disabled = true;
+    try { render(await invoke("cancelUpdateDownload", version)); }
+    catch (error) { if (!closed) problem(error, dialog.open ? get("desktop-update-dialog-error") : get("desktop-update-error")); }
+    finally { if (!closed) for (const button of [cancelButton, backgroundCancel]) button.disabled = Boolean(status?.actionBusy); }
+  }
+  listen(cancelButton, "click", () => { void cancelDownload(); });
+  listen(backgroundCancel, "click", () => { void cancelDownload(); });
   async function install(version) {
     if (closed || installBusy || !status?.canInstall || !validVersion(version)) return;
     installBusy = true; installButton.disabled = true; nowButton.disabled = true;

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { registerAppIPC, ACK_UPDATE_CHANNEL, DEFER_UPDATE_CHANNEL, REQUEST_UPDATE_CHANNEL,
-  SET_UPDATE_ACCESS_CHANNEL, CLEAR_UPDATE_ACCESS_CHANNEL, UPDATE_STATUS_CHANNEL, INSTALL_UPDATE_CHANNEL } = require('./ipc.cjs');
+  SET_UPDATE_ACCESS_CHANNEL, CLEAR_UPDATE_ACCESS_CHANNEL, UPDATE_STATUS_CHANNEL, INSTALL_UPDATE_CHANNEL, CANCEL_DOWNLOAD_CHANNEL } = require('./ipc.cjs');
 
 test('all UI actions validate frame and payload; event delivery is restricted and disposed', async () => {
   const handlers = new Map(), sent = [], calls = [];
@@ -15,12 +15,12 @@ test('all UI actions validate frame and payload; event delivery is restricted an
   let callback, detached = false;
   const controller = { getStatus: () => ({}), check: async () => ({}),
     acknowledge: async (version) => calls.push(version), defer: async (version) => calls.push(version),
-    request: async (version) => calls.push(version), install: async (version) => calls.push(version), setAccess: async (token) => calls.push(token), clearAccess: async () => calls.push('clear'),
+    request: async (version) => calls.push(version), install: async (version) => calls.push(version), cancel: async (version) => calls.push(version), setAccess: async (token) => calls.push(token), clearAccess: async () => calls.push('clear'),
     subscribe(fn) { callback = fn; return () => { detached = true; }; } };
   const dispose = registerAppIPC({ app: { getVersion: () => '0.1.0' }, getMainWindow: () => window,
     getFrontendURL: () => 'http://127.0.0.1:8000/', getUpdateService: () => controller, getUpdateController: () => controller,
     ipcMain: { handle: (name, fn) => handlers.set(name, fn), removeHandler: (name) => handlers.delete(name) } });
-  for (const channel of [ACK_UPDATE_CHANNEL, DEFER_UPDATE_CHANNEL, REQUEST_UPDATE_CHANNEL, INSTALL_UPDATE_CHANNEL, SET_UPDATE_ACCESS_CHANNEL, CLEAR_UPDATE_ACCESS_CHANNEL]) {
+  for (const channel of [ACK_UPDATE_CHANNEL, DEFER_UPDATE_CHANNEL, REQUEST_UPDATE_CHANNEL, INSTALL_UPDATE_CHANNEL, CANCEL_DOWNLOAD_CHANNEL, SET_UPDATE_ACCESS_CHANNEL, CLEAR_UPDATE_ACCESS_CHANNEL]) {
     assert.equal(handlers.get(channel)({ sender, senderFrame: { url: frame.url } }, '0.2.0').error.code, 'FORBIDDEN');
   }
   assert.equal(handlers.get(REQUEST_UPDATE_CHANNEL)(event, { path: '/tmp/setup.exe' }).error.code, 'INVALID_ARGUMENT');

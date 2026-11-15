@@ -137,3 +137,33 @@ test('changing access cancels old checks and resets throttling without reviving 
   assert.equal(s.getCandidate().manifest.version, '0.2.0');
   s.stop();
 });
+
+test('timeout during version-history lookup cannot make a late network request', async () => {
+  const f = updateFixture(); let resolve, calls = 0;
+  f.transport.releases = async () => { calls++; return [f.feedRelease]; };
+  const s = service(f, { getHighestVersion: () => new Promise(done => { resolve = done; }), timeoutMs: 15 });
+  assert.equal((await s.check()).error.code, 'TIMEOUT');
+  resolve('0.1.0'); await new Promise(setImmediate);
+  assert.equal(calls, 0); assert.equal(s.getCandidate(), null);
+});
+
+test('background checks do not invalidate an offer during a busy download or installation', async () => {
+  const f = updateFixture(); let busy = false, calls = 0;
+  const releases = f.transport.releases;
+  f.transport.releases = () => { calls++; return releases(); };
+  const s = service(f, { canCheck: () => !busy });
+  await s.check(); busy = true;
+  assert.equal((await s.check()).state, 'available');
+  assert.equal(calls, 1); assert.ok(s.getCandidate());
+});
+
+test('DNS, refused connections and resets produce safe errors without retaining an install candidate', async () => {
+  for (const code of ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET']) {
+    const f = updateFixture();
+    f.transport.releases = async () => { throw Object.assign(Error('private token and diagnostic path'), { code }); };
+    const s = service(f), result = await s.check();
+    assert.equal(result.error.code, 'NETWORK');
+    assert.equal(JSON.stringify(result).includes('diagnostic'), false);
+    assert.equal(s.getCandidate(), null); s.stop();
+  }
+});
