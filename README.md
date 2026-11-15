@@ -10,6 +10,17 @@ SQLite und PDF-Rechnungserstellung.
 > Authentifizierung. Sie ist für den lokalen Betrieb gedacht und sollte nicht
 > ungeschützt über ein Netzwerk oder das Internet erreichbar gemacht werden.
 
+## Lizenzstatus
+
+Für die Weiterverwendung des eigenen Projektcodes wird derzeit keine allgemeine
+Lizenz erteilt. Eine spätere öffentliche Bereitstellung dient zunächst der
+Einsicht; das Projekt wird damit nicht als Open Source freigegeben.
+Gesetzliche Befugnisse und die GitHub-Nutzungsbedingungen, einschließlich der
+dort vorgesehenen Möglichkeit zum Ansehen und Forken öffentlicher Repositories,
+bleiben unberührt. Fremdkomponenten unterliegen weiterhin ihren jeweiligen
+Lizenzen und Urheberhinweisen. Siehe auch
+[GitHub: Repository-Lizenzierung](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
+
 ## Funktionen
 
 - Tätigkeiten und Stundenpreise verwalten.

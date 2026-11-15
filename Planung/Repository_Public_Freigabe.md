@@ -35,7 +35,7 @@ Die Scans liefen lokal; kein Quellcode wurde an einen Scandienst übertragen.
 | Commit-Metadaten | Eine persönliche E-Mail-Identität neben einer GitHub-Systemadresse. Die persönliche Adresse wird hier nicht ausgeschrieben. Der Eigentümer hat am 15.11.2026 ausdrücklich bestätigt, dass die bestehende Historie mit dieser Adresse später öffentlich bleiben darf. |
 | Issues/PRs | 23 Einträge: zwei Issues und 21 PRs. Vollständige Titel/Beschreibungen zusätzlich lokal ohne Secret-Befund gescannt; keine Issue- oder Inline-PR-Kommentare vorhanden. Reviewtexte, Commit-Kommentare und ein möglicher separater Wiki-Bestand sind nicht vollständig geprüft. |
 | Releases/Actions | Keine Releases oder Entwürfe. Ein Actions-Lauf mit zwei ausgeführten Jobs, beide verfügbaren Logs lokal ohne Secret-Befund gescannt; zwei Buildjobs übersprungen und keine Artefakte für diesen Lauf. Normale Konto-/Commit-/Runnermetadaten in Logs würden ebenfalls öffentlich. |
-| Lizenz | Keine eigene Projekt-Lizenzdatei gefunden. Ohne Eigentümerentscheidung wurde keine Lizenz ergänzt. Rechte an Code/Icons und Hinweise mitgelieferter Abhängigkeiten sind für eine offene Lizenzfreigabe zu klären. |
+| Lizenz | Der Eigentümer hat am 15.11.2026 Variante 3 gewählt: spätere öffentliche Einsicht, vorerst keine allgemeine Lizenz zur Weiterverwendung des eigenen Projektcodes. Der Hinweis steht in der README; Drittanbieterlizenzen bleiben maßgeblich. |
 
 Ein Scan ohne Befund beweist nicht die Abwesenheit beliebiger vertraulicher
 Inhalte. Neue Commits, Kommentare, Logs und Artefakte erfordern vor einer
@@ -48,10 +48,11 @@ tatsächlichen Veröffentlichung eine erneute Prüfung.
    Hochschul-E-Mail ausdrücklich akzeptiert. Eine Bereinigung ist dafür nicht
    erforderlich. Diese Entscheidung erlaubt noch keine Sichtbarkeitsänderung
    des Repositorys. Eine zukünftige `noreply`-Adresse würde alte Commits nicht ändern.
-2. **Lizenz:** Entscheiden, unter welchen Bedingungen Nutzung, Änderung und
-   Weitergabe erlaubt werden sollen. Öffentlich sichtbar ist nicht automatisch
-   Open Source. Eine bewusste Veröffentlichung ohne zusätzliche Projektlizenz
-   ist ebenfalls eine Entscheidung; Drittanbieterlizenzen gelten unabhängig davon.
+2. **Lizenz – geklärt:** Der Eigentümer hat am 15.11.2026 die spätere öffentliche
+   Einsicht ohne allgemeine Weiterverwendungslizenz für den eigenen Projektcode
+   gewählt. Eine Open-Source-Lizenz wird vorerst nicht hinzugefügt. Gesetzliche
+   Befugnisse, GitHub-Nutzungsbedingungen und Drittanbieterlizenzen bleiben
+   unberührt. Diese Entscheidung ist keine Freigabe der Sichtbarkeitsänderung.
 3. **GitHub-Inhalte:** Review-/Commit-Kommentare, Wiki und neue Uploads/Logs/
    Artefakte unmittelbar vor der Umstellung abschließend prüfen. Ein Löschen im
    aktuellen Quellstand entfernt alte Inhalte nicht aus der Historie.
