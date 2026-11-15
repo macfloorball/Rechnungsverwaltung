@@ -1115,6 +1115,10 @@ sichern Abbruch, konkurrierende Aktionen und Neustart-Bereinigung ab.
 Die [Regressionstestmatrix](Planung/Desktop_Update_Tests.md) beschreibt die
 automatisierten Prüfungen und grenzt echte Linux-/Electron-Ausführung von
 Testadaptern und noch ausstehender nativer Installationsabnahme ab.
+Die [Release- und Abnahmeanleitung](Planung/Desktop_Update_Abnahme.md) führt durch
+GitHub-Einrichtung, Freigabe, native Windows-/Linux-Prüfungen mit zwei Versionen,
+Datenerhaltsvergleich und manuelle Wiederherstellung. Der lokale Probelauf ist
+geprüft; signierter Live-Release und native Installationsabnahme stehen aus.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
@@ -1211,10 +1215,10 @@ noch kein vertrauenswürdiges Update-Manifest und keine Installationsfreigabe.
 Ein `stable`-Kanal allein ersetzt keine Signaturprüfung.
 
 Release-Prüfungen benötigen vollständige lokale Git-Historie und sämtliche
-Desktop-Tags; CI muss diese später explizit abrufen. Die Prüfung des freigegebenen
-Entwicklungsbranches, Signierung und Veröffentlichung folgen erst in Schritt 4.
-Details und externe Voraussetzungen:
-[Updatearchitektur](Planung/Automatische_Desktop_Updates_Architektur.md).
+Desktop-Tags; der Release-Workflow ruft diese explizit ab. Die Prüfung des
+freigegebenen Entwicklungsbranches, Signierung und Veröffentlichung sind
+implementiert und bleiben bis zur Einrichtung der externen Voraussetzungen
+gesperrt. Details: [Release-Einrichtung](Planung/Desktop_Release_Einrichtung.md).
 
 ### Persönliche Daten bei der Deinstallation
 
@@ -1234,7 +1238,10 @@ Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
 2. App vollständig schließen und das Ende ihres lokalen Servers abwarten.
    Keine zweite Instanz oder Schreibprogramme auf dem Datenbestand offen lassen.
 3. Den neuen Installer aus derselben vertrauenswürdigen Bezugsquelle übernehmen,
-   SHA-256 vergleichen und unter demselben Windows-Benutzer starten.
+   signierte Freigabedaten und Windows-Authenticode einschließlich erwartetem
+   Zertifikat/Publisher/Version prüfen, SHA-256 vergleichen und unter demselben
+   Windows-Benutzer starten. Die [Abnahmeanleitung](Planung/Desktop_Update_Abnahme.md#dateiverteilung-und-manuelles-prüfen)
+   beschreibt diese Prüfungen; eine Prüfsummendatei allein genügt nicht.
    App-ID, technischer Profilname und Herausgeber bleiben stabil.
 4. Über die vorhandene Installation installieren; nicht vorher Datenverzeichnisse
    verschieben oder löschen. Gleichversionige Neuinstallation dient der Reparatur.
@@ -1242,9 +1249,11 @@ Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
    PDFs prüfen. Die vorhandene Datenbankinitialisierung prüft das Schema und
    führt erforderliche Migrationen kontrolliert mit vorheriger SQLite-Sicherung aus.
 
-Es gibt keinen Hintergrunddownload, keine Update-URL und keinen automatischen
-Neustart. Der Installer blockiert ein Downgrade gegenüber der in Windows
-registrierten Version (Exitcode 3). Ein manuelles Austauschen von Dateien wird
+Dieser manuelle Weg bleibt unabhängig vom optionalen In-App-Update verfügbar.
+Der implementierte automatische Weg lädt erst nach Zustimmung und verlangt vor
+Installation und Neustart eine zweite Bestätigung; produktiv bleibt er bis zur
+Vertrauenseinrichtung gesperrt. Der Installer blockiert ein Downgrade gegenüber
+der in Windows registrierten Version (Exitcode 3). Ein manuelles Austauschen von Dateien wird
 dadurch nicht abgesichert; zusätzlich lehnt das Backend neuere Datenbankschemata ab.
 Bei fehlgeschlagenem Update denselben oder einen neueren vollständigen Installer
 erneut ausführen. Originaldaten und Sicherungen behalten. Für einen notwendigen

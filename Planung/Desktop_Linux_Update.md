@@ -130,3 +130,7 @@ Zustimmung/Abbruch, Datenerhalt, fehlende Rechte, Parallelstart, Strom-/Prozessa
 und neuer Backendstart müssen geprüft werden. Private Release-Infrastruktur und
 native Windows-Abnahme bleiben ebenfalls offen; produktive Updates sind weiterhin
 gesperrt. Es wurde kein Release ausgelöst und kein Paketformat hinzugefügt.
+
+Die konkrete plattformübergreifende Testfolge einschließlich Dateivergleichen,
+Fehlerfällen und Protokollvorgaben steht in der
+[Betriebs- und Abnahmeanleitung](Desktop_Update_Abnahme.md#native-linux-appimage-abnahme).

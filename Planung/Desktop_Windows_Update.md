@@ -4,7 +4,7 @@ Stand: 15.11.2026, Umsetzungsschritt 8. Diese Implementierung ergänzt den
 [verifizierten Download](Desktop_Update_Download.md). Produktive Signatur- und
 Freigabeinfrastruktur ist weiterhin nicht eingerichtet; die Release-Policy bleibt
 **deaktiviert**. Eine echte native Windows-Abnahme steht aus. Linux-Installation
-gehört zum nächsten, separat freizugebenden Schritt.
+ist inzwischen im [AppImage-Updateweg](Desktop_Linux_Update.md) ergänzt.
 
 ## Zustimmung, laufende Vorgänge und Beenden
 
@@ -127,6 +127,9 @@ Windows-Neustart nach Installation getestet. Die produktive Einrichtung bleibt
 bis zur dokumentierten Signatur-/Freigabeeinrichtung gesperrt.
 
 ## Noch erforderliche native Windows-Abnahme
+
+Die zusammengeführte [Betriebs- und Abnahmeanleitung](Desktop_Update_Abnahme.md)
+enthält Vorbereitung, Testbestand, Dateivergleiche, Fehlerfälle und Protokollvorgaben.
 
 In einer isolierten Windows-x64-VM mit Snapshot und ausschließlich Testdaten:
 

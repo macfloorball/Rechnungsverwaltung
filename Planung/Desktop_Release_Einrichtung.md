@@ -1,6 +1,6 @@
 # Sichere Desktop-Releases: Einrichtung und Freigabe
 
-Stand: 14.11.2026, Umsetzungsschritt 4. Die Implementierung ist **vorbereitet,
+Stand: 15.11.2026, ergänzt in Umsetzungsschritt 12. Die Implementierung ist **vorbereitet,
 aber für produktive Releases gesperrt**. In `desktop-release-policy.json` stehen
 `enabled: false` und nicht eingerichtete Signaturfelder auf `null`. Das bedeutet
 Abbruch vor Veröffentlichung, keine Ersatzschlüssel oder umgehbare Signaturprüfung.
@@ -13,11 +13,14 @@ Binärrepository wurde bewertet und verworfen. Für diese Variante sind weder
 eine zusätzliche GitHub App noch ein fremdes Publish-Repository notwendig.
 
 Private Releases und ihre Assets erfordern für Endnutzer eigenen GitHub-Zugriff
-auf dieses Repository. Ein Lesetoken bzw. eine eigene GitHub-Anmeldung muss später
-im Update-Dienst gesondert eingerichtet werden; es gibt kein gemeinsames App-Token.
+auf dieses Repository. Der implementierte Desktop-Abschnitt nimmt einen eigenen
+Fine-grained Lesetoken mit `Contents: Read-only` für genau dieses Repository an;
+es gibt kein gemeinsames App-Token. Der Kontozugriff muss bereits bestehen.
 Ohne Anmeldung funktionieren die lokale Anwendung und der manuelle Updateweg
-weiter. Die Client-Authentifizierung gehört zu den folgenden Update-Schritten,
-sie wird durch diesen Release-Workflow noch nicht implementiert.
+weiter. Main speichert den Zugang mit Electron `safeStorage` verschlüsselt im
+privaten Profil. Linux benötigt einen unterstützten entsperrten Schlüsselbund;
+`basic_text` und Klartext-Fallback sind ausgeschlossen. Dieser Zugang ist vom
+Release-Publish-Token und vom optionalen Policy-Lesetoken getrennt.
 
 Eine spätere Umstellung des gesamten Repositorys auf öffentlich macht auch
 Quellcode, Git-Historie und automatisch von GitHub angebotene Quellarchive
@@ -63,7 +66,10 @@ Unter **Settings → Environments** die Environment **`desktop-release`** anlege
 - Deployment-Regeln auf **Selected branches and tags** setzen und ausschließlich
   einen **Tag**-Eintrag **`desktop-v*`** zulassen. Keine Branch- oder `*`-Freigabe.
 - GitHub muss diese Schutzregeln im verwendeten Tarif für **private** Repositories
-  unterstützen. Diese Verfügbarkeit ist nicht nachgewiesen. Ist sie nicht
+  unterstützen. Laut [GitHub-Dokumentation zu Pflichtfreigaben](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#required-reviewers)
+  sind Required reviewers unter Free, Pro und Team nur für öffentliche
+  Repositories verfügbar. Die Unterstützung im konkreten privaten Konto ist
+  nicht nachgewiesen. Ist sie nicht
   vorhanden, bleibt der Workflow gesperrt; eine andere Freigabearchitektur muss
   ausdrücklich festgelegt werden, statt Schutzregeln wegzulassen.
 
@@ -171,6 +177,11 @@ Ein Release-Verantwortlicher erstellt und pusht dann einen Tag wie
 Handlung; diese Sitzung erstellt oder pusht keinen solchen Tag. Normale Merges
 starten ausschließlich die gewöhnliche Desktop-CI.
 
+Vor der erstmaligen Aktivierung den kontrollierten Ablauf und die nativen
+Prüfungen aus [Desktop_Update_Abnahme.md](Desktop_Update_Abnahme.md) durchführen.
+Es gibt keinen automatischen Start von Releases durch gewöhnliche Merges und
+keinen Veröffentlichungsschalter in der Anwendung.
+
 ## Ablauf und veröffentlichte Dateien
 
 1. `release_gate.cjs`: alle Voraussetzungen read-only prüfen; kein Secret für
@@ -204,6 +215,14 @@ Die sechs Release-Assets sind:
 - `RELEASE_NOTES.md`
 - `SHA256SUMS`
 
+Diese Namen bezeichnen Release-Dateien, **derzeit keine öffentlichen Downloads**.
+Im gewählten privaten Repository bleiben sie zugangsgeschützt. Automatische
+GitHub-Quellarchive und die gesamte Historie würden bei einer Veröffentlichung
+des Repositorys ebenfalls sichtbar. Eine öffentliche Binärverteilung ohne
+öffentlichen Quellcode benötigt eine gesondert freigegebene Architekturänderung;
+ein stiller Wechsel der Sichtbarkeit ist weder Teil des Workflows noch des
+manuellen Updatewegs.
+
 Manifestformat 1 bindet App-ID, Version, Tag, Quellcommit, Repository-ID und
 Sichtbarkeit, Schlüssel-ID, Veröffentlichungs-/Ablaufzeit, Release Notes sowie
 Plattform, Größe, SHA-256 und tatsächliche GitHub-Asset-ID beider Pakete.
@@ -234,7 +253,7 @@ freigeben; keine Ersetzung bereits ausgelieferter Pakete und keine Downgrades.
 Die separate Wiederherstellung von Datenbanken bleibt der Offline-Sicherung
 vorbehalten, sie wird durch diesen Workflow nicht verändert.
 
-## Nachweisgrenzen dieses Schritts
+## Historischer Prüfstand von Schritt 4
 
 Offline-Tests verwenden frisch erzeugte **Testschlüssel** und simulierte
 GitHub-Antworten. Sie prüfen echte Ed25519-Signaturen, Manipulationserkennung,

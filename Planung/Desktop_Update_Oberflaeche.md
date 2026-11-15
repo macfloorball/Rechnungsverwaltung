@@ -21,9 +21,10 @@ Der produktive Release-Workflow bleibt gesperrt, bis die dokumentierte
   Netzwerk-/Verifikationsfehler und notwendiger GitHub-Zugang sind sichtbar.
 - Der Fortschrittsbereich verarbeitet empfangene/gesamte Bytes aus dem Main-Status.
   Ohne gültige Gesamtgröße ist er unbestimmt. Es gibt keinen simulierten Fortschritt.
-  **Der echte Paketdownload folgt in Schritt 7.** Main liefert deshalb derzeit
-  immer `canDownload: false`; „Jetzt aktualisieren“ ist deaktiviert. Auch direkte
-  IPC-Aufrufe erhalten `DOWNLOAD_UNAVAILABLE`. Installation folgt in Schritt 8/9.
+  Der echte Paketdownload ist seit Schritt 7 implementiert; Windows-/Linux-
+  Installationsübergaben seit Schritt 8/9. `canDownload` und `canInstall` richten
+  sich nach gültiger Freigabe, Paketstatus und unterstütztem Installationspfad.
+  Ohne eingerichtetes Vertrauen bleiben die Aktionen gesperrt.
 - Ohne Desktop-Bridge bleibt der Abschnitt verborgen; die Web-App nutzt keine
   Update-IPC und legt keine Zugänge an.
 
