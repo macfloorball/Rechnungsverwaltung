@@ -1120,6 +1120,12 @@ GitHub-Einrichtung, Freigabe, native Windows-/Linux-Prüfungen mit zwei Versione
 Datenerhaltsvergleich und manuelle Wiederherstellung. Der lokale Probelauf ist
 geprüft; signierter Live-Release und native Installationsabnahme stehen aus.
 
+Eine spätere öffentliche Verteilung desselben Repositorys ist vorgesehen.
+Die [Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) beschreibt den
+geprüften Quell-/Historienstand und offene Entscheidungen. Aktuell bleibt das
+Repository privat; öffentliche Sichtbarkeit und produktive Updates sind noch
+nicht freigegeben.
+
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
 NSIS-Installer für Windows x64, pro Benutzer ohne Administratorrechte. Ein fester

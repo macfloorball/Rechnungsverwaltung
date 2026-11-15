@@ -12,6 +12,13 @@ Repository-ID **1447003404**, derzeit privat. Ein separates öffentliches
 Binärrepository wurde bewertet und verworfen. Für diese Variante sind weder
 eine zusätzliche GitHub App noch ein fremdes Publish-Repository notwendig.
 
+Inzwischen ist eine spätere Veröffentlichung des gesamten Repositorys
+grundsätzlich vorgesehen. Sie wurde noch nicht durchgeführt. Die
+[öffentliche Freigabevorbereitung](Repository_Public_Freigabe.md) dokumentiert
+Inhalts-/Historienprüfung und die notwendige Umstellung des Update-Vertrauens.
+Bis zur ausdrücklichen Sichtbarkeitsfreigabe bleibt die aktuelle private Policy
+maßgeblich; ein anderer Releaseprozess nur wegen GitHub Pro wird nicht eingeführt.
+
 Private Releases und ihre Assets erfordern für Endnutzer eigenen GitHub-Zugriff
 auf dieses Repository. Der implementierte Desktop-Abschnitt nimmt einen eigenen
 Fine-grained Lesetoken mit `Contents: Read-only` für genau dieses Repository an;
