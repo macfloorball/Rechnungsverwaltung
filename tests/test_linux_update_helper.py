@@ -139,19 +139,25 @@ def test_rejected_handoff_never_executes_or_silently_replaces_original(tmp_path,
 def test_native_copy_crosses_filesystems_before_atomic_replace(tmp_path):
     import tempfile
     context, target, incoming, marker, data = fixture(tmp_path)
-    with tempfile.TemporaryDirectory(prefix="linux-update-test-", dir=ROOT / "dist") as destination:
-        other = Path(destination) / target.name
-        other.write_bytes(target.read_bytes())
-        other.chmod(0o700)
-        if other.stat().st_dev == incoming.stat().st_dev:
+    shared_memory = Path("/dev/shm")
+    if not shared_memory.is_dir() or not os.access(shared_memory, os.W_OK | os.X_OK):
+        pytest.skip("A second writable filesystem is required")
+    # Only the download lives in tmpfs: it may be noexec. The helper must copy it
+    # to the target filesystem before starting the verified replacement.
+    with tempfile.TemporaryDirectory(prefix="linux-update-test-", dir=shared_memory) as cache:
+        other = Path(cache) / incoming.name
+        if Path(cache).stat().st_dev == target.stat().st_dev:
             pytest.skip("Two distinct writable filesystems required")
-        context.update(target=str(other), identity=identity(other.stat()))
+        other.write_bytes(data)
+        other.chmod(0o600)
+        context["file"] = str(other)
         result = run_owner(context, marker)
         assert result.returncode == 0, result.stdout + result.stderr
         until(marker.exists)
         assert other.read_bytes() == data
-        assert target.read_bytes() == data + b"old"
-        assert not list(other.parent.glob(".ttc-rechnungsverwaltung-update-*"))
+        assert target.read_bytes() == data
+        assert incoming.read_bytes() == data
+        assert not list(target.parent.glob(".ttc-rechnungsverwaltung-update-*"))
 
 
 def test_parallel_app_start_is_blocked_by_live_update_lock(tmp_path):

@@ -11,13 +11,18 @@ const { installerConfig } = require('./installer_config.cjs');
 const { releaseFixture } = require('../tests/release_fixture.cjs');
 
 function fixture(t, withGit = false) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-release-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-release-'));
+  const root = path.join(temporary, 'app');
+  fs.mkdirSync(root);
+  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  // Git for Windows cannot use Node's device path \\.\nul as a config file.
+  const gitConfig = path.join(temporary, 'gitconfig');
+  fs.writeFileSync(gitConfig, '');
   const metadata = { version: '1.2.3', desktopAppId: 'de.mac-floorball.ttc-rechnungsverwaltung', devDependencies: { electron: '45.3.1' } };
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(metadata));
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ version: metadata.version, packages: { '': { version: metadata.version } } }));
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', timeout: 10000,
-    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: os.devNull } }).trim();
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: gitConfig } }).trim();
   if (withGit) {
     git('init', '--quiet');
     git('add', '.');

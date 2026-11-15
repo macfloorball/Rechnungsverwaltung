@@ -88,6 +88,8 @@ test('AppImage validates its own runtime and rejects Windows or altered Linux fi
   const metadata = JSON.parse(fs.readFileSync(metadataFile, 'utf8'));
   metadata.ttcDistribution = 'appimage';
   fs.writeFileSync(metadataFile, JSON.stringify(metadata));
+  // On Windows, the old Windows "Lib" directory would alias Linux "lib".
+  fs.rmSync(path.join(root, 'runtime/python'), { recursive: true });
   const interpreter = path.join(root, 'runtime/python/bin/python3.13');
   const dependency = path.join(root, 'runtime/python/lib/python3.13/site-packages/fastapi/__init__.py');
   for (const file of [interpreter, dependency]) {

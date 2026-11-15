@@ -60,6 +60,32 @@ Laufzeiten und deren Archivhashes/Paketpins bleiben unverändert. Der erfolgreic
 vollständige Remote-CI-Lauf muss nach Übertragung dieser Korrektur noch bestätigt
 werden; die reine Manifestprüfung belegt keine ausgeführten Windows-Tests.
 
+Der [nachfolgende Lauf für da4ebbe](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43722267205)
+bestätigte die erfolgreiche Einrichtung von Python 3.13.17 auf beiden Runnern.
+Er scheiterte danach an vier Portabilitätsannahmen in Tests:
+
+- Der AppImage-Test übernahm das Windows-Verzeichnis `Lib` aus seiner ersten
+  Fixture. Unter Windows kollidierte es mit Linux-`lib`. Die Windows-Laufzeit
+  wird jetzt vor Aufbau der Linux-Testlaufzeit vollständig aus der Fixture entfernt.
+- Der Kalender-Test entfernte den Modulimport nur bei LF-Zeilenenden. Er
+  akzeptiert jetzt auch CRLF und prüft HTTP-/Netzwerkfehler mit beiden Varianten.
+- Die Release-Fixture verwendete Nodes Windows-Gerätepfad `\\.\nul` als globale
+  Git-Konfiguration. Ein eigenes leeres Konfigurationsfile außerhalb des
+  Testrepositories ersetzt diesen für Git ungeeigneten Pfad.
+- Der Linux-Dateisystemtest benötigte einen bereits vorhandenen `dist`-Ordner.
+  Jetzt liegt nur sein Download in einem privaten temporären Verzeichnis unter
+  `/dev/shm`; der Helfer muss ihn vor Start auf das Zieldateisystem kopieren.
+  Ohne zweites beschreibbares Dateisystem wird der Fall ausdrücklich übersprungen.
+
+Nach Korrektur bestanden lokal **202 JavaScript-Tests, einer übersprungen**
+(einschließlich NSIS-Hook-Kompilierung) und **409 Python-Tests, 13 übersprungen**.
+Die gezielten zehn Linux-Helfertests liefen ohne Skip. Lokale Werkzeuge: Node
+24.22.3 und Python 3.13.18 mit den bestehenden CI-Paketpins. Die Korrektur ändert
+Testfixtures und Dokumentation, keine produktive Verifikation oder Laufzeit.
+Ein neuer vollständiger GitHub-Lauf einschließlich Windows bleibt nach dem
+erneuten Push erforderlich; beide Paketbuilds des verlinkten Laufs wurden wegen
+der Testfehler übersprungen.
+
 Versionspins ersetzen keine Lieferkettenprüfung. Updates dieser Pins sollen in
 eigenen geprüften Änderungen erfolgen. Die Hosted-Runner-Images werden trotz
 festgelegter OS-Generation von GitHub aktualisiert; Signaturen und Zeitstempel
