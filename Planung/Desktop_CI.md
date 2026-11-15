@@ -165,6 +165,33 @@ Anwendungsänderungen vorzunehmen.
 Die elf betroffenen Server-/Lebenszyklustests bestanden lokal mit dieser
 Diagnoseergänzung; der native Windows-Fehler bleibt bis zur Auswertung offen.
 
+Beim ersten Lauf von
+[54b985c](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43747857838)
+scheiterte Windows schon vor Python an einem zeitabhängigen Downloadtest. Zwei
+Abbruchtests warteten pauschal 15 ms und konnten dadurch vor dem tatsächlichen
+Streamstart abbrechen. Sie warten jetzt mit begrenzter Frist auf 20 tatsächlich
+geschriebene Bytes, bevor sie den Abbruch bzw. das Entfernen des Zugangs prüfen.
+Die 21 Downloadtests und die vollständige lokale JavaScript-Suite (202 bestanden,
+ein plattformabhängiger Skip, einschließlich NSIS-Hook-Kompilierung) bestanden.
+
+Eine gezielte Wiederholung des Windows-Jobs erreichte Python und meldete sechs
+Reload-Fehler bei 390 bestandenen und 30 übersprungenen Tests. Die Stacks zeigen
+den Supervisor bereits im Dateiwächter sowie den Resource-Sharer beim Warten
+auf Verbindungen. Sie bestätigen somit nicht die zuvor vermutete Blockade beim
+stdin-Zugriff. Der Worker ist im bisherigen Log nicht sichtbar; die bisherigen
+Anwendungsänderungen gelten weiterhin nicht als erfolgreiche Windows-Korrektur.
+
+Der Diagnosehelfer `tests/server_diagnostics.py` gibt Spawn-Workern nun eigene
+temporäre `worker-<PID>.log`-Dateien für stdout/stderr. Stackausgaben und auch
+frühe normale Python-Fehler werden damit unabhängig von der Vererbung der
+Windows-Standardhandles erfasst. Fehlerberichte lesen Supervisor- und Workerlogs
+zusammen. Die Dateien liegen außerhalb des beobachteten Quellordners; Logs
+sollen den Dateiwächtertest nicht selbst wecken. Lokal bestanden damit alle elf
+Server-/Lebenszyklustests; zehn erfasste Workerlogs enthielten echte Startmeldungen.
+Diese Änderung betrifft nur Testdiagnose und Test-Synchronisation, nicht den
+produktiven Server oder dessen Zeitlimits. Die native Windows-Ursache bleibt
+bis zum nächsten Lauf mit sichtbarer Workerausgabe offen.
+
 Versionspins ersetzen keine Lieferkettenprüfung. Updates dieser Pins sollen in
 eigenen geprüften Änderungen erfolgen. Die Hosted-Runner-Images werden trotz
 festgelegter OS-Generation von GitHub aktualisiert; Signaturen und Zeitstempel

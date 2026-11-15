@@ -50,6 +50,14 @@ async function settled(downloader) {
   return downloader.getStatus();
 }
 async function empty(f) { assert.deepEqual(await fs.readdir(f.cache).catch((e) => { if (e.code === 'ENOENT') return []; throw e; }), []); }
+async function receiving(f, bytes) {
+  const deadline = Date.now() + 3000;
+  while (f.downloader.getStatus()?.download?.receivedBytes !== bytes) {
+    assert.equal(f.downloader.isBusy(), true, 'download ended before receiving the partial payload');
+    assert.ok(Date.now() < deadline, 'partial download did not start');
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+}
 
 test('consent streams a signed Linux package into private storage, verifies disk bytes and exposes no paths over IPC', async (t) => {
   const f = await fixture(t);
@@ -205,7 +213,7 @@ test('total deadline limits active transfers too, and a credential removal cance
   const other = await fixture(t);
   other.holder.response = () => new Response(new ReadableStream({ start(c) { c.enqueue(other.payload.subarray(0, 20)); } }));
   other.controller.request('0.2.0');
-  await new Promise((r) => setTimeout(r, 15));
+  await receiving(other, 20);
   await other.controller.clearAccess();
   assert.equal(other.controller.getStatus().state, 'idle'); await empty(other);
   assert.equal(other.calls.filter((a) => a.url.endsWith('/assets/20')).length, 1);
@@ -215,7 +223,7 @@ test('user cancellation removes partial bytes, keeps local status usable and req
   const f = await fixture(t); let cancelled = false;
   f.holder.response = () => new Response(new ReadableStream({ start(c) { c.enqueue(f.payload.subarray(0, 20)); }, cancel() { cancelled = true; } }));
   f.controller.request('0.2.0');
-  await new Promise(r => setTimeout(r, 15));
+  await receiving(f, 20);
   const status = await f.controller.cancel('0.2.0');
   assert.equal(status.state, 'cancelled'); assert.equal(status.error, null);
   assert.equal(cancelled, true); await empty(f);

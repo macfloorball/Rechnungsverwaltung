@@ -11,21 +11,20 @@ import time
 import urllib.request
 
 import pytest
+import server_diagnostics
 
 
 def wait_for_exit(process, timeout, log_path):
     try:
         return process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise AssertionError(log_path.read_text(errors="replace")) from None
+        raise AssertionError(server_diagnostics.read(log_path)) from None
 
 
 @pytest.mark.parametrize("reload", [False, True])
 @pytest.mark.parametrize("control", ["command", "eof"])
 def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control: str):
-    (tmp_path / "sitecustomize.py").write_text(
-        'import faulthandler\nfaulthandler.dump_traceback_later(5, repeat=True)\n'
-    )
+    server_diagnostics.configure(tmp_path, tmp_path)
     (tmp_path / "sample_app.py").write_text(
         'import asyncio\nfrom pathlib import Path\nfrom fastapi import FastAPI\n'
         'app = FastAPI()\n'
@@ -56,8 +55,8 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control:
                     with urllib.request.urlopen(url + "/health", timeout=0.2):
                         break
                 except OSError:
-                    assert process.poll() is None, (tmp_path / "server.log").read_text()
-                    assert time.monotonic() < deadline, (tmp_path / "server.log").read_text(errors="replace")
+                    assert process.poll() is None, server_diagnostics.read(tmp_path / "server.log")
+                    assert time.monotonic() < deadline, server_diagnostics.read(tmp_path / "server.log")
                     time.sleep(0.05)
 
             def write():
@@ -69,7 +68,7 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control:
                 response = executor.submit(write)
                 deadline = time.monotonic() + 5
                 while not (tmp_path / "started").exists():
-                    assert time.monotonic() < deadline, (tmp_path / "server.log").read_text(errors="replace")
+                    assert time.monotonic() < deadline, server_diagnostics.read(tmp_path / "server.log")
                     time.sleep(0.01)
                 if control == "command":
                     process.stdin.write(b"shutdown\n")
@@ -93,9 +92,7 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control:
 def test_idle_reload_stops_without_waiting_for_a_filesystem_event(tmp_path, control):
     watched = tmp_path / "watched"
     watched.mkdir()
-    (watched / "sitecustomize.py").write_text(
-        'import faulthandler\nfaulthandler.dump_traceback_later(5, repeat=True)\n'
-    )
+    server_diagnostics.configure(watched, tmp_path)
     app_file = watched / "sample_app.py"
     app_source = 'from fastapi import FastAPI\napp=FastAPI()\n@app.get("/health")\ndef health(): return {"version": %d}\n'
     app_file.write_text(app_source % 1)
@@ -136,8 +133,8 @@ main()
                                 return
                     except OSError:
                         pass
-                    assert process.poll() is None, (tmp_path / "server.log").read_text(errors="replace")
-                    assert time.monotonic() < deadline, (tmp_path / "server.log").read_text(errors="replace")
+                    assert process.poll() is None, server_diagnostics.read(tmp_path / "server.log")
+                    assert time.monotonic() < deadline, server_diagnostics.read(tmp_path / "server.log")
                     time.sleep(0.05)
             wait_for_version(1)
             app_file.write_text(app_source % 2)
