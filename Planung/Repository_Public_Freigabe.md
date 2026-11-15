@@ -63,10 +63,12 @@ tatsächlichen Veröffentlichung eine erneute Prüfung.
    [Desktop-CI-Lauf](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43654985422)
    für `b8fe7c3` bestand unter Ubuntu, scheiterte unter Windows jedoch bereits
    beim Bereitstellen von Python 3.13.18: Diese Version war dort nicht verfügbar.
-   Beide Paketbuilds wurden übersprungen. Geeignete verfügbare Windows-CI-Version
-   gesondert prüfen und festlegen. Die eingebettete Windows-Laufzeit ist davon
-   getrennt. Dieser Vorbereitungsschritt ändert keine Versionspins/Workflows und
-   startet keinen neuen Lauf; vollständige Remote-CI ist nicht nachgewiesen.
+   Beide Paketbuilds wurden übersprungen. In einer nachfolgenden Korrektur wurde
+   der CI-Pin auf das laut offiziellem Actions-Manifest unter Windows x64 und
+   Ubuntu 24.04 x64 verfügbare Python 3.13.17 vereinheitlicht; siehe
+   [Desktop-CI](Desktop_CI.md). Die eingebetteten Laufzeiten bleiben davon
+   getrennt. Ein neuer erfolgreicher vollständiger Remote-Lauf ist weiterhin
+   nachzuweisen.
 
 Quellen: [GitHub: Commit-E-Mail](https://docs.github.com/en/account-and-profile/how-tos/email-preferences/setting-your-commit-email-address),
 [Lizenzierung](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).

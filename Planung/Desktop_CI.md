@@ -34,7 +34,7 @@ dieser Repository-Einstellungen wurde hier nicht verändert.
 | Teil | Festlegung |
 | --- | --- |
 | Node | 24.22.3, passend zur Engine-Anforderung der bestehenden Electron-Werkzeuge |
-| CI-Python | 3.13.18, pip 26.1.2 |
+| CI-Python | 3.13.17, pip 26.1.2; exakt verfügbar für Windows x64 und Ubuntu 24.04 x64 |
 | JavaScript | `npm ci` mit bestehendem `package-lock.json`, einschließlich Electron 45.3.1 und electron-builder 26.18.0 |
 | Testpakete | `requirements-ci.txt`, exakte Versionen einschließlich transitiver Laufzeitpakete und Windows-spezifischem colorama |
 | Windows-Laufzeit | Bestehendes CPython 3.13.17 Embedded, festgelegter Archivhash und `requirements-windows.txt` unverändert |
@@ -49,6 +49,16 @@ umgestellt. Die gemeinsame Anwendungs-/Installer-Version bleibt davon unabhängi
 und wird weiterhin in Schritt 2 geprüft. Python-/JS-Pakete werden nicht auf dem
 Zielgerät installiert. Distributions- und Wheel-Lizenzen werden mit der Laufzeit
 übernommen, insbesondere `lib/python3.13/LICENSE.txt` und `.dist-info/licenses`.
+
+Korrektur vom 15.11.2026: Der bisherige CI-Pin 3.13.18 scheiterte auf
+`windows-2025` bereits in `setup-python`. Das offizielle
+[Versionsmanifest von actions/python-versions](https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json)
+enthält für die hier benötigten Ziele 3.13.18 nur für Ubuntu 24.04 x64,
+3.13.17 dagegen auch für Windows x64. Alle fünf `setup-python`-Aufrufe in Desktop-CI und
+Release-Workflow verwenden deshalb einheitlich 3.13.17. Die eingebetteten
+Laufzeiten und deren Archivhashes/Paketpins bleiben unverändert. Der erfolgreiche
+vollständige Remote-CI-Lauf muss nach Übertragung dieser Korrektur noch bestätigt
+werden; die reine Manifestprüfung belegt keine ausgeführten Windows-Tests.
 
 Versionspins ersetzen keine Lieferkettenprüfung. Updates dieser Pins sollen in
 eigenen geprüften Änderungen erfolgen. Die Hosted-Runner-Images werden trotz
