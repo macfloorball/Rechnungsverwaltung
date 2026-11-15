@@ -41,6 +41,22 @@ Ein Scan ohne Befund beweist nicht die Abwesenheit beliebiger vertraulicher
 Inhalte. Neue Commits, Kommentare, Logs und Artefakte erfordern vor einer
 tatsächlichen Veröffentlichung eine erneute Prüfung.
 
+## Lizenzentscheidung vom 16.11.2026
+
+Der Eigentümer hat die bisherige Entscheidung ohne Weiterverwendungslizenz
+ausdrücklich durch die MIT-Lizenz ersetzt. Der eigene Projektcode wird unter
+[`LICENSE`](../LICENSE) freigegeben; README und npm-Paketmetadaten weisen MIT aus.
+Als Urheberbezeichnung wird der bestehende Paketautor `mac-floorball` verwendet.
+Die unten dokumentierte Entscheidung vom 15.11.2026 bleibt als historischer
+Prüfstand erhalten. Lizenzen und Urheberrechte fremder Komponenten bleiben
+unverändert; dies ist keine vollständige Lizenzprüfung aller ausgelieferten
+Abhängigkeiten.
+
+Ziel ist ein Antrag auf kostenlose Open-Source-Signierung bei der SignPath
+Foundation. Die Lizenz allein bestätigt weder die Aufnahme noch eine fertige
+Signierintegration. Es wurden keine Schlüssel erzeugt, kein Antrag abgesendet
+und keine produktiven Releases aktiviert.
+
 ## Entscheidungen und damalige offene Punkte
 
 Die damaligen GitHub-/CI-Befunde in diesem Abschnitt sind historisch. Für den
