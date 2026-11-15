@@ -113,6 +113,41 @@ Rechnungs-/Sicherungs-/Export-/Wiederherstellungsszenarien** unter Linux. Die
 Windows-Bestätigung und die weiterhin offene Reload-Diagnose benötigen den
 nächsten Remote-Lauf. Produktive Releasefreigaben bleiben deaktiviert.
 
+Der [Lauf für 7cbd454](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43730518602)
+bestätigte erneut Ubuntu und die Windows-JavaScript-Prüfung. Unter Windows
+bestanden jetzt auch Sicherung, Export und Import; übrig blieben sieben Fehler
+bei 389 bestandenen und 29 übersprungenen Python-Tests:
+
+- Sechs Reload-Startfälle: Die neuen Logs zeigen den gestarteten Supervisor,
+  aber keinen gestarteten Worker. Uvicorns Prozessfabrik fragt vor dem Spawn
+  `sys.stdin.fileno()` ab, während der Kontrollthread bereits aus demselben
+  gepufferten Stream liest. Der Owner-Kanal wird nun vorübergehend aus
+  `sys.stdin` genommen, wenn Worker gestartet werden; Uvicorn unterstützt den
+  Wert `None`. Der Kontrollthread behält ausdrücklich seine eigene Referenz.
+  Das gilt für Erststart und Dateireload. Beim Dateireload wird der bisherige
+  Worker außerdem kooperativ geweckt und beendet, bevor das gemeinsame
+  Stop-Ereignis zurückgesetzt und erneut verwendet wird.
+- Ein Dateinamensfall: Auf einem Dateisystem ohne Unterscheidung der Groß-
+  und Kleinschreibung kann die Testfixture `Beleg.pdf` und `beleg.pdf` nicht
+  gleichzeitig anlegen. Der Test verwendet jetzt exklusives Anlegen und
+  überspringt ausschließlich diesen nicht darstellbaren Fall. Ein zusätzlicher
+  plattformunabhängiger ZIP-Wiederherstellungstest verlangt weiterhin die
+  Ablehnung beider Namen in einem manipulierten Archiv.
+
+Die beiden bestehenden Langzeit-Dateiwächtertests verweigern jetzt jeden
+Descriptorzugriff auf den Owner-Kanal und prüfen echten Start, Neustart nach
+Dateiänderung sowie Beenden per Befehl/EOF. Eine temporäre Kopie des bisherigen
+Supervisors scheitert an beiden neuen Kanalprüfungen; die korrigierte gezielte
+Suite besteht **41 Tests**. Start-, Drain- und Shutdown-Zeitlimits wurden nicht
+erhöht. Ein erfolgreicher nativer Windows-Lauf und die dadurch freigegebenen
+Paketbuilds müssen weiterhin nach dem nächsten Push bestätigt werden.
+
+Die abschließende lokale Prüfung dieser Änderungen bestand mit **413 Python-
+Tests, 13 optionalen/plattformabhängigen Skips** und **vier echten Offline-
+Electron-Szenarien** (Entwicklung/Produktion und Standard-/eigene Dokumentenablage).
+Sicherung, Export, Wiederherstellung und Wiederanlauf nach Absturz wurden dabei
+erneut geprüft. Diese Linux-Ergebnisse ersetzen die Windows-CI-Bestätigung nicht.
+
 Versionspins ersetzen keine Lieferkettenprüfung. Updates dieser Pins sollen in
 eigenen geprüften Änderungen erfolgen. Die Hosted-Runner-Images werden trotz
 festgelegter OS-Generation von GitHub aktualisiert; Signaturen und Zeitstempel

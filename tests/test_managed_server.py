@@ -1,5 +1,6 @@
 """Exercise the real managed Uvicorn lifecycle without application/user data."""
 import concurrent.futures
+import json
 import os
 from pathlib import Path
 import signal
@@ -82,14 +83,24 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control:
 def test_idle_reload_stops_without_waiting_for_a_filesystem_event(tmp_path, control):
     watched = tmp_path / "watched"
     watched.mkdir()
-    (watched / "sample_app.py").write_text('from fastapi import FastAPI\napp=FastAPI()\n@app.get("/health")\ndef health(): return {"ok": True}\n')
+    app_file = watched / "sample_app.py"
+    app_source = 'from fastapi import FastAPI\napp=FastAPI()\n@app.get("/health")\ndef health(): return {"version": %d}\n'
+    app_file.write_text(app_source % 1)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     root = Path(__file__).resolve().parent.parent
     wrapper = """
 import uvicorn.supervisors.watchfilesreload as module
+import sys
 from scripts.managed_server import main
+control_input = sys.stdin
+class OwnerInput:
+    def __iter__(self):
+        return iter(control_input)
+    def fileno(self):
+        raise AssertionError('Reload workers must not access the owner control pipe')
+sys.stdin = OwnerInput()
 original = module.watch
 def slow(*args, **kwargs):
     kwargs['rust_timeout'] = 60000
@@ -103,15 +114,21 @@ main()
         process = subprocess.Popen([sys.executable, "-c", wrapper, "sample_app:app", "--host", "127.0.0.1", "--port", str(port), "--reload", "--reload-dir", str(watched)],
                                    cwd=tmp_path, env=env, stdin=subprocess.PIPE, stdout=log, stderr=log, start_new_session=os.name != "nt")
         try:
-            deadline = time.monotonic() + 10
-            while True:
-                try:
-                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.2):
-                        break
-                except OSError:
-                    assert process.poll() is None, (tmp_path / "server.log").read_text()
+            def wait_for_version(version):
+                deadline = time.monotonic() + 10
+                while True:
+                    try:
+                        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.2) as response:
+                            if json.load(response)["version"] == version:
+                                return
+                    except OSError:
+                        pass
+                    assert process.poll() is None, (tmp_path / "server.log").read_text(errors="replace")
                     assert time.monotonic() < deadline, (tmp_path / "server.log").read_text(errors="replace")
                     time.sleep(0.05)
+            wait_for_version(1)
+            app_file.write_text(app_source % 2)
+            wait_for_version(2)
             if control == "command":
                 process.stdin.write(b"shutdown\n")
             process.stdin.close()

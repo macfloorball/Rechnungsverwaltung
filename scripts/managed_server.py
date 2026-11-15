@@ -8,6 +8,7 @@ import threading
 
 import uvicorn
 from uvicorn.supervisors import ChangeReload
+from uvicorn._subprocess import get_subprocess
 
 
 def serve(config, stop, sockets=None):
@@ -28,10 +29,37 @@ class ManagedReload(ChangeReload):
         # Keep that event and signal the separate cross-process event explicitly.
         self.worker_stop = worker_stop
 
-    def shutdown(self):
+    def _spawn_without_control_input(self, operation):
+        # Uvicorn otherwise asks stdin.fileno() while the control thread may
+        # hold its buffered-reader lock. The owner pipe belongs to this process,
+        # not to reload workers. Uvicorn supports sys.stdin being None.
+        control_input = sys.stdin
+        try:
+            sys.stdin = None
+            operation()
+        finally:
+            sys.stdin = control_input
+
+    def startup(self):
+        self._spawn_without_control_input(super().startup)
+
+    def restart(self):
+        # Wake and finish the old worker's Event waiter before reusing the
+        # shared Event. Killing a waiting process can strand its condition.
+        self._stop_worker()
+        if self.should_exit.is_set():
+            return
+        self.worker_stop.clear()
+
+        def start():
+            self.process = get_subprocess(config=self.config, target=self.target, sockets=self.sockets)
+            self.process.start()
+
+        self._spawn_without_control_input(start)
+
+    def _stop_worker(self):
         # The shared event requests graceful shutdown inside the worker, including
         # on Windows where SIGTERM/taskkill would otherwise terminate immediately.
-        self.should_exit.set()
         self.worker_stop.set()
         self.process.join(17)
         forced = self.process.is_alive()
@@ -44,10 +72,16 @@ class ManagedReload(ChangeReload):
             if self.process.is_alive():
                 self.process.kill()
                 self.process.join(1)
-        for sock in self.sockets:
-            sock.close()
         if forced:
             raise RuntimeError("Worker musste erzwungen beendet werden")
+
+    def shutdown(self):
+        self.should_exit.set()
+        try:
+            self._stop_worker()
+        finally:
+            for sock in self.sockets:
+                sock.close()
 
 
 def main():
@@ -69,9 +103,11 @@ def main():
         sock = config.bind_socket()
         reloader = ManagedReload(config, target=functools.partial(serve, config, stop), sockets=[sock], worker_stop=stop)
 
+    control_input = sys.stdin
+
     def control():
         # EOF also covers a launcher that disappears without a normal shutdown.
-        for line in sys.stdin:
+        for line in control_input:
             if line.strip() == "shutdown":
                 break
         stop.set()
