@@ -24,7 +24,7 @@ async function fixture(t, extra = {}) {
     stopForUpdate: async () => { calls.push('stop'); if (holder.fail === 'stop') throw Error('secret'); },
     resumeAfterUpdate: async () => calls.push('resume') };
   const installer = createWindowsInstaller({ config: f.config, platform: 'win32', now: () => f.now, downloader, getCandidate: service.getCandidate,
-    app: { isPackaged: true, getPath: (key) => key === 'userData' ? profile : path.join(profile, 'Program', 'TTC Rechnungsverwaltung.exe') },
+    app: { isPackaged: true, getPath: (key) => key === 'userData' ? profile : path.join(profile, 'Program', 'TT Rechnungsverwaltung.exe') },
     getMainWindow: () => ({ isDestroyed: () => false, webContents: { executeJavaScript: async (code) => {
       calls.push(code.startsWith('!') ? 'safe' : code.includes('= true') ? 'freeze' : 'unfreeze'); return holder.safe;
     } } }),

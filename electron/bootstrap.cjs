@@ -9,7 +9,7 @@ try {
 } catch {
   console.error('Installationsprüfung fehlgeschlagen.');
   app.whenReady().then(() => {
-    dialog.showErrorBox('TTC Rechnungsverwaltung – Installationsfehler',
+    dialog.showErrorBox('TT Rechnungsverwaltung – Installationsfehler',
       'Installationsdateien fehlen, sind beschädigt oder nicht lesbar. Zugriffsrechte prüfen und die Anwendung mit dem vollständigen Installer reparieren. Persönliche Daten bleiben erhalten.');
     app.exit(1);
   }).catch(() => app.exit(1));

@@ -13,7 +13,7 @@ test('name and title come from package metadata; old profile paths are preserved
   let modelId;
   configureIdentity({ getPath: (key) => paths[key], setPath: (key, value) => { paths[key] = value; }, setName: (value) => { name = value; }, setAppUserModelId: (value) => { modelId = value; } }, 'win32');
   assert.equal(modelId, 'de.mac-floorball.ttc-rechnungsverwaltung');
-  assert.equal(name, 'TTC Rechnungsverwaltung');
+  assert.equal(name, 'TT Rechnungsverwaltung');
   assert.equal(paths.userData, path.join(profile, 'ttc-rechnungsverwaltung'));
   assert.ok(fs.statSync(paths.userData).isDirectory());
   assert.equal(paths.sessionData, '/custom/session');

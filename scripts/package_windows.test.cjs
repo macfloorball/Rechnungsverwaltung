@@ -16,7 +16,7 @@ test('Windows package contains runtime source and build, but no user or developm
     await fs.mkdir(path.join(root, name), { recursive: true });
   }
   const files = {
-    'package.json': JSON.stringify({ name:'ttc-rechnungsverwaltung',productName:'TTC Rechnungsverwaltung',version:'0.1.0',author:'mac-floorball',desktopAppId:'de.mac-floorball.ttc-rechnungsverwaltung',main:'electron/main.cjs',devDependencies:{electron:'45.3.1'} }),
+    'package.json': JSON.stringify({ name:'ttc-rechnungsverwaltung',productName:'TT Rechnungsverwaltung',version:'0.1.0',author:'mac-floorball',desktopAppId:'de.mac-floorball.ttc-rechnungsverwaltung',main:'electron/main.cjs',devDependencies:{electron:'45.3.1'} }),
     'scripts/run.cjs':'// runtime launcher', 'scripts/managed_server.py':'# lifecycle adapter',
     'scripts/package_windows.cjs':'// excluded build tool', 'scripts/private.env':'PRIVATE',
     'electron/main.cjs':'// main', 'electron/example.test.cjs':'// test',

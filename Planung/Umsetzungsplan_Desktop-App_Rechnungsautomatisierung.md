@@ -158,7 +158,7 @@ Implementierung. Sie ersetzen keine plattformbezogene Abnahme.
 - Die Bridge bietet nur `apiVersion` und den lesenden Versionsabruf
   `getVersion()` an. Der Main-Prozess prüft Absender, Hauptframe, Origin
   und Argumente. Keine Datei-, Datenbank- oder Prozess-API im Renderer.
-- App-Name und Fenstertitel: **TTC Rechnungsverwaltung**. PNG-/ICO-Symbol,
+- App-Name und Fenstertitel: **TT Rechnungsverwaltung**. PNG-/ICO-Symbol,
   Standardgröße 1280 × 800, Mindestgröße 1000 × 650; Begrenzung auf die
   verfügbare Arbeitsfläche. Minimieren, Wiederherstellen und Maximieren
   unter Linux/X11 geprüft; Windows-Skalierung und echte Mehrmonitortests offen.
@@ -171,7 +171,7 @@ Implementierung. Sie ersetzen keine plattformbezogene Abnahme.
   unverändert kopierten Dateien unter `dist/frontend` ohne Reload und
   prüft deren Build-Kennung. Python und seine Pakete müssen lokal vorhanden sein.
 - `npm run desktop:build:win` erzeugt einen entpackten x64-Testbuild unter
-  `dist/windows/TTC Rechnungsverwaltung-win32-x64/`. EXE-Format, Name,
+  `dist/windows/TT Rechnungsverwaltung-win32-x64/`. EXE-Format, Name,
   Version 0.1.0, eingebettete Icons, erforderliche Starterdateien und
   Ausschluss von Nutzerdaten/Entwicklungsumgebungen wurden geprüft.
   Der tatsächliche Paketinhalt wurde zusätzlich mit Linux-Electron aus

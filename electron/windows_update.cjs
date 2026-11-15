@@ -82,7 +82,7 @@ function createWindowsInstaller({ config, app, downloader, dialog, getMainWindow
         if (!window || window.isDestroyed()) throw new UpdateError('INSTALL_BUSY');
         const safe = () => window.webContents.executeJavaScript(`!document.querySelector('dialog[open]:not(#desktop-update-dialog)') && !document.querySelector('[aria-busy="true"]')`, true);
         if (!await safe()) throw new UpdateError('INSTALL_BUSY');
-        const answer = await dialog.showMessageBox(window, { type: 'question', title: 'TTC Rechnungsverwaltung – Update',
+        const answer = await dialog.showMessageBox(window, { type: 'question', title: 'TT Rechnungsverwaltung – Update',
           message: `Version ${version} jetzt installieren?`,
           detail: 'Die App und ihr lokaler Server werden kontrolliert beendet. Ungespeicherte Eingaben gehen verloren. Der Windows-Installer öffnet sich sichtbar; nach erfolgreicher Prüfung startet die App erneut. Rechnungen und persönliche Dateien bleiben erhalten.',
           buttons: ['Abbrechen', 'Jetzt installieren'], defaultId: 0, cancelId: 0, noLink: true });

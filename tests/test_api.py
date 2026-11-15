@@ -65,7 +65,7 @@ def test_local_frontend_and_openapi_remain_available(client: TestClient) -> None
     response = client.get("/openapi.json")
     assert response.status_code == 200
     schema = response.json()
-    assert schema["info"]["title"] == "TTC-Rechnungsverwaltung"
+    assert schema["info"]["title"] == "TT Rechnungsverwaltung"
     for path in ("/api/health", "/api/calendar/{year}/{month}", "/api/invoices"):
         assert path in schema["paths"]
     assert not schema.get("servers")

@@ -1,4 +1,4 @@
-# TTC Rechnungsverwaltung
+# TT Rechnungsverwaltung
 
 Eine lokale Webanwendung mit zusätzlichem Electron-Desktop-Grundgerüst zur
 Verwaltung von Trainingsterminen und zur Erstellung monatlicher Rechnungen
@@ -356,7 +356,7 @@ aufgelöst; absolute Pfade sind ebenfalls möglich. Ohne Variable gilt `frontend
 
 ### Fenster, Sicherheit und Beenden
 
-App-Name und Fenstertitel sind **TTC Rechnungsverwaltung**. Das Fenster startet
+App-Name und Fenstertitel sind **TT Rechnungsverwaltung**. Das Fenster startet
 mit 1280 × 800, mindestens 1000 × 650; auf kleineren Arbeitsflächen werden
 beide Werte begrenzt. Minimieren, Wiederherstellen und Maximieren sind nativ.
 Electron-Profile behalten den bisherigen technischen Namen. Die Desktop-Datenbank
@@ -402,8 +402,8 @@ npm ci
 npm run desktop:build:win
 ```
 
-Ausgabe: `dist/windows/TTC Rechnungsverwaltung-win32-x64/` mit
-`TTC Rechnungsverwaltung.exe`. Der gesamte Ordner gehört zum Testbuild;
+Ausgabe: `dist/windows/TT Rechnungsverwaltung-win32-x64/` mit
+`TT Rechnungsverwaltung.exe`. Der gesamte Ordner gehört zum Testbuild;
 Build-Artefakte sind per `.gitignore` ausgeschlossen. Es gibt noch keinen
 Installer, keine Signatur und keinen automatischen Updateprozess.
 
@@ -421,7 +421,7 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Danach `TTC Rechnungsverwaltung.exe` im Hauptordner starten. Die Anwendung
+Danach `TT Rechnungsverwaltung.exe` im Hauptordner starten. Die Anwendung
 findet `resources/app/.venv/Scripts/python.exe` automatisch. Alternativ lässt
 sich der absolute Interpreterpfad über `TTC_PYTHON` vorgeben. Externes Python
 und dessen Pakete sind Voraussetzungen dieses Testbuilds, nicht mitgelieferte
@@ -1167,7 +1167,7 @@ Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
 Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
 Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
 Ergebnis ohne Release-Tag:
-`dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-development-setup.exe`.
+`dist/installer/TT Rechnungsverwaltung-0.1.0-windows-x64-development-setup.exe`.
 Produktionsbuilds behalten den Dateinamen ohne `-development`; Einzelheiten zur
 Versionsprüfung stehen unter [Desktop-Release-Versionierung](#desktop-release-versionierung).
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
@@ -1176,7 +1176,7 @@ Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
 
 ### Produktidentität
 
-App-Name: **TTC Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
+App-Name: **TT Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
 Paketversion: **0.1.0** aus `package.json`. Das vorhandene TTC-Symbol wird
 für App, EXE und Installer verwendet. Der technische Profilname bleibt
 `ttc-rechnungsverwaltung`; eine Änderung der Herausgeberangabe verschiebt
@@ -1185,7 +1185,7 @@ Der Installer ist nicht digital signiert. Die Herausgeber-Metadaten ersetzen
 kein Zertifikat; eine SmartScreen-Anzeige eines unbekannten Herausgebers ist möglich.
 
 Der Installer legt für den aktuellen Benutzer eine Desktop-Verknüpfung und
-einen Startmenü-Eintrag **TTC Rechnungsverwaltung** an. Bei Neuinstallation
+einen Startmenü-Eintrag **TT Rechnungsverwaltung** an. Bei Neuinstallation
 beziehungsweise Update werden die Verknüpfungen bereitgestellt. Der Start
 benötigt weder ein Terminal noch einen separaten Backend-Aufruf. Die native
 Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.

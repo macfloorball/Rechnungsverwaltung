@@ -65,7 +65,7 @@ diesen Teilnachweis nicht als vollständig abgeschlossen markiert.
 - Eine Windows-10/11-x64-VM mit Snapshot und einem normalen Benutzer verwenden.
 - Auf der sauberen Zielinstallation sind Python, Node.js und npm nicht erforderlich.
 - Installer und zugehörige `.sha256`-Datei aus `dist/installer/` übertragen.
-- In PowerShell mit `Get-FileHash -Algorithm SHA256 '.\TTC Rechnungsverwaltung-0.1.0-windows-x64-setup.exe'`
+- In PowerShell mit `Get-FileHash -Algorithm SHA256 '.\TT Rechnungsverwaltung-0.1.0-windows-x64-setup.exe'`
   den Hash mit der Textdatei vergleichen.
 - Ausschließlich Testdaten verwenden; vor Update-/Deinstallationstests eine
   vollständige Sicherung über die Anwendung anlegen und außerhalb der VM sichern.

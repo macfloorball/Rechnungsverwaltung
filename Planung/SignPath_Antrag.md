@@ -4,7 +4,7 @@ Stand: 16.11.2026. Kein Antrag versendet, keine Aufnahme bestätigt.
 
 ## Projektangaben
 
-- Projekt: TTC Rechnungsverwaltung
+- Projekt: TT Rechnungsverwaltung
 - Repository: https://github.com/macfloorball/Rechnungsverwaltung
 - Maintainer: macfloorball (Paketautor: mac-floorball)
 - Zweck: lokale Vereinsabrechnung mit Electron, Python, SQLite und PDF-Ausgabe.

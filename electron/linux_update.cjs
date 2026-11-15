@@ -173,7 +173,7 @@ function createLinuxInstaller({ config, app, downloader, dialog, getMainWindow, 
         window = getMainWindow();
         const safe = () => window && !window.isDestroyed() && window.webContents.executeJavaScript(`!document.querySelector('dialog[open]:not(#desktop-update-dialog)') && !document.querySelector('[aria-busy="true"]')`, true);
         if (!await safe()) throw new UpdateError('INSTALL_BUSY');
-        const answer = await dialog.showMessageBox(window, { type: 'question', title: 'TTC Rechnungsverwaltung – AppImage-Update',
+        const answer = await dialog.showMessageBox(window, { type: 'question', title: 'TT Rechnungsverwaltung – AppImage-Update',
           message: `Version ${version} jetzt installieren?`, detail: 'Die App und ihr lokaler Server werden kontrolliert beendet. Ungespeicherte Eingaben gehen verloren. Das geprüfte AppImage wird am bisherigen Ort ersetzt und neu gestartet. Rechnungen und persönliche Dateien bleiben erhalten.',
           buttons: ['Abbrechen', 'Jetzt installieren'], defaultId: 0, cancelId: 0, noLink: true });
         if (answer.response !== 1) return;
