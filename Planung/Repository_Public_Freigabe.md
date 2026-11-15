@@ -32,7 +32,7 @@ Die Scans liefen lokal; kein Quellcode wurde an einen Scandienst übertragen.
 | Aktueller Stand | Separater `git archive HEAD`-Export ohne Secret-Befund. Ignorierte lokale Laufzeiten und Benutzerdaten wurden nicht aufgenommen. |
 | Historische Dateitypen | Keine versionierten Datenbanken, Rechnungs-PDFs, Backuparchive, `.env`-Dateien oder privaten Schlüsseldateien gefunden. Zwei binäre Versionen: App-Icon als PNG und ICO; SVG ebenfalls versioniert. |
 | Weitere Textprüfung | E-Mail-Kandidaten sind Test-/Beispieladressen, bewusst ungültige Authentifizierungs-URLs, ein Paket-Maintainerkontakt und ein Regex-Fehlalarm. IBAN-Literale liegen in Tests, Benutzerpfade sind Beispiele. Das bestätigt keine tatsächliche Kontoinhaberschaft der Beispiel-IBANs. |
-| Commit-Metadaten | Eine persönliche E-Mail-Identität neben einer GitHub-Systemadresse. Die persönliche Adresse wird hier nicht ausgeschrieben. Ihre spätere öffentliche Sichtbarkeit ist gesondert zu klären. |
+| Commit-Metadaten | Eine persönliche E-Mail-Identität neben einer GitHub-Systemadresse. Die persönliche Adresse wird hier nicht ausgeschrieben. Der Eigentümer hat am 15.11.2026 ausdrücklich bestätigt, dass die bestehende Historie mit dieser Adresse später öffentlich bleiben darf. |
 | Issues/PRs | 23 Einträge: zwei Issues und 21 PRs. Vollständige Titel/Beschreibungen zusätzlich lokal ohne Secret-Befund gescannt; keine Issue- oder Inline-PR-Kommentare vorhanden. Reviewtexte, Commit-Kommentare und ein möglicher separater Wiki-Bestand sind nicht vollständig geprüft. |
 | Releases/Actions | Keine Releases oder Entwürfe. Ein Actions-Lauf mit zwei ausgeführten Jobs, beide verfügbaren Logs lokal ohne Secret-Befund gescannt; zwei Buildjobs übersprungen und keine Artefakte für diesen Lauf. Normale Konto-/Commit-/Runnermetadaten in Logs würden ebenfalls öffentlich. |
 | Lizenz | Keine eigene Projekt-Lizenzdatei gefunden. Ohne Eigentümerentscheidung wurde keine Lizenz ergänzt. Rechte an Code/Icons und Hinweise mitgelieferter Abhängigkeiten sind für eine offene Lizenzfreigabe zu klären. |
@@ -43,11 +43,11 @@ tatsächlichen Veröffentlichung eine erneute Prüfung.
 
 ## Vor der Freigabe noch klären
 
-1. **Commit-E-Mail:** Veröffentlichung der bisherigen Identität bewusst
-   akzeptieren oder eine Bereinigung gesondert planen. Eine zukünftige
-   `noreply`-Adresse ändert alte Commits nicht. Keine Historie eigenständig
-   umschreiben oder Force-Pushes durchführen. PR-Refs, Logs und vorhandene Kopien
-   müssen bei einer Bereinigung ebenfalls berücksichtigt werden.
+1. **Commit-E-Mail – geklärt:** Der Eigentümer hat am 15.11.2026 die spätere
+   öffentliche Sichtbarkeit der bestehenden Historie einschließlich seiner
+   Hochschul-E-Mail ausdrücklich akzeptiert. Eine Bereinigung ist dafür nicht
+   erforderlich. Diese Entscheidung erlaubt noch keine Sichtbarkeitsänderung
+   des Repositorys. Eine zukünftige `noreply`-Adresse würde alte Commits nicht ändern.
 2. **Lizenz:** Entscheiden, unter welchen Bedingungen Nutzung, Änderung und
    Weitergabe erlaubt werden sollen. Öffentlich sichtbar ist nicht automatisch
    Open Source. Eine bewusste Veröffentlichung ohne zusätzliche Projektlizenz
