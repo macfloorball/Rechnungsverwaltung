@@ -14,6 +14,72 @@ import pytest
 import server_diagnostics
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows native standard-handle inheritance")
+def test_spawn_initializes_while_owner_control_pipe_is_being_read(tmp_path):
+    """Reach worker code before sending anything to the owner's stdin pipe."""
+    script = tmp_path / "spawn_app.py"
+    script.write_text('''
+import ctypes
+import functools
+import multiprocessing
+import sys
+import threading
+import time
+import uvicorn
+from scripts.managed_server import ManagedReload
+
+def worker(sockets=None):
+    print("WORKER_INITIALIZED", flush=True)
+
+if __name__ == "__main__":
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.GetStdHandle.argtypes = [ctypes.c_ulong]
+    kernel.GetStdHandle.restype = ctypes.c_void_p
+    original_handle = kernel.GetStdHandle(-10 & 0xffffffff)
+    original_input = sys.stdin
+    reading = threading.Event()
+    def control():
+        reading.set()
+        original_input.read(1)
+    threading.Thread(target=control, daemon=True).start()
+    assert reading.wait(2)
+    time.sleep(0.1)  # Let the synchronous ReadFile enter its pending state.
+    stop = multiprocessing.get_context("spawn").Event()
+    reloader = ManagedReload(uvicorn.Config("unused:app"), worker, [], stop)
+    for start in (reloader.startup, reloader.restart):
+        start()
+        assert sys.stdin is original_input
+        assert kernel.GetStdHandle(-10 & 0xffffffff) == original_handle
+        reloader.process.join(5)
+        assert reloader.process.exitcode == 0
+    try:
+        reloader._spawn_without_control_input(functools.partial(int, "invalid"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Expected operation failure")
+    assert sys.stdin is original_input
+    assert kernel.GetStdHandle(-10 & 0xffffffff) == original_handle
+    reloader.shutdown()
+''')
+    root = Path(__file__).resolve().parent.parent
+    env = os.environ | {"PYTHONPATH": str(root)}
+    with (tmp_path / "spawn.log").open("w+") as log:
+        process = subprocess.Popen([sys.executable, str(script)], env=env,
+                                   stdin=subprocess.PIPE, stdout=log, stderr=log)
+        try:
+            # Keep the owner pipe open and empty throughout both worker starts.
+            assert wait_for_exit(process, 12, tmp_path / "spawn.log") == 0
+            log.seek(0)
+            assert log.read().count("WORKER_INITIALIZED") == 2
+        finally:
+            if process.poll() is None:
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               capture_output=True, timeout=5)
+                process.wait(timeout=5)
+            process.stdin.close()
+
+
 def wait_for_exit(process, timeout, log_path):
     try:
         return process.wait(timeout=timeout)

@@ -295,6 +295,47 @@ Ein normaler Merge erzeugt weder GitHub Release noch öffentliche Binärdateien.
   Installation und manuelle Linux-GUI-/Updateabnahme wurden nicht ausgeführt.
   Die neue Pipeline ersetzt diese Abnahmen nicht.
 
+## Native Windows-Diagnose des Reload-Starts (15.11.2026)
+
+Auf `ddfe517` wurden die sechs Reload-Startfehler unter Windows mit Python
+3.13.17 x64, pip 26.1.2 und den unveränderten Pins aus `requirements-ci.txt`
+reproduziert: beide betroffenen Testdateien meldeten 6 Fehler und 5 Erfolge.
+Die Worker erreichten noch nicht einmal `sitecustomize`; ein Python-Stack des
+Workers konnte deshalb nicht aufgezeichnet werden. Ein isolierter Spawn-Test
+mit Event und Socket bestand. Derselbe Test mit einem bereits aus der
+Kontrollpipe lesenden Thread blockierte vor der Worker-Initialisierung,
+auch bei `sys.stdin = None`.
+
+Ursache ist die zusätzliche native Windows-Standardeingabe: `CreateProcess`
+übergibt dem Worker weiterhin den Handle der synchronen Kontrollpipe. Dessen
+Python-Initialisierung kann an der gleichzeitig ausstehenden Leseoperation
+blockieren ([CPython bpo-34780](https://bugs.python.org/issue34780)). Das reine
+Ersetzen des Python-Streamobjekts verhindert nur Uvicorns spätere
+`stdin_fileno`-Übergabe. `ManagedReload` setzt deshalb während jedes Workerstarts
+auch `STD_INPUT_HANDLE` auf einen separaten NUL-Handle und stellt ihn anschließend
+wieder her, auch bei Ausnahmen. Der Kontrollthread behält seine ursprüngliche
+Pipe; die kooperative Beendigung bleibt unverändert.
+
+Native Prüfung mit ausschließlich temporären Profilen und Testdaten:
+
+- Beide betroffenen Testdateien inklusive neuem Regressionstest: **12 bestanden**.
+  Der neue Test startet und erneuert Worker bei offener, leerer Kontrollpipe und
+  prüft die Handle-Wiederherstellung nach Erfolg und Ausnahme. Gegen eine isolierte
+  Kopie von `ddfe517` erreicht er den Worker-Code nicht; mit Korrektur besteht er.
+- Vollständige Python-Suite: **391 bestanden, 30 übersprungen, 6 fehlgeschlagen**.
+  Alle sechs verbleibenden Fehler sind `WinError 1314` beim Anlegen von Symlinks
+  in `test_api`, `test_complete_backup`, `test_database` und
+  `test_document_storage`. Dem lokalen Windows-Benutzer fehlt das Symlink-Recht.
+  Keine Tests wurden dafür deaktiviert und keine Betriebssystemrechte geändert.
+- Node **24.22.3**, Abhängigkeiten über `npm ci --no-audit --no-fund`, anschließend
+  `npm run desktop:check`: **185 bestanden, 18 übersprungen, kein Fehler**.
+- Die nativen Serverprüfungen liefen außerhalb der Agent-Sandbox: innerhalb
+  dieser Sandbox blockierte bereits ein Start ohne Reload in `socketpair/accept`.
+
+Der Reload-Fehler ist damit nativ behoben. Eine vollständig erfolgreiche
+Windows-Suite, ein neuer GitHub-CI-Lauf sowie Installer-/Updateabnahme bleiben
+offen. Es wurde nichts gepusht, getaggt oder veröffentlicht.
+
 ## Primärquellen
 
 - [Python Build Standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/20261110), [Distributionsformat](https://github.com/astral-sh/python-build-standalone/blob/main/docs/distributions.rst).

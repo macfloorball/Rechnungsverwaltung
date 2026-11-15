@@ -3,6 +3,7 @@ import argparse
 import functools
 import logging
 import multiprocessing
+import os
 import sys
 import threading
 
@@ -34,11 +35,37 @@ class ManagedReload(ChangeReload):
         # hold its buffered-reader lock. The owner pipe belongs to this process,
         # not to reload workers. Uvicorn supports sys.stdin being None.
         control_input = sys.stdin
+        null_input = None
         try:
             sys.stdin = None
+            if sys.platform == "win32":
+                import ctypes
+                import msvcrt
+
+                kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+                kernel.GetStdHandle.argtypes = [ctypes.c_ulong]
+                kernel.GetStdHandle.restype = ctypes.c_void_p
+                kernel.SetStdHandle.argtypes = [ctypes.c_ulong, ctypes.c_void_p]
+                kernel.SetStdHandle.restype = ctypes.c_int
+                stdin_handle = -10 & 0xffffffff  # STD_INPUT_HANDLE
+                owner_handle = kernel.GetStdHandle(stdin_handle)
+                null_input = open(os.devnull, "rb")
+                # sys.stdin=None only affects Uvicorn's Python-level handoff.
+                # Windows also gives CreateProcess children the native standard
+                # handle. Python startup can block on that synchronous pipe
+                # while the owner's control thread is reading it (bpo-34780).
+                if not kernel.SetStdHandle(stdin_handle, msvcrt.get_osfhandle(null_input.fileno())):
+                    raise ctypes.WinError(ctypes.get_last_error())
             operation()
         finally:
-            sys.stdin = control_input
+            try:
+                if null_input is not None:
+                    if not kernel.SetStdHandle(stdin_handle, owner_handle):
+                        raise ctypes.WinError(ctypes.get_last_error())
+            finally:
+                if null_input is not None:
+                    null_input.close()
+                sys.stdin = control_input
 
     def startup(self):
         self._spawn_without_control_input(super().startup)
