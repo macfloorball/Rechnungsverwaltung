@@ -37,8 +37,7 @@ def backend_process(tmp_path, *, damaged=False, reload=False, document_directory
         try:
             if damaged:
                 assert process.wait(timeout=10) != 0
-                log.seek(0)
-                assert "TTC_DATABASE_ERROR:corrupt" in log.read()
+                assert "TTC_DATABASE_ERROR:corrupt" in server_diagnostics.read(tmp_path / "process.log")
                 yield None
                 return
             url = f"http://127.0.0.1:{port}"

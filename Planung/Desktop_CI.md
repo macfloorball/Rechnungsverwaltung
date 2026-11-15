@@ -192,6 +192,22 @@ Diese Änderung betrifft nur Testdiagnose und Test-Synchronisation, nicht den
 produktiven Server oder dessen Zeitlimits. Die native Windows-Ursache bleibt
 bis zum nächsten Lauf mit sichtbarer Workerausgabe offen.
 
+Der [Lauf für f16300e](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43748976061)
+bestand unter Ubuntu und in der Windows-JavaScript-Prüfung. Die Windows-Python-
+Suite meldete weiterhin ausschließlich sechs Reload-Fehler (390 bestanden,
+30 übersprungen). In den Fehlerberichten erschienen keine Workerdateien. Die
+Erkennung über `--multiprocessing-fork` wird deshalb in der reinen Testdiagnose
+nicht mehr vorausgesetzt: Jeder testgestartete Python-Prozess schreibt ab
+`sitecustomize` in eine eigene `python-<PID>.log`. Zusätzlich werden ausführbarer
+Python-Pfad, Prozessargumente/-flags und vom Supervisor beobachtete Worker-PIDs
+samt Exitcode protokolliert. So werden auch fehlender Eintritt in die Python-
+Initialisierung oder ein sehr früher Worker-Abbruch unterscheidbar. Die Ausgabe
+ist auf temporäre Testprozesse beschränkt; Produktivcode und Zeitlimits bleiben
+unverändert. Der Windows-Reload-Fehler ist weiterhin offen.
+Lokal bestanden die elf Server-/Lebenszyklustests. Die erzeugten Diagnose-
+dateien enthielten Prozessstarts, Workerstarts/-exits und die erwartete Meldung
+für eine absichtlich beschädigte Testdatenbank.
+
 Versionspins ersetzen keine Lieferkettenprüfung. Updates dieser Pins sollen in
 eigenen geprüften Änderungen erfolgen. Die Hosted-Runner-Images werden trotz
 festgelegter OS-Generation von GitHub aktualisiert; Signaturen und Zeitstempel
