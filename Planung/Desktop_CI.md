@@ -148,6 +148,23 @@ Electron-Szenarien** (Entwicklung/Produktion und Standard-/eigene Dokumentenabla
 Sicherung, Export, Wiederherstellung und Wiederanlauf nach Absturz wurden dabei
 erneut geprüft. Diese Linux-Ergebnisse ersetzen die Windows-CI-Bestätigung nicht.
 
+Der [Windows-Lauf für 935dcf9](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43732206912)
+belegt diese Grenze: JavaScript und Ubuntu blieben erfolgreich, die Windows-
+Python-Suite meldete weiterhin sechs Reload-Startfehler und zusätzlich einen
+Shutdown-Timeout ohne Reload (389 bestanden, 30 übersprungen). Die bisherigen
+Änderungen haben den nativen Windows-Start damit noch nicht nachweislich behoben.
+
+Als nächster Diagnoseschritt aktivieren ausschließlich die temporären
+Server-Testprozesse über ihre lokale `sitecustomize.py` alle fünf Sekunden
+`faulthandler`-Stackausgaben. Dies erfasst Supervisor und Spawn-Worker, ohne
+Variableninhalte auszugeben. Auch ein Shutdown-Timeout gibt jetzt den zugehörigen
+Serverlog aus. Produktivcode und sämtliche Zeitlimits bleiben in diesem
+Diagnoseschritt unverändert. Die Stackposition im nächsten Windows-Lauf soll
+die tatsächlich blockierende Stelle bestimmen, statt weitere unbestätigte
+Anwendungsänderungen vorzunehmen.
+Die elf betroffenen Server-/Lebenszyklustests bestanden lokal mit dieser
+Diagnoseergänzung; der native Windows-Fehler bleibt bis zur Auswertung offen.
+
 Versionspins ersetzen keine Lieferkettenprüfung. Updates dieser Pins sollen in
 eigenen geprüften Änderungen erfolgen. Die Hosted-Runner-Images werden trotz
 festgelegter OS-Generation von GitHub aktualisiert; Signaturen und Zeitstempel

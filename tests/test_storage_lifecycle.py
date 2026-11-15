@@ -15,6 +15,9 @@ import pytest
 
 @contextmanager
 def backend_process(tmp_path, *, damaged=False, reload=False, document_directory=None):
+    (tmp_path / "sitecustomize.py").write_text(
+        'import faulthandler\nfaulthandler.dump_traceback_later(5, repeat=True)\n'
+    )
     root = Path(__file__).resolve().parent.parent
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -63,7 +66,11 @@ def backend_process(tmp_path, *, damaged=False, reload=False, document_directory
                 process.stdin.write(b"shutdown\n")
                 process.stdin.close()
                 try:
-                    assert process.wait(timeout=10) == 0
+                    try:
+                        result = process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        raise AssertionError((tmp_path / "process.log").read_text(errors="replace")) from None
+                    assert result == 0
                 finally:
                     if process.poll() is None:
                         process.kill()
