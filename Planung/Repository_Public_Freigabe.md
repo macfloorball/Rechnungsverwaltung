@@ -5,7 +5,7 @@ des gesamten Repositorys grundsätzlich vor. Die tatsächliche Änderung ist noc
 nicht freigegeben. Repository und Release-Policy bleiben privat, produktive
 Updates deaktiviert. Ein Release-Umbau nur wegen GitHub Pro ist nicht vorgesehen.
 
-## Geprüfter Umfang
+## Erste Prüfung und damaliger Umfang
 
 Ausgangscommit des Update-Branches:
 `14d583a7aaf50f1b023ce3c029b7e7cb39d1332d`.
@@ -41,7 +41,10 @@ Ein Scan ohne Befund beweist nicht die Abwesenheit beliebiger vertraulicher
 Inhalte. Neue Commits, Kommentare, Logs und Artefakte erfordern vor einer
 tatsächlichen Veröffentlichung eine erneute Prüfung.
 
-## Vor der Freigabe noch klären
+## Entscheidungen und damalige offene Punkte
+
+Die damaligen GitHub-/CI-Befunde in diesem Abschnitt sind historisch. Für den
+aktuellen Freigabestand gilt die erneute Prüfung weiter unten.
 
 1. **Commit-E-Mail – geklärt:** Der Eigentümer hat am 15.11.2026 die spätere
    öffentliche Sichtbarkeit der bestehenden Historie einschließlich seiner
@@ -75,6 +78,66 @@ Quellen: [GitHub: Commit-E-Mail](https://docs.github.com/en/account-and-profile/
 [Lizenzierung](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
 
 ## Spätere Umstellung und Update-Vertrauen
+
+### Erneute Prüfung vor der Sichtbarkeitsentscheidung (15.11.2026)
+
+Geprüfter Quellstand: `d66bbd85d288452bc1d24fc40b3878fa0f78b7ff`.
+Remote-Branches, Tags und PR-Kopfstände wurden erneut abgerufen. Die erreichbare
+Historie umfasst jetzt **390 Commits und 756 Datei-Blobs** (11.725.272 Bytes),
+der aktuelle Git-Export **170 versionierte Dateien**. Der Diffscan meldet
+246 ausgewertete Commits mit Diffs. Diffscan, vollständiger Blobscan und
+separater aktueller Git-Export blieben mit Gitleaks 8.30.1 ohne Secret-Befund.
+Commit-Metadaten wurden zusätzlich exportiert und gescannt. Weiterhin bestehen
+zwei Commit-E-Mail-Identitäten; die Veröffentlichung der persönlichen Identität
+ist wie oben vom Eigentümer akzeptiert.
+
+Die ergänzende Dateityp-/Textprüfung fand weiterhin keine versionierten
+Rechnungs-PDFs, Datenbanken, Backuparchive oder privaten Schlüsseldateien.
+Binärinhalte sind ausschließlich die beiden bekannten App-Icon-Dateien.
+Kontakt-/IBAN-/Benutzerpfadkandidaten liegen weiterhin in den bereits geprüften
+Testfixtures und Beispielen, nicht in einem versionierten Benutzerprofil.
+
+Auf GitHub wurden erneut geprüft:
+
+- **24 Issues/PRs** (drei Issues, 21 PRs) einschließlich vollständiger Titel und
+  Beschreibungen. Keine Issue-Kommentare, Inline-PR-Kommentare oder PR-Reviews.
+- Kommentarendpunkte für **alle 390 erreichbaren Commits**: keine Kommentare.
+- **Neun Actions-Läufe**, einschließlich aller über die API gelisteten Versuche:
+  24 verfügbare ausgeführte Joblogs lokal gescannt, ohne Secret-Befund. Zwei
+  weitere Jobs waren abgebrochen und hatten keine ausgeführten Schritte;
+  ihre Logs waren nicht abrufbar. Übersprungene Jobs wurden nicht als ausgeführt
+  gezählt. Die gescannten GitHub-Texte, Logs und Commit-Metadaten umfassen rund
+  2,50 MB. Keine Actions-Artefakte und keine Releases/Entwürfe vorhanden.
+- Discussions und Pages sind deaktiviert. Das Wiki ist als Funktion aktiviert;
+  der Eigentümer bestätigte bei direkter Ansicht, dass nur die Aufforderung zum
+  Anlegen der ersten Seite erscheint. Der Wiki-Inhalt wurde damit durch den
+  Eigentümer, nicht durch einen erfolgreichen automatischen Clone, geprüft.
+  Ein zusätzlicher HTTPS-Git-Leseversuch öffnete einen Anmeldedialog und wurde
+  ohne Eingabe von Zugangsdaten beendet.
+
+Der [CI-Lauf für 7f51f08](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/43753909719)
+ist vollständig erfolgreich: Windows-/Ubuntu-Testjobs und beide vollständigen
+Paketbuilds einschließlich Laufzeitprüfungen. Die danach ergänzte lokale
+Lizenzdokumentation ändert keinen Anwendungscode. Die früher oben dokumentierten
+CI-Blocker sind damit historisch; Signierung und tatsächliche Update-Abnahme
+bleiben gesonderte offene Aufgaben.
+
+Die Branch-Regel für `Entwicklung-App` und die Tag-Regel für `desktop-v*` wurden
+in diesem Chat auf GitHub als aktiv und korrekt bestätigt. Die persönliche
+Commit-Identität und die Veröffentlichung ohne allgemeine Projektlizenz sind
+entschieden. Bei dieser erneuten Prüfung wurden keine konkreten zusätzlichen
+vertraulichen Inhalte festgestellt. Dies ist kein Ausschluss unbekannter Inhalte
+in nicht erreichbaren Serverobjekten oder externen Kopien. Neue Inhalte nach
+diesem Stand benötigen erneut eine Prüfung.
+
+**Die tatsächliche Sichtbarkeitsänderung ist weiterhin nicht freigegeben.**
+Vor der Bestätigung muss dem Eigentümer klar sein, dass auch Historie, Issues,
+PRs und Actions-Logs öffentlich werden und Kopien/Forks bestehen bleiben können.
+Repository und `desktop-release-policy.json` bleiben bis zur gesonderten
+Umstellung privat; `enabled` bleibt `false`. Es wurden keine GitHub-Inhalte
+gelöscht, keine Historie umgeschrieben, keine Releases erzeugt und keine
+Zugangsdaten eingegeben. Rohberichte und Logkopien verbleiben außerhalb des
+Repositorys unter `/tmp`.
 
 Dasselbe öffentliche Repository kann den vorbereiteten Releaseprozess mit
 Pflichtfreigabe verwenden. Die Umstellung möglichst **vor der ersten tatsächlich
