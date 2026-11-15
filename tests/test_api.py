@@ -3116,3 +3116,41 @@ def test_database_failure_returns_actionable_503_without_recreating(client, corr
     else:
         assert "fehlt" in response.json()["detail"]
         assert not path.exists()
+
+
+def test_delete_after_another_request_completed_returns_not_found_and_preserves_invariants(client, invoice_draft, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, Lock
+    from backend.database import get_organization, list_records
+    import backend.main as main
+
+    period, invoice_id, _ = invoice_draft
+    database = client.app.state.test_database_path
+    assert client.post("/api/invoices", json=period).status_code == 201
+    sequence = get_organization(database)["next_invoice_number"]
+    entered, release, guard = Event(), Event(), Lock()
+    original, calls = main.get_owned_invoice_document, 0
+
+    def ownership_after_concurrent_delete(invoice, path):
+        nonlocal calls
+        with guard:
+            calls += 1
+            first = calls == 1
+        if first:
+            entered.set()
+            assert release.wait(5)
+        return original(invoice, path)
+
+    monkeypatch.setattr(main, "get_owned_invoice_document", ownership_after_concurrent_delete)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(client.delete, f"/api/invoices/{invoice_id}")
+        try:
+            assert entered.wait(5)
+            second = executor.submit(client.delete, f"/api/invoices/{invoice_id}")
+            assert second.result(timeout=5).status_code == 204
+        finally:
+            release.set()
+        assert first.result(timeout=5).status_code == 404
+    assert list_records("invoices", database_path=database) == []
+    assert get_organization(database)["next_invoice_number"] == sequence
+    assert not list(client.app.state.test_invoice_directory.iterdir())

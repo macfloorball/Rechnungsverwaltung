@@ -1112,6 +1112,9 @@ sicher beschreibbare AppImages nach Bestätigung atomar. Bei ungeeigneten Pfaden
 bleibt die manuelle Aktualisierung vorgesehen; DEB/RPM werden nicht eingeführt.
 [Offlinebetrieb und Fehlerbehandlung](Planung/Desktop_Update_Fehlerbehandlung.md)
 sichern Abbruch, konkurrierende Aktionen und Neustart-Bereinigung ab.
+Die [Regressionstestmatrix](Planung/Desktop_Update_Tests.md) beschreibt die
+automatisierten Prüfungen und grenzt echte Linux-/Electron-Ausführung von
+Testadaptern und noch ausstehender nativer Installationsabnahme ab.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen

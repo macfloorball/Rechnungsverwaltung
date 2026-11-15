@@ -22,10 +22,17 @@ def serve(config, stop, sockets=None):
 
 
 class ManagedReload(ChangeReload):
+    def __init__(self, config, target, sockets, worker_stop):
+        super().__init__(config, target, sockets)
+        # The filesystem watcher already captured should_exit in its constructor.
+        # Keep that event and signal the separate cross-process event explicitly.
+        self.worker_stop = worker_stop
+
     def shutdown(self):
         # The shared event requests graceful shutdown inside the worker, including
         # on Windows where SIGTERM/taskkill would otherwise terminate immediately.
         self.should_exit.set()
+        self.worker_stop.set()
         self.process.join(17)
         forced = self.process.is_alive()
         if forced:
@@ -57,18 +64,22 @@ def main():
     )
     stop = multiprocessing.get_context("spawn").Event()
 
+    reloader = None
+    if args.reload:
+        sock = config.bind_socket()
+        reloader = ManagedReload(config, target=functools.partial(serve, config, stop), sockets=[sock], worker_stop=stop)
+
     def control():
         # EOF also covers a launcher that disappears without a normal shutdown.
         for line in sys.stdin:
             if line.strip() == "shutdown":
                 break
         stop.set()
+        if reloader is not None:
+            reloader.should_exit.set()
 
     threading.Thread(target=control, daemon=True).start()
-    if args.reload:
-        sock = config.bind_socket()
-        reloader = ManagedReload(config, target=functools.partial(serve, config, stop), sockets=[sock])
-        reloader.should_exit = stop
+    if reloader is not None:
         reloader.run()
     else:
         serve(config, stop)

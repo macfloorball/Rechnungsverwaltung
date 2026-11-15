@@ -881,6 +881,9 @@ def delete_invoice(
         if existing_invoice["pdf_path"]:
             get_owned_invoice_document(existing_invoice, database_path)
     except InvoiceDocumentAssociationError as error:
+        # Another completed deletion can invalidate the earlier ownership snapshot.
+        if get_invoice(invoice_id, database_path) is None:
+            raise HTTPException(404, "Endgültige Rechnung wurde nicht gefunden") from None
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Die zugehörige PDF-Datei konnte nicht sicher zugeordnet werden",

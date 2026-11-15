@@ -76,3 +76,50 @@ def test_shutdown_finishes_active_request(tmp_path: Path, reload: bool, control:
                 else:
                     os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=5)
+
+
+@pytest.mark.parametrize("control", ["command", "eof"])
+def test_idle_reload_stops_without_waiting_for_a_filesystem_event(tmp_path, control):
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    (watched / "sample_app.py").write_text('from fastapi import FastAPI\napp=FastAPI()\n@app.get("/health")\ndef health(): return {"ok": True}\n')
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    root = Path(__file__).resolve().parent.parent
+    wrapper = """
+import uvicorn.supervisors.watchfilesreload as module
+from scripts.managed_server import main
+original = module.watch
+def slow(*args, **kwargs):
+    kwargs['rust_timeout'] = 60000
+    return original(*args, **kwargs)
+module.watch = slow
+main()
+"""
+    env = os.environ | {"PYTHONPATH": os.pathsep.join([str(watched), str(root)]), "PYTHONDONTWRITEBYTECODE": "1"}
+    # Logs stay outside watched: log writes must not accidentally wake the watcher.
+    with (tmp_path / "server.log").open("w") as log:
+        process = subprocess.Popen([sys.executable, "-c", wrapper, "sample_app:app", "--host", "127.0.0.1", "--port", str(port), "--reload", "--reload-dir", str(watched)],
+                                   cwd=tmp_path, env=env, stdin=subprocess.PIPE, stdout=log, stderr=log, start_new_session=os.name != "nt")
+        try:
+            deadline = time.monotonic() + 10
+            while True:
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.2):
+                        break
+                except OSError:
+                    assert process.poll() is None, (tmp_path / "server.log").read_text()
+                    assert time.monotonic() < deadline
+                    time.sleep(0.05)
+            if control == "command":
+                process.stdin.write(b"shutdown\n")
+            process.stdin.close()
+            assert process.wait(timeout=5) == 0
+        finally:
+            if process.poll() is None:
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=5)
+                else:
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)

@@ -28,6 +28,8 @@ let expectedHTTPFailure = null;
 shell.openExternal = async (url) => { handoffs.push(url); };
 dialog.showErrorBox = (_title, message) => { errors.push(message); };
 app.on('browser-window-created', (_event, window) => {
+  // Test screenshots must also complete when the desktop obscures this window.
+  window.webContents.setBackgroundThrottling(false);
   window.webContents.on('console-message', (event) => {
     if (expectedHTTPFailure && new RegExp(`Failed to load resource.*${expectedHTTPFailure}`).test(event.message)) return;
     if (event.level === 'error') errors.push(event.message);
@@ -451,7 +453,10 @@ async function run() {
   console.log('DESKTOP_BILLABLE_CHECK saved');
   await js(`(async () => {
     document.querySelector('#invoice-preview').scrollIntoView({behavior:'instant',block:'center'});
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise(resolve => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+      setTimeout(resolve, 250);
+    });
   })()`);
   await fs.writeFile(path.join(output, 'preview.png'), (await contents.capturePage()).toPNG());
 
