@@ -16,6 +16,7 @@ test('Windows package contains runtime source and build, but no user or developm
     await fs.mkdir(path.join(root, name), { recursive: true });
   }
   const files = {
+    'LICENSE': 'Project MIT license', 'THIRD_PARTY_NOTICES.md': 'Third-party notices',
     'package.json': JSON.stringify({ name:'ttc-rechnungsverwaltung',productName:'TT Rechnungsverwaltung',version:'0.1.0',author:'mac-floorball',desktopAppId:'de.mac-floorball.ttc-rechnungsverwaltung',main:'electron/main.cjs',devDependencies:{electron:'45.3.1'} }),
     'scripts/run.cjs':'// runtime launcher', 'scripts/managed_server.py':'# lifecycle adapter',
     'scripts/package_windows.cjs':'// excluded build tool', 'scripts/private.env':'PRIVATE',
@@ -28,6 +29,9 @@ test('Windows package contains runtime source and build, but no user or developm
   await fs.writeFile(path.join(root, 'package-lock.json'), JSON.stringify({ version: '0.1.0', packages: { '': { version: '0.1.0' } } }));
   await prepareWindowsSource(root, target);
   const entries = await fs.readdir(target, { recursive: true });
+  for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
+    assert.equal(await fs.readFile(path.join(target, name), 'utf8'), files[name]);
+  }
   for (const expected of ['electron/main.cjs', 'backend/main.py','backend/paths.py','backend/storage_import.py','backend/storage_errors.py','dist/frontend/index.html','dist/frontend/desktop-build.json','requirements.txt','scripts/run.cjs','scripts/managed_server.py']) {
     assert.ok(entries.includes(expected.split('/').join(path.sep)), expected);
   }

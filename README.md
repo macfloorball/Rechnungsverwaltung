@@ -20,6 +20,11 @@ jeweiligen Lizenzen und Urheberhinweisen; sie werden dadurch nicht neu lizenzier
 Die Lizenz erteilt keinen Schreibzugriff auf dieses Repository und keinen
 Zugriff auf die privaten Signierschlüssel für offizielle Updates.
 
+Eine Übersicht der mitgelieferten Fremdkomponenten und ihrer Lizenzdateien steht
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Der aktuelle Prüfstand und
+offene Punkte vor einer Binärveröffentlichung stehen in der
+[Desktop-Lizenzprüfung](Planung/Desktop_Lizenzpruefung.md).
+
 ## Funktionen
 
 - Tätigkeiten und Stundenpreise verwalten.
