@@ -8,7 +8,7 @@ function createUpdateController({ service, credentials, downloader, installer })
   const shown = new Set(), deferred = new Set(), listeners = new Set();
   let credentialChange = false;
   function getStatus() {
-    const status = service.getStatus();
+    const status = { ...service.getStatus(), installationHint: installer?.getPolicy?.().message || null };
     const installation = installer?.getStatus();
     if (installation) return Object.freeze({ ...status, ...installation, availableVersion: installation.version, promptVersion: null, canDownload: false, canInstall: false });
     const transfer = downloader?.getStatus();

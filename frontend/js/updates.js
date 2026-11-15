@@ -72,8 +72,9 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
       error: "Die Update-Prüfung konnte nicht abgeschlossen werden.", downloading: "Das Update wird heruntergeladen …",
       downloaded: "Das Update wurde heruntergeladen und geprüft. Die automatische Installation ist noch nicht verfügbar.",
     };
-    labels.preparing_install = "Die Windows-Installation wird vorbereitet …";
+    labels.preparing_install = "Die Installation wird vorbereitet …";
     labels.install_handoff = "Die App wird für die Installation beendet …";
+    if (next.state === "downloaded" && next.installationHint) labels.downloaded = next.installationHint;
     if (next.state === "downloaded" && next.canInstall) labels.downloaded = "Das Update ist geprüft und zur Installation bereit.";
     let label = labels[next.state];
     if (next.state === "downloading" && next.download?.phase === "verifying") label = "Das heruntergeladene Paket wird geprüft …";
@@ -96,9 +97,11 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
       ? "Der Token wird nur für diese Update-Quelle verwendet. Du kannst den gespeicherten Zugang jederzeit entfernen."
       : "Für diese App-Version wird derzeit kein neuer GitHub-Zugang benötigt.";
     nowButton.disabled = installBusy || busy || (!(eligible() && next.canDownload === true) && !next.canInstall) || (dialog.open && dialogVersion !== next.availableVersion);
-    get("desktop-update-unavailable").hidden = next.canDownload === true || ["downloading", "downloaded"].includes(next.state);
+    const installHint = typeof next.installationHint === "string" ? next.installationHint.slice(0, 600) : "";
+    get("desktop-update-unavailable").textContent = installHint || "Automatisches Aktualisieren ist derzeit nicht verfügbar. Bitte verwende einen geprüften Installer oder verschiebe das Update.";
+    get("desktop-update-unavailable").hidden = !installHint && (next.canDownload === true || ["downloading", "downloaded"].includes(next.state));
     nowButton.textContent = next.state === "downloading" ? "Wird heruntergeladen …"
-      : next.canInstall ? "Jetzt installieren" : next.state === "downloaded" ? "Download geprüft" : "Jetzt aktualisieren";
+      : next.canInstall ? "Jetzt installieren" : next.state === "downloaded" ? "Download geprüft" : installHint ? "Update herunterladen" : "Jetzt aktualisieren";
     laterButton.textContent = next.state === "downloading" ? "Im Hintergrund weiterladen" : "Später";
     if (dialog.open && dialogVersion !== next.availableVersion && !["downloading", "downloaded"].includes(next.state)) {
       message(get("desktop-update-dialog-error"), "Diese Update-Freigabe ist nicht mehr aktuell. Bitte erneut prüfen.");
@@ -107,7 +110,7 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
       message(get("desktop-update-dialog-error"), next.error.message.slice(0, 600));
     }
     if (dialog.open && next.state === "downloaded") {
-      message(get("desktop-update-dialog-error"), next.canInstall ? "Das Paket ist geprüft. Zur Installation wird die App nach erneuter Bestätigung beendet." : "Das Paket wurde geprüft. Die automatische Installation ist noch nicht verfügbar.");
+      message(get("desktop-update-dialog-error"), next.canInstall ? "Das Paket ist geprüft. Zur Installation wird die App nach erneuter Bestätigung beendet." : (next.installationHint || "Das Paket wurde geprüft. Die automatische Installation ist noch nicht verfügbar."));
       laterButton.textContent = "Schließen";
     }
     renderProgress();

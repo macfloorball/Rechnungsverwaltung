@@ -135,3 +135,14 @@ test('verified Windows update offers a separate version-bound install action', a
   assert.equal(ui.get('check-desktop-updates').attributes.get('aria-busy'), 'false');
   ui.dispose();
 });
+
+
+test('unsupported AppImage location explains manual fallback before a download is offered', async () => {
+  const hint = 'Dieses AppImage bitte manuell aus dem freigegebenen Repository aktualisieren.';
+  const ui = fixture({ ...available, canDownload: true, installationHint: hint });
+  await ui.dispose.ready;
+  assert.equal(ui.get('desktop-update-unavailable').hidden, false);
+  assert.equal(ui.get('desktop-update-unavailable').textContent, hint);
+  assert.equal(ui.get('desktop-update-now').textContent, 'Update herunterladen');
+  ui.dispose();
+});

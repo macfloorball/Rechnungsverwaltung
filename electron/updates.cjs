@@ -4,6 +4,7 @@ const { compareVersions, parseVersion } = require('./version.cjs');
 const { createUpdateTransport } = require('./update_transport.cjs');
 const { createUpdateCredentials, validToken } = require('./update_credentials.cjs');
 const { createUpdateDownloader } = require('./update_download.cjs');
+const { createLinuxInstaller } = require('./linux_update.cjs');
 const { createWindowsInstaller } = require('./windows_update.cjs');
 const { createUpdateController } = require('./update_controller.cjs');
 
@@ -129,7 +130,7 @@ function createDesktopUpdates({ app, safeStorage, metadata = require('../package
   const credentials = createUpdateCredentials({ safeStorage, profile: app.getPath('userData'), platform });
   const service = createUpdateService({ config, getToken: credentials.getToken });
   const downloader = createUpdateDownloader({ config, profile: app.getPath('userData'), getCandidate: service.getCandidate, getToken: credentials.getToken });
-  const installer = createWindowsInstaller({ config, app, downloader, platform, getCandidate: service.getCandidate, ...installation });
+  const installer = (platform === 'linux' ? createLinuxInstaller : createWindowsInstaller)({ config, app, downloader, platform, getCandidate: service.getCandidate, ...installation });
   return { credentials, service, downloader, installer, controller: createUpdateController({ service, credentials, downloader, installer }) };
 }
 module.exports = { createUpdateService, createDesktopUpdates };

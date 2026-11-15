@@ -90,6 +90,7 @@ if (!primaryInstance) app.quit();
 else app.whenReady().then(async () => {
   const config = getDesktopConfig(process.env, process.argv, app.isPackaged);
   if (process.platform === 'win32' && app.isPackaged) await require('./windows_update.cjs').checkWindowsUpdateLock(app.getPath('userData'));
+  if (process.platform === 'linux' && app.isPackaged) await require('./linux_update.cjs').checkLinuxUpdateLock(app);
   const backendOptions = { config, root: app.getAppPath(), env: { ...process.env, TTC_DATA_DIRECTORY: process.env.TTC_DATA_DIRECTORY || app.getPath('userData') }, onFailure: fail };
   backend = createBackend(backendOptions);
   await backend.start();

@@ -15,7 +15,7 @@ const CLEAR_UPDATE_ACCESS_CHANNEL = 'ttc:request:updates:clear-access';
 const UPDATE_STATUS_CHANNEL = 'ttc:event:updates:status';
 const ACTION_ERRORS = Object.freeze({
   INSTALL_BUSY: 'Bitte laufende Vorgänge abschließen und andere Dialoge schließen.',
-  INSTALL_UNAVAILABLE: 'Die sichere Windows-Installation ist nicht verfügbar. Bitte einen vollständigen geprüften Installer verwenden.',
+  INSTALL_UNAVAILABLE: 'Die sichere automatische Installation ist hier nicht verfügbar. Bitte einen vollständigen geprüften Installer verwenden.',
   UPDATE_CHANGED: 'Die Update-Freigabe hat sich geändert. Bitte erneut prüfen.',
   DOWNLOAD_BUSY: 'Ein Download läuft bereits. Bitte dessen Abschluss abwarten.',
   UPDATE_BUSY: 'Der GitHub-Zugang wird bereits bearbeitet. Bitte kurz warten.',

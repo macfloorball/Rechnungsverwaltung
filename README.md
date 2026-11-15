@@ -1106,7 +1106,10 @@ Nutzerzustimmung implementiert. Die
 [Windows-Installationsübergabe](Planung/Desktop_Windows_Update.md) nutzt den
 vorhandenen sichtbaren NSIS-Installer nach erneuter Bestätigung. Native Windows-
 Abnahme und produktive Vertrauensinfrastruktur stehen aus; ohne konfigurierte
-Vertrauensdaten bleibt der Updateweg gesperrt. Linux-Installation folgt separat.
+Vertrauensdaten bleibt der Updateweg gesperrt. Der
+[Linux-AppImage-Updateweg](Planung/Desktop_Linux_Update.md) ersetzt benutzereigene,
+sicher beschreibbare AppImages nach Bestätigung atomar. Bei ungeeigneten Pfaden
+bleibt die manuelle Aktualisierung vorgesehen; DEB/RPM werden nicht eingeführt.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
