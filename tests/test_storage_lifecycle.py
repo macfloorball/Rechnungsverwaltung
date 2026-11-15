@@ -11,10 +11,12 @@ import urllib.error
 import urllib.request
 
 import pytest
+import server_diagnostics
 
 
 @contextmanager
 def backend_process(tmp_path, *, damaged=False, reload=False, document_directory=None):
+    server_diagnostics.configure(tmp_path, tmp_path)
     root = Path(__file__).resolve().parent.parent
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -35,8 +37,7 @@ def backend_process(tmp_path, *, damaged=False, reload=False, document_directory
         try:
             if damaged:
                 assert process.wait(timeout=10) != 0
-                log.seek(0)
-                assert "TTC_DATABASE_ERROR:corrupt" in log.read()
+                assert "TTC_DATABASE_ERROR:corrupt" in server_diagnostics.read(tmp_path / "process.log")
                 yield None
                 return
             url = f"http://127.0.0.1:{port}"
@@ -46,8 +47,8 @@ def backend_process(tmp_path, *, damaged=False, reload=False, document_directory
                     with urllib.request.urlopen(url + "/api/health", timeout=0.2):
                         break
                 except OSError:
-                    assert process.poll() is None, (tmp_path / "process.log").read_text()
-                    assert time.monotonic() < deadline
+                    assert process.poll() is None, server_diagnostics.read(tmp_path / "process.log")
+                    assert time.monotonic() < deadline, server_diagnostics.read(tmp_path / "process.log")
                     time.sleep(0.05)
 
             def request(method, endpoint, payload=None, expected=200):
@@ -63,7 +64,11 @@ def backend_process(tmp_path, *, damaged=False, reload=False, document_directory
                 process.stdin.write(b"shutdown\n")
                 process.stdin.close()
                 try:
-                    assert process.wait(timeout=10) == 0
+                    try:
+                        result = process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        raise AssertionError(server_diagnostics.read(tmp_path / "process.log")) from None
+                    assert result == 0
                 finally:
                     if process.poll() is None:
                         process.kill()

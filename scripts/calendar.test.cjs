@@ -7,7 +7,7 @@ const vm=require('node:vm');
 
 // Isolate the calendar's request/error handling; the actual desktop flow is
 // additionally exercised with the browser DOM in the graphical integration test.
-function calendar(fetch) {
+function calendar(fetch, lineEnding) {
   function node(){return {hidden:true,disabled:false,textContent:'',events:{},attributes:{},
     addEventListener(name,fn){this.events[name]=fn;},
     setAttribute(name,value){this.attributes[name]=value;},
@@ -15,19 +15,21 @@ function calendar(fetch) {
   const elements=new Map();
   const document={querySelector(selector){if(!elements.has(selector))elements.set(selector,node());return elements.get(selector);},addEventListener(){},createElement:node};
   const source=fs.readFileSync(path.join(__dirname,'../frontend/js/calendar.js'),'utf8')
-    .replace(/^import .*;\n/,'').replace('export function initializeCalendar','function initializeCalendar');
+    .replace(/\r?\n/g,lineEnding)
+    .replace(/^import .*;\r?\n/,'').replace('export function initializeCalendar','function initializeCalendar');
   vm.runInNewContext(source+'\ninitializeCalendar();',{
     document,fetch,bindTrainingEditor(){},window:{confirm:()=>false},Intl,Date,Error,
   });
   return elements;
 }
 
-for(const kind of ['HTTP','network'])test(`calendar shows ${kind} failures and recovers on retry`,async()=>{
+for(const [ending,lineEnding] of [['LF','\n'],['CRLF','\r\n']])
+for(const kind of ['HTTP','network'])test(`calendar shows ${kind} failures and recovers on retry (${ending})`,async()=>{
   let fail=true;
   const elements=calendar(async()=>{
     if(fail){if(kind==='network')throw Error('Verbindung unterbrochen');return {ok:false,status:503};}
     return {ok:true,json:async()=>({year:2026,month:11,days:[]})};
-  });
+  },lineEnding);
   await new Promise(setImmediate);
   const message=elements.get('#calendar-error');
   assert.equal(message.hidden,false);

@@ -13,11 +13,26 @@ test('installed build uses embedded Python exclusively and rejects missing runti
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-embedded-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'packaged-runtime.json'), '{}');
-  assert.throws(() => launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root), /Laufzeit fehlt/);
+  assert.throws(() => launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root, 'win32'), /Laufzeit fehlt/);
   const directory = path.join(root, 'runtime', 'python');
   fs.mkdirSync(directory, { recursive: true });
   fs.writeFileSync(path.join(directory, 'python.exe'), 'fixture');
-  assert.equal(launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root).python, path.join(directory, 'python.exe'));
+  assert.equal(launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root, 'win32').python, path.join(directory, 'python.exe'));
+});
+
+test('Linux package uses isolated bundled Python instead of host overrides', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-linux-launch-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'packaged-runtime.json'), '{}');
+  assert.throws(() => launchConfig('desktop-production', {}, root, 'linux'), /Laufzeit fehlt/);
+  const python = path.join(root, 'runtime', 'python', 'bin', 'python3.13');
+  fs.mkdirSync(path.dirname(python), { recursive: true });
+  fs.writeFileSync(python, 'fixture');
+  const config = launchConfig('desktop-production', { TTC_PYTHON: '/untrusted/python' }, root, 'linux');
+  assert.equal(config.python, python);
+  assert.deepEqual(config.args.slice(0, 3), ['-I', '-B', '-c']);
+  assert.equal(config.args[4], root);
+  assert.equal(config.args[5], 'backend.main:app');
 });
 
 test('development uses one Uvicorn service and the development address', () => {
@@ -86,4 +101,16 @@ test('Dokumenten-Startmarker werden auch über mehrere Ausgabeblöcke erkannt', 
   await once(child, 'close');
   assert.equal(child.documentError, 'space');
   assert.equal(child.databaseError, undefined);
+});
+
+test('update shutdown never escalates to signals while an owned backend is still busy', async () => {
+  const { EventEmitter } = require('node:events');
+  const child = new EventEmitter();
+  Object.assign(child, { pid: 999999999, exitCode: null, signalCode: null, managedBackend: true,
+    stdin: { end(value) { assert.equal(value, 'shutdown\n'); } } });
+  await assert.rejects(stopTree(child, { force: false, graceMs: 5 }), /Update abgebrochen/);
+  // A later controlled exit can be observed, so a failed update does not poison
+  // the normal backend shutdown cache forever.
+  child.exitCode = 0;
+  assert.equal(await stopTree(child, { force: false }), false);
 });

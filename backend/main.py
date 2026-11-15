@@ -17,6 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.desktop_update_gate import DesktopUpdateGate
 from backend.paths import get_database_path as resolve_database_path
 from backend.paths import (
     get_document_directory, get_default_document_directory, get_legacy_document_directory,
@@ -107,6 +108,7 @@ app = FastAPI(
     redoc_url=None,
     swagger_ui_oauth2_redirect_url=None,
 )
+app.add_middleware(DesktopUpdateGate, token=os.environ.get("TTC_DESKTOP_UPDATE_CONTROL"))
 logger = logging.getLogger(__name__)
 
 
@@ -879,6 +881,9 @@ def delete_invoice(
         if existing_invoice["pdf_path"]:
             get_owned_invoice_document(existing_invoice, database_path)
     except InvoiceDocumentAssociationError as error:
+        # Another completed deletion can invalidate the earlier ownership snapshot.
+        if get_invoice(invoice_id, database_path) is None:
+            raise HTTPException(404, "Endgültige Rechnung wurde nicht gefunden") from None
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Die zugehörige PDF-Datei konnte nicht sicher zugeordnet werden",

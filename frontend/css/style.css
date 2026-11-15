@@ -95,6 +95,90 @@ button {
   color: #526579;
 }
 
+.desktop-updates[hidden],
+.desktop-updates [hidden],
+.update-dialog [hidden] {
+  display: none !important;
+}
+
+.desktop-updates .section-heading,
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.update-access {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e6ed;
+}
+
+.update-access summary,
+.update-release-notes summary {
+  color: #153c61;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.update-access label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.update-access input {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #cbd6e0;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.update-actions {
+  justify-content: flex-start;
+}
+
+.update-dialog {
+  width: min(560px, calc(100% - 32px));
+}
+
+.update-release-notes {
+  margin: 18px 0;
+}
+
+.update-release-notes pre {
+  max-height: 240px;
+  padding: 14px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #f5f7fa;
+  border-radius: 8px;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.update-progress {
+  margin: 18px 0;
+}
+
+.update-progress progress {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  accent-color: #153c61;
+}
+
+#desktop-update-now:disabled,
+#check-desktop-updates:disabled:not([aria-busy="true"]),
+#save-desktop-update-access:disabled {
+  cursor: not-allowed;
+}
+
 .organization-settings-group {
   min-width: 0;
   margin: 20px 0 0;

@@ -85,7 +85,8 @@ def create_backup(database: Path, documents: Path, destination: Path) -> Path:
             if len(entries) > MAX_ENTRIES or sum(entry.file_size for entry in entries) > MAX_TOTAL_BYTES:
                 raise ValueError('Sicherung überschreitet das Wiederherstellungslimit (8 GiB / 100.000 Einträge).')
         archive.chmod(0o600)
-        with archive.open('rb') as stream:
+        # Windows _commit/FlushFileBuffers requires a writable file handle.
+        with archive.open('r+b') as stream:
             os.fsync(stream.fileno())
         os.link(archive, target)
     return target

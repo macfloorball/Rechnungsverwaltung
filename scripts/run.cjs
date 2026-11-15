@@ -9,7 +9,7 @@ const { waitForFrontend } = require('../electron/startup.cjs');
 const ROOT = path.join(__dirname, '..');
 const MODES = ['web', 'web-dev', 'desktop-dev', 'desktop-production'];
 
-function launchConfig(mode, env = process.env, root = ROOT) {
+function launchConfig(mode, env = process.env, root = ROOT, platform = process.platform) {
   if (!MODES.includes(mode)) throw new Error(`Startmodus erforderlich: ${MODES.join(', ')}`);
   const production = ['web', 'desktop-production'].includes(mode);
   const config = getDesktopConfig(env, production ? ['--desktop-production'] : []);
@@ -19,13 +19,20 @@ function launchConfig(mode, env = process.env, root = ROOT) {
   const url = new URL(config.url);
   const venv = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   const packagedRuntime = fs.existsSync(path.join(root, 'packaged-runtime.json'));
-  const embedded = path.join(root, 'runtime', 'python', 'python.exe');
+  const embedded = platform === 'linux'
+    ? path.join(root, 'runtime', 'python', 'bin', 'python3.13')
+    : path.join(root, 'runtime', 'python', 'python.exe');
   if (packagedRuntime && !fs.existsSync(embedded)) {
     throw new Error('Die mitgelieferte Python-Laufzeit fehlt. Anwendung mit dem Installer reparieren; persönliche Daten bleiben erhalten.');
   }
   // Installed builds never fall back to an unrelated system Python or venv.
   const python = packagedRuntime ? embedded : env.TTC_PYTHON || (fs.existsSync(venv) ? venv : process.platform === 'win32' ? 'python' : 'python3');
-  const args = ['-m', 'scripts.managed_server', 'backend.main:app', '--host', url.hostname.replace(/[\[\]]/g, ''), '--port', url.port || '80'];
+  let args = ['-m', 'scripts.managed_server', 'backend.main:app', '--host', url.hostname.replace(/[\[\]]/g, ''), '--port', url.port || '80'];
+  if (packagedRuntime && platform === 'linux') {
+    // Isolated mode ignores host PYTHONHOME/PYTHONPATH and user site-packages.
+    // Only our validated application directory is added to the search path.
+    args = ['-I', '-B', '-c', 'import runpy,sys;sys.path.insert(0,sys.argv.pop(1));runpy.run_module("scripts.managed_server",run_name="__main__")', root, ...args.slice(2)];
+  }
   if (!production) args.push('--reload', '--reload-dir', path.join(root, 'backend'));
   return { ...config, python, args, desktop: mode.startsWith('desktop-'),
     frontend: mode === 'desktop-production' ? path.join(root, 'dist', 'frontend') : path.join(root, 'frontend') };
@@ -43,11 +50,14 @@ function checkPort(url) {
 const stoppingTrees = new WeakMap();
 function stopTree(child, options = {}) {
   if (!child) return Promise.resolve(false);
-  if (!stoppingTrees.has(child)) stoppingTrees.set(child, stopOwnedTree(child, options));
+  if (!stoppingTrees.has(child)) stoppingTrees.set(child, stopOwnedTree(child, options).catch((error) => {
+    if (options.force === false) stoppingTrees.delete(child);
+    throw error;
+  }));
   return stoppingTrees.get(child);
 }
 
-async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}) {
+async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000, force = true } = {}) {
   if (!child?.pid) return false;
   let forced = false;
   if (child.managedBackend && child.exitCode === null && child.signalCode === null) {
@@ -57,6 +67,7 @@ async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     if (child.exitCode === null && child.signalCode === null) {
+      if (!force) throw Error('Backend wartet noch auf laufende Vorgänge; Update abgebrochen.');
       forced = true;
       console.error('Server-Shutdown überschritten. Erzwinge Beenden eigener Prozesse; laufende Datenoperationen können unterbrochen werden.');
     }
@@ -65,6 +76,7 @@ async function stopOwnedTree(child, { graceMs = 20000, terminateMs = 2000 } = {}
     console.error('Anwendungsserver wurde nicht fehlerfrei beendet.');
     forced = true;
   }
+  if (!force) return forced;
   if (process.platform === 'win32') {
     if (child.exitCode !== null || child.signalCode !== null) return forced;
     await new Promise((resolve, reject) => {

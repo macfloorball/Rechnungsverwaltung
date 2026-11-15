@@ -10,6 +10,17 @@ SQLite und PDF-Rechnungserstellung.
 > Authentifizierung. Sie ist für den lokalen Betrieb gedacht und sollte nicht
 > ungeschützt über ein Netzwerk oder das Internet erreichbar gemacht werden.
 
+## Lizenzstatus
+
+Für die Weiterverwendung des eigenen Projektcodes wird derzeit keine allgemeine
+Lizenz erteilt. Eine spätere öffentliche Bereitstellung dient zunächst der
+Einsicht; das Projekt wird damit nicht als Open Source freigegeben.
+Gesetzliche Befugnisse und die GitHub-Nutzungsbedingungen, einschließlich der
+dort vorgesehenen Möglichkeit zum Ansehen und Forken öffentlicher Repositories,
+bleiben unberührt. Fremdkomponenten unterliegen weiterhin ihren jeweiligen
+Lizenzen und Urheberhinweisen. Siehe auch
+[GitHub: Repository-Lizenzierung](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
+
 ## Funktionen
 
 - Tätigkeiten und Stundenpreise verwalten.
@@ -1086,6 +1097,46 @@ späteren Projektphasen zugeordnet.
 
 ## Windows-Installation und Updates (Phase 6)
 
+Die neue [Desktop-CI](Planung/Desktop_CI.md) prüft Python-/JavaScript-Tests,
+Windows-NSIS-Builds und Linux-AppImages bei Desktop-PRs und relevanten Pushes.
+Sie veröffentlicht keine produktiven Releases. Linux-Buildanleitung und
+Abnahmegrenzen stehen ebenfalls dort.
+
+Der getrennte [Desktop-Release-Workflow](Planung/Desktop_Release_Einrichtung.md)
+ist für ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags vorbereitet. Er verwendet
+auf Wunsch dasselbe private Repository. Produktive Releases bleiben bis zur
+Einrichtung echter Signaturen und geschützter Freigaben gesperrt.
+
+Die [Update-Erkennung](Planung/Desktop_Update_Erkennung.md) ist im Main-Prozess
+implementiert: verzögerte/wiederkehrende Prüfungen, verifizierte Release-Metadaten
+und benannte manuelle Prüf-IPC. Entwicklungsbuilds bleiben deaktiviert. Die
+[Update-Oberfläche](Planung/Desktop_Update_Oberflaeche.md) ergänzt Dialog,
+manuelle Prüfung und persönlichen GitHub-Zugang. Der
+[verifizierte Paketdownload](Planung/Desktop_Update_Download.md) ist nach
+Nutzerzustimmung implementiert. Die
+[Windows-Installationsübergabe](Planung/Desktop_Windows_Update.md) nutzt den
+vorhandenen sichtbaren NSIS-Installer nach erneuter Bestätigung. Native Windows-
+Abnahme und produktive Vertrauensinfrastruktur stehen aus; ohne konfigurierte
+Vertrauensdaten bleibt der Updateweg gesperrt. Der
+[Linux-AppImage-Updateweg](Planung/Desktop_Linux_Update.md) ersetzt benutzereigene,
+sicher beschreibbare AppImages nach Bestätigung atomar. Bei ungeeigneten Pfaden
+bleibt die manuelle Aktualisierung vorgesehen; DEB/RPM werden nicht eingeführt.
+[Offlinebetrieb und Fehlerbehandlung](Planung/Desktop_Update_Fehlerbehandlung.md)
+sichern Abbruch, konkurrierende Aktionen und Neustart-Bereinigung ab.
+Die [Regressionstestmatrix](Planung/Desktop_Update_Tests.md) beschreibt die
+automatisierten Prüfungen und grenzt echte Linux-/Electron-Ausführung von
+Testadaptern und noch ausstehender nativer Installationsabnahme ab.
+Die [Release- und Abnahmeanleitung](Planung/Desktop_Update_Abnahme.md) führt durch
+GitHub-Einrichtung, Freigabe, native Windows-/Linux-Prüfungen mit zwei Versionen,
+Datenerhaltsvergleich und manuelle Wiederherstellung. Der lokale Probelauf ist
+geprüft; signierter Live-Release und native Installationsabnahme stehen aus.
+
+Eine spätere öffentliche Verteilung desselben Repositorys ist vorgesehen.
+Die [Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) beschreibt den
+geprüften Quell-/Historienstand und offene Entscheidungen. Aktuell bleibt das
+Repository privat; öffentliche Sichtbarkeit und produktive Updates sind noch
+nicht freigegeben.
+
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
 NSIS-Installer für Windows x64, pro Benutzer ohne Administratorrechte. Ein fester
@@ -1096,7 +1147,7 @@ noch Node.js oder npm erforderlich. Linux-Entwicklungs- und Webstarts bleiben er
 
 Technische Grundlage: [NSIS-Konfiguration](https://www.electron.build/nsis/) und
 [Python Embedded Distribution](https://docs.python.org/3/using/windows.html#the-embeddable-package).
-Es gibt keinen automatischen Updateabruf und keine Veröffentlichung aus dem Build.
+Der Build ruft keine Updates ab und veröffentlicht keine Releases.
 
 ### Installer bauen
 
@@ -1116,7 +1167,10 @@ Build erstellen. Das Python-Archiv ist auf Version 3.13.17 und SHA-256 fixiert,
 Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
 Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
 Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
-Ergebnis: `dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-setup.exe`.
+Ergebnis ohne Release-Tag:
+`dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-development-setup.exe`.
+Produktionsbuilds behalten den Dateinamen ohne `-development`; Einzelheiten zur
+Versionsprüfung stehen unter [Desktop-Release-Versionierung](#desktop-release-versionierung).
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
 ohne eingebettete Laufzeit. Nur `desktop:installer:win` erstellt das eigenständige
 Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
@@ -1137,6 +1191,52 @@ beziehungsweise Update werden die Verknüpfungen bereitgestellt. Der Start
 benötigt weder ein Terminal noch einen separaten Backend-Aufruf. Die native
 Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
 
+### Desktop-Release-Versionierung
+
+`package.json` bleibt die einzige Versionsquelle für die Desktop-App; die
+beiden Wurzelversionen in `package-lock.json` müssen übereinstimmen. Die aktuelle
+Version bleibt **0.1.0**. Die Backend-/Web-Versionierung wird nicht geändert.
+Versionsänderungen immer gemeinsam in Paket und Lockfile pflegen.
+
+```sh
+npm run desktop:version
+npm run desktop:version -- --tag desktop-v0.1.0
+```
+
+Ohne Tag entsteht ein ausdrücklich als `development` gekennzeichneter Build.
+Für einen stabilen Build muss `TTC_DESKTOP_RELEASE_TAG=desktop-vX.Y.Z` gesetzt
+sein. Der passende Tag muss bereits existieren und auf den sauberen aktuellen
+Commit zeigen. Die Prüfung erstellt weder Tags noch Releases. Unter PowerShell
+die Variable beispielsweise mit `$env:TTC_DESKTOP_RELEASE_TAG = 'desktop-v0.1.0'`
+setzen. Diese Variable für Entwicklungsbuilds wieder entfernen.
+
+Erlaubt ist der stabile SemVer-Kern `X.Y.Z`, ohne führende Nullen oder Zusätze;
+jede Komponente liegt zwischen 0 und 65535, damit sie verlustfrei in die
+Windows-Dateiversion `X.Y.Z.0` passt. Prerelease- und Buildzusätze werden bewusst
+abgelehnt: Entwicklung wird über den Kanal gekennzeichnet, da die vorhandene
+NSIS-Vergleichslogik keine SemVer-Prereleaseordnung sicherstellt.
+
+Jeder andere vorhandene `desktop-v*`-Tag muss gültig und älter sein. Gleiche
+Versionen werden nur beim erneuten Prüfen desselben Tags akzeptiert;
+Veröffentlichung und Überschreiben sind dadurch nicht erlaubt. Haupt-, Neben-
+und Patchversionen dürfen steigen, aber nie auf einen kleineren oder gleichen
+Versionsstand wechseln. Der wiederverwendbare Updatevergleich prüft zusätzlich
+einen gespeicherten Versionshöchststand. Eine gleichversionige manuelle
+Installer-Reparatur bleibt möglich, die vorhandene NSIS-Downgrade-Sperre bleibt aktiv.
+
+Paketversion, Electron-/Windows-Version, Installer-Konfiguration und eingebettetes
+`desktopRelease` verwenden dieselbe geprüfte Version. Der Installer-Build schreibt
+zusätzlich `<Installer>.release.json` mit Kanal, Tag/Commit (bei stabilen Builds),
+Plattform, Größe und SHA-256. Diese Datei ist **unsignierte Buildinformation**,
+noch kein vertrauenswürdiges Update-Manifest und keine Installationsfreigabe.
+Ein `stable`-Kanal allein ersetzt keine Signaturprüfung.
+
+Release-Prüfungen benötigen vollständige lokale Git-Historie und sämtliche
+Desktop-Tags; der Release-Workflow ruft diese explizit ab. Die Prüfung des
+freigegebenen Entwicklungsbranches, Signierung und Veröffentlichung sind
+implementiert und bleiben bis zur Einrichtung der externen Voraussetzungen
+gesperrt. Details: [Release-Einrichtung](Planung/Desktop_Release_Einrichtung.md).
+
 ### Persönliche Daten bei der Deinstallation
 
 Die Deinstallation entfernt Programmdateien, Registrierung und Verknüpfungen.
@@ -1155,7 +1255,10 @@ Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
 2. App vollständig schließen und das Ende ihres lokalen Servers abwarten.
    Keine zweite Instanz oder Schreibprogramme auf dem Datenbestand offen lassen.
 3. Den neuen Installer aus derselben vertrauenswürdigen Bezugsquelle übernehmen,
-   SHA-256 vergleichen und unter demselben Windows-Benutzer starten.
+   signierte Freigabedaten und Windows-Authenticode einschließlich erwartetem
+   Zertifikat/Publisher/Version prüfen, SHA-256 vergleichen und unter demselben
+   Windows-Benutzer starten. Die [Abnahmeanleitung](Planung/Desktop_Update_Abnahme.md#dateiverteilung-und-manuelles-prüfen)
+   beschreibt diese Prüfungen; eine Prüfsummendatei allein genügt nicht.
    App-ID, technischer Profilname und Herausgeber bleiben stabil.
 4. Über die vorhandene Installation installieren; nicht vorher Datenverzeichnisse
    verschieben oder löschen. Gleichversionige Neuinstallation dient der Reparatur.
@@ -1163,9 +1266,11 @@ Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
    PDFs prüfen. Die vorhandene Datenbankinitialisierung prüft das Schema und
    führt erforderliche Migrationen kontrolliert mit vorheriger SQLite-Sicherung aus.
 
-Es gibt keinen Hintergrunddownload, keine Update-URL und keinen automatischen
-Neustart. Der Installer blockiert ein Downgrade gegenüber der in Windows
-registrierten Version (Exitcode 3). Ein manuelles Austauschen von Dateien wird
+Dieser manuelle Weg bleibt unabhängig vom optionalen In-App-Update verfügbar.
+Der implementierte automatische Weg lädt erst nach Zustimmung und verlangt vor
+Installation und Neustart eine zweite Bestätigung; produktiv bleibt er bis zur
+Vertrauenseinrichtung gesperrt. Der Installer blockiert ein Downgrade gegenüber
+der in Windows registrierten Version (Exitcode 3). Ein manuelles Austauschen von Dateien wird
 dadurch nicht abgesichert; zusätzlich lehnt das Backend neuere Datenbankschemata ab.
 Bei fehlgeschlagenem Update denselben oder einen neueren vollständigen Installer
 erneut ausführen. Originaldaten und Sicherungen behalten. Für einen notwendigen

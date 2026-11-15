@@ -92,3 +92,20 @@ def test_target_created_during_import_is_never_overwritten(tmp_path, monkeypatch
         import_database(source, target)
     assert target.read_bytes() == b"concurrent target"
     assert not list(target.parent.glob(".ttc-import-*"))
+
+
+def test_sync_failure_never_publishes_import_or_changes_source(tmp_path, monkeypatch):
+    import os
+    source = legacy_database(tmp_path / "legacy.db")
+    original = source.read_bytes()
+    target = tmp_path / "profile" / "ttc.db"
+
+    def fail(_fd):
+        raise OSError("synchronization failed")
+
+    monkeypatch.setattr(os, "fsync", fail)
+    with pytest.raises(OSError, match="synchronization failed"):
+        import_database(source, target)
+    assert source.read_bytes() == original
+    assert not target.exists()
+    assert not list(target.parent.glob(".ttc-import-*"))

@@ -3,15 +3,22 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { buildFrontend } = require('./build_frontend.cjs');
+const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
+const { validateReleaseMetadata } = require('../electron/version.cjs');
+const { buildTrust } = require('./release_policy.cjs');
 
-async function prepareWindowsSource(root, target) {
-  await buildFrontend(root);
+async function prepareWindowsSource(root, target, release = getDesktopRelease(root)) {
   const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
+  validateReleaseMetadata(release, metadata.version);
+  const desktopUpdateTrust = buildTrust(root, release);
+  await buildFrontend(root);
   await fs.mkdir(target, { recursive: true });
   await fs.writeFile(path.join(target, 'package.json'), JSON.stringify({
     name: metadata.name, productName: metadata.productName, version: metadata.version,
     desktopAppId: metadata.desktopAppId, description: metadata.description,
     main: metadata.main, author: metadata.author || metadata.productName, private: true,
+    desktopRelease: release,
+    desktopUpdateTrust,
   }, null, 2));
   // Positive selection: never copy runtime data, environments, Git, or node_modules.
   for (const folder of ['electron', 'backend']) {
@@ -38,14 +45,15 @@ async function prepareWindowsSource(root, target) {
   await fs.mkdir(path.join(target, 'dist'), { recursive: true });
   await fs.cp(path.join(root, 'dist', 'frontend'), path.join(target, 'dist', 'frontend'), { recursive: true });
   await fs.copyFile(path.join(root, 'requirements.txt'), path.join(target, 'requirements.txt'));
+  assertPackageRelease(target, release);
   return metadata;
 }
 
-async function packageWindows(root = path.join(__dirname, '..')) {
+async function packageWindows(root = path.join(__dirname, '..'), release = getDesktopRelease(root)) {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-win-build-'));
   try {
     const source = path.join(temporary, 'app');
-    const metadata = await prepareWindowsSource(root, source);
+    const metadata = await prepareWindowsSource(root, source, release);
     const { packager } = await import('@electron/packager');
     const output = await packager({
       dir: source, out: path.join(root, 'dist', 'windows'),
@@ -53,10 +61,12 @@ async function packageWindows(root = path.join(__dirname, '..')) {
       platform: 'win32', arch: 'x64', electronVersion: metadata.devDependencies.electron,
       electronZipDir: process.env.TTC_ELECTRON_ZIP_DIRECTORY,
       appVersion: metadata.version, icon: path.join(source, 'electron', 'assets', 'app-icon.ico'),
+      buildVersion: `${metadata.version}.0`,
       win32metadata: { ProductName: metadata.productName, FileDescription: metadata.description || metadata.productName,
         CompanyName: metadata.author || metadata.productName },
       asar: false, prune: false, overwrite: true,
     });
+    for (const destination of output) assertPackageRelease(path.join(destination, 'resources', 'app'), release);
     for (const destination of output) console.log(`Windows-Testbuild: ${destination}`);
     return output;
   } finally {

@@ -28,8 +28,10 @@ def test_database_backup_is_valid_and_uses_private_permissions(
     )
 
     assert backup_path.name == "ttc-20261105T120000000000Z.sqlite3"
-    assert backup_directory.stat().st_mode & 0o777 == 0o700
-    assert backup_path.stat().st_mode & 0o777 == 0o600
+    # Windows uses ACLs; stat/chmod do not represent POSIX permission bits.
+    if os.name != "nt":
+        assert backup_directory.stat().st_mode & 0o777 == 0o700
+        assert backup_path.stat().st_mode & 0o777 == 0o600
     with sqlite3.connect(backup_path) as connection:
         assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
         assert connection.execute("SELECT value FROM example").fetchone() == (

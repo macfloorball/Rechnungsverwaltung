@@ -17,6 +17,10 @@ htmlcov/
 # Local configuration and secrets
 .env
 .env.*
+*.pem
+*.pfx
+*.p12
+*.key
 !.env.example
 *.local
 *.local.*

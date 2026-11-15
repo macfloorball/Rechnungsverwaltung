@@ -94,6 +94,25 @@ def test_publication_failure_leaves_no_partial_backup(inventory, monkeypatch):
     assert list(inventory[2].iterdir()) == []
 
 
+@pytest.mark.parametrize("operation", ["backup", "export"])
+def test_sync_failure_never_publishes_archive_or_changes_inputs(inventory, monkeypatch, operation):
+    import os
+    from backend.data_export import create_export
+    database, documents, destination = inventory
+    original_database = database.read_bytes()
+    original_document = (documents / 'Beleg.pdf').read_bytes()
+
+    def fail(_fd):
+        raise OSError('synchronization failed')
+
+    monkeypatch.setattr(os, 'fsync', fail)
+    with pytest.raises(OSError, match='synchronization failed'):
+        (create_backup if operation == 'backup' else create_export)(*inventory)
+    assert list(destination.iterdir()) == []
+    assert database.read_bytes() == original_database
+    assert (documents / 'Beleg.pdf').read_bytes() == original_document
+
+
 def test_online_backup_preserves_wal_and_blocks_concurrent_writes(inventory, monkeypatch):
     import backend.backup_service as service
     database, documents, destination = inventory
@@ -150,7 +169,7 @@ def test_restore_to_new_profile_and_no_overwrite(inventory, tmp_path):
         restore_backup(archive, target, confirmed=True, current_database=inventory[0], current_documents=inventory[1], safety_directory=tmp_path / 'safety')
 
 
-@pytest.mark.parametrize('damage', ['hash', 'traversal', 'duplicate', 'version', 'database'])
+@pytest.mark.parametrize('damage', ['hash', 'traversal', 'duplicate', 'version', 'database', 'case-collision'])
 def test_invalid_restore_never_publishes_target(inventory, tmp_path, damage):
     from backend.backup_restore import restore_backup
     archive = create_backup(*inventory)
@@ -168,6 +187,9 @@ def test_invalid_restore_never_publishes_target(inventory, tmp_path, damage):
         import hashlib
         files['database/ttc.db'] = b'not sqlite'
         manifest['files']['database/ttc.db'] = {'size': 10, 'sha256': hashlib.sha256(b'not sqlite').hexdigest()}
+    elif damage == 'case-collision':
+        files['documents/beleg.pdf'] = files['documents/Beleg.pdf']
+        manifest['files']['documents/beleg.pdf'] = dict(manifest['files']['documents/Beleg.pdf'])
     files['manifest.json'] = json.dumps(manifest).encode()
     broken = tmp_path / 'broken.zip'
     with zipfile.ZipFile(broken, 'w') as output:
@@ -240,7 +262,11 @@ def test_nonportable_documents_abort_without_publication(inventory, kind):
     elif kind == 'windows-name':
         (documents / 'CON.pdf').write_bytes(b'bad name')
     else:
-        (documents / 'beleg.pdf').write_bytes(b'ambiguous')
+        try:
+            with (documents / 'beleg.pdf').open('xb') as stream:
+                stream.write(b'ambiguous')
+        except FileExistsError:
+            pytest.skip('Filesystem cannot represent two names differing only in case; archive rejection is tested separately')
     with pytest.raises((OSError, ValueError)):
         create_backup(*inventory)
     assert not list(inventory[2].glob('*.zip'))

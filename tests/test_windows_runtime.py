@@ -1,4 +1,4 @@
-"""Windows runtime build rejects corrupted archives before publishing files."""
+"""Windows build validation and shared checks against shipped native runtimes."""
 import hashlib
 import json
 import os
@@ -21,12 +21,19 @@ def _windows_path(value):
 
 
 def _packaged_command():
-    executable = os.environ.get("TTC_WINDOWS_PYTHON")
+    linux = os.environ.get("TTC_LINUX_PYTHON")
+    executable = linux or os.environ.get("TTC_WINDOWS_PYTHON")
     if not executable:
-        pytest.skip("Set TTC_WINDOWS_PYTHON for the packaged Windows runtime check")
+        pytest.skip("Set TTC_WINDOWS_PYTHON or TTC_LINUX_PYTHON for packaged runtime checks")
     environment = {key: value for key, value in os.environ.items() if not key.startswith("TTC_")}
     environment["PYTHONIOENCODING"] = "utf-8"
     command = [executable]
+    if linux:
+        app = Path(linux).resolve().parents[3]
+        command += ["-I", "-B", "-c",
+                    'import runpy,sys;sys.path.insert(0,sys.argv.pop(1));target=sys.argv.pop(1);'
+                    'runpy.run_module(sys.argv.pop(1),run_name="__main__") if target=="-m" else runpy.run_path(target,run_name="__main__")',
+                    str(app)]
     if os.environ.get("TTC_WINE"):
         assert os.environ.get("TTC_WINE_PREFIX"), "Use a dedicated Wine prefix"
         environment.update(WINEPREFIX=os.environ["TTC_WINE_PREFIX"], WINEDEBUG="-all")
@@ -89,7 +96,10 @@ def test_migration_in_separate_interpreter(tmp_path, packaged):
 @pytest.mark.parametrize("invalid_directory", [False, True])
 def test_packaged_backend_start_and_shutdown(tmp_path, invalid_directory):
     command, environment = _packaged_command()
-    app = Path(os.environ["TTC_WINDOWS_PYTHON"]).resolve().parents[2]
+    if os.environ.get("TTC_LINUX_PYTHON"):
+        app = Path(os.environ["TTC_LINUX_PYTHON"]).resolve().parents[3]
+    else:
+        app = Path(os.environ["TTC_WINDOWS_PYTHON"]).resolve().parents[2]
     profile = tmp_path / "User Data"
     if invalid_directory:
         profile.write_bytes(b"preserve-existing-file")
