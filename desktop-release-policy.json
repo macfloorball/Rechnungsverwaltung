@@ -3,7 +3,7 @@
   "enabled": false,
   "repository": "macfloorball/Rechnungsverwaltung",
   "repositoryId": 1447003404,
-  "visibility": "private",
+  "visibility": "public",
   "environment": "desktop-release",
   "keyId": null,
   "publicKeyPem": null,
@@ -12,6 +12,7 @@
     "certificateSha1": null,
     "certificateSha256": null,
     "publisherSubject": null,
-    "timestampUrl": null
+    "timestampUrl": null,
+    "mode": "ed25519-only"
   }
 }

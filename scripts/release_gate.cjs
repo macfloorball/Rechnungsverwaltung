@@ -1,5 +1,7 @@
 'use strict';
 const path = require('node:path');
+const { appendFileSync } = require('node:fs');
+const { windowsMode } = require('../electron/windows_trust.cjs');
 const { loadPolicy, validatePolicy } = require('./release_policy.cjs');
 const { getDesktopRelease } = require('./desktop_release.cjs');
 const { validateReleaseMetadata } = require('../electron/version.cjs');
@@ -62,6 +64,11 @@ if (require.main === module) {
     }
     const release = getDesktopRelease(root);
     await checkGate(githubAPI(process.env.DESKTOP_POLICY_READ_TOKEN || process.env.GITHUB_TOKEN), policy, release);
+    if (process.env.GITHUB_OUTPUT) {
+      const runner = windowsMode(policy.windows) === 'ed25519-only'
+        ? ['windows-2025'] : ['self-hosted', 'Windows', 'X64', 'desktop-release-signing'];
+      appendFileSync(process.env.GITHUB_OUTPUT, `windowsRunner=${JSON.stringify(runner)}\n`);
+    }
     console.log(`Release-Voraussetzungen geprüft: ${release.tag} (${release.commit})`);
   })().catch((error) => { console.error(`Release gesperrt: ${error.message}`); process.exitCode = 1; });
 }

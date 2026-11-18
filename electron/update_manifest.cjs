@@ -1,4 +1,5 @@
 'use strict';
+const { windowsMode, validWindowsReceipt } = require('./windows_trust.cjs');
 const { createPublicKey, createHash, verify } = require('node:crypto');
 const { parseVersion, versionFromTag, compareVersions, validateReleaseMetadata } = require('./version.cjs');
 
@@ -24,8 +25,8 @@ function configuration(metadata, { packaged, currentVersion, platform, arch }) {
   const publicKey = createPublicKey(trust.publicKeyPem);
   const fingerprint = createHash('sha256').update(publicKey.export({ type: 'spki', format: 'der' })).digest('hex');
   if (publicKey.asymmetricKeyType !== 'ed25519' || fingerprint !== trust.keyId
-      || !hex(trust.windows?.certificateSha256, 64) || typeof trust.windows.publisherSubject !== 'string'
-      || !trust.windows.publisherSubject.trim() || /[\r\n\0]/.test(trust.windows.publisherSubject)) invalid();
+      || (windowsMode(trust.windows) === 'authenticode-required' && (!hex(trust.windows?.certificateSha256, 64) || typeof trust.windows.publisherSubject !== 'string'
+      || !trust.windows.publisherSubject.trim() || /[\r\n\0]/.test(trust.windows.publisherSubject)))) invalid();
   return Object.freeze({ enabled: true, appId: metadata.desktopAppId, currentVersion, platform, arch,
     repository: trust.repository, repositoryId: trust.repositoryId, visibility: trust.visibility,
     keyId: trust.keyId, publicKey, windows: Object.freeze({ ...trust.windows }) });
@@ -105,8 +106,7 @@ function validateManifest(bytes, signature, config, release, now = Date.now()) {
     if (windows) {
       const receipt = artifact.windowsSignature;
       keys(receipt, ['status', 'certificateSha256', 'publisherSubject', 'timestamped', 'version']);
-      if (receipt.status !== 'Valid' || receipt.timestamped !== true || receipt.version !== manifest.version
-          || receipt.certificateSha256 !== config.windows.certificateSha256 || receipt.publisherSubject !== config.windows.publisherSubject) invalid();
+      if (!validWindowsReceipt(receipt, config.windows, manifest.version)) invalid();
       Object.freeze(receipt);
     }
     platforms.add(artifact.platform);

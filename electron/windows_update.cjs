@@ -93,11 +93,13 @@ function createWindowsInstaller({ config, app, downloader, dialog, getMainWindow
         const { packet, artifact, expiresAt, commit } = current(version);
         const stat = await fs.lstat(packet.file);
         if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== artifact.size || stat.nlink !== 1) throw new UpdateError('INSTALL_UNAVAILABLE');
-        // The helper locks and hashes the file again, then verifies native Authenticode.
+        // The helper locks and hashes the file again, then enforces the embedded Windows mode.
         const executable = app.getPath('exe'), directory = path.dirname(executable);
         helper = helperFactory({ file: packet.file, slot: packet.slot, size: artifact.size, hash: artifact.sha256,
           version, expiresAt, commit, requiredFiles: REQUIRED_FILES, currentVersion: config.currentVersion, certificate: config.windows.certificateSha256,
-          publisher: config.windows.publisherSubject, parentPid: process.pid, executable, directory, profile,
+          publisher: config.windows.publisherSubject, windowsMode: require('./windows_trust.cjs').windowsMode(config.windows),
+          publicKeyPem: config.publicKey.export({ type: 'spki', format: 'pem' }),
+          trust: { repository: config.repository, repositoryId: config.repositoryId, visibility: config.visibility, keyId: config.keyId }, parentPid: process.pid, executable, directory, profile,
           updates: path.join(profile, 'updates'), downloads: path.join(profile, 'updates', 'downloads'),
           lock: path.join(profile, 'updates', 'windows-install.lock'), journal: path.join(profile, 'updates', 'windows-install-state.json'),
           installKey: `HKCU:\\Software\\${GUID}`, uninstallKey: `HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${GUID}` });

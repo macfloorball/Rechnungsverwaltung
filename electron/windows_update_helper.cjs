@@ -29,9 +29,14 @@ function SecurePath([string]$path) {
 }
 function Signature([string]$file) {
   $s = Get-AuthenticodeSignature -LiteralPath $file
+  if ((Get-Item -LiteralPath $file).VersionInfo.ProductVersion -cne $context.version) { throw 'VERSION' }
+  if ($context.windowsMode -ceq 'ed25519-only') {
+    if ($s.Status -ne 'NotSigned') { throw 'SIGNATURE' }
+    return
+  }
+  if ($context.windowsMode -cne 'authenticode-required') { throw 'MODE' }
   if ($s.Status -ne 'Valid' -or $null -eq $s.SignerCertificate -or $null -eq $s.TimeStamperCertificate) { throw 'SIGNATURE' }
   if ((HashBytes $s.SignerCertificate.RawData) -cne $context.certificate -or $s.SignerCertificate.Subject -cne $context.publisher) { throw 'PUBLISHER' }
-  if ((Get-Item -LiteralPath $file).VersionInfo.ProductVersion -cne $context.version) { throw 'VERSION' }
 }
 function Journal([string]$phase) {
   $json = @{formatVersion=1; phase=$phase; version=$context.version; previousVersion=$context.currentVersion; time=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Compress
@@ -43,6 +48,15 @@ function Installed {
   $root = [IO.Path]::Combine($context.directory,'resources','app')
   $metadata = Get-Content -LiteralPath ([IO.Path]::Combine($root,'package.json')) -Raw | ConvertFrom-Json
   if ($metadata.version -cne $context.version -or $metadata.desktopAppId -cne 'de.mac-floorball.ttc-rechnungsverwaltung' -or $metadata.ttcDistribution -cne 'installer' -or $metadata.desktopRelease.channel -cne 'stable' -or $metadata.desktopRelease.version -cne $context.version -or $metadata.desktopRelease.commit -cne $context.commit) { throw 'INCOMPLETE' }
+  $trust = $metadata.desktopUpdateTrust
+  if ($trust.enabled -ne $true -or ($trust.publicKeyPem -replace '\s','') -cne ($context.publicKeyPem -replace '\s','')) { throw 'TRUST' }
+  $mode = 'authenticode-required'
+  if ($null -ne $trust.windows.PSObject.Properties['mode']) { $mode = $trust.windows.mode }
+  if ($mode -cne $context.windowsMode) { throw 'TRUST' }
+  foreach ($field in @('repository','repositoryId','visibility','keyId')) {
+    if ($trust.$field -cne $context.trust.$field) { throw 'TRUST' }
+  }
+  if ($mode -ceq 'authenticode-required' -and ($trust.windows.certificateSha256 -cne $context.certificate -or $trust.windows.publisherSubject -cne $context.publisher)) { throw 'TRUST' }
   $manifest = Get-Content -LiteralPath ([IO.Path]::Combine($root,'installation-manifest.json')) -Raw | ConvertFrom-Json
   if ($manifest.formatVersion -ne 1 -or @($manifest.files.PSObject.Properties).Count -lt 20) { throw 'INCOMPLETE' }
   foreach ($name in $context.requiredFiles) { if ($null -eq $manifest.files.PSObject.Properties[$name]) { throw 'INCOMPLETE' } }

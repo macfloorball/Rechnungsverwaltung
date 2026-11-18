@@ -18,6 +18,8 @@ env:
 
 jobs:
   gate:
+    outputs:
+      windowsRunner: ${{ steps.authorization.outputs.windowsRunner }}
     name: Verify release authorization
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -35,7 +37,8 @@ jobs:
         with:
           node-version: '24.22.3'
           package-manager-cache: false
-      - name: Validate policy, tag, ancestry, protections and successful native CI
+      - id: authorization
+        name: Validate policy, tag, ancestry, protections and successful native CI
         run: node scripts/release_gate.cjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -87,9 +90,9 @@ jobs:
           retention-days: 1
 
   windows:
-    name: Build and sign stable Windows NSIS
+    name: Build and verify stable Windows NSIS
     needs: gate
-    runs-on: [self-hosted, Windows, X64, desktop-release-signing]
+    runs-on: ${{ fromJSON(needs.gate.outputs.windowsRunner) }}
     environment: desktop-release
     timeout-minutes: 40
     steps:
@@ -112,7 +115,7 @@ jobs:
       - run: python scripts/prepare_windows_runtime.py dist/python-windows
       - run: npm run desktop:installer:win
       - run: node scripts/check_installer.cjs
-      - name: Verify signed packaged runtime
+      - name: Verify packaged runtime
         shell: pwsh
         run: |
           $appRoot = (Resolve-Path 'dist/windows/TT Rechnungsverwaltung-win32-x64/resources/app').Path
@@ -131,7 +134,7 @@ jobs:
   publish:
     name: Approve and publish complete signed release
     needs: [gate, linux, windows]
-    runs-on: [self-hosted, Windows, X64, desktop-release-signing]
+    runs-on: ${{ fromJSON(needs.gate.outputs.windowsRunner) }}
     environment: desktop-release
     timeout-minutes: 30
     permissions:
@@ -156,7 +159,7 @@ jobs:
         with:
           name: desktop-linux
           path: dist/release-input/linux
-      - name: Reverify Authenticode, sign manifest, verify uploads and publish last
+      - name: Reverify Windows policy, sign manifest, verify uploads and publish last
         run: node scripts/publish_desktop.cjs
         env:
           GITHUB_TOKEN: ${{ github.token }}

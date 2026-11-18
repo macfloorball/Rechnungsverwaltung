@@ -13,7 +13,7 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
   const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
   const release = getDesktopRelease(root);
   const policy = release.channel === 'stable' ? loadPolicy(root) : null;
-  if (policy && process.platform !== 'win32') throw Error('Produktive Windows-Installer benötigen einen nativen Windows-Signierrechner.');
+  if (policy && process.platform !== 'win32') throw Error('Produktive Windows-Installer benötigen einen nativen Windows-Buildrunner.');
   const config = installerConfig(root, metadata, release);
   const runtime = path.join(root, 'dist', 'python-windows');
   const manifest = JSON.parse(await fs.readFile(path.join(runtime, 'runtime-manifest.json'), 'utf8'));

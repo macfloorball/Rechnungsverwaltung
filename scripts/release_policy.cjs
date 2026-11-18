@@ -1,5 +1,6 @@
 'use strict';
 const fs = require('node:fs');
+const { windowsMode } = require('../electron/windows_trust.cjs');
 const path = require('node:path');
 const { createPublicKey, createHash } = require('node:crypto');
 
@@ -25,6 +26,7 @@ function validatePolicy(policy) {
     throw Error('Manifestgültigkeit muss zwischen 1 und 365 Tagen liegen.');
   }
   const win = policy.windows;
+  if (windowsMode(win) === 'ed25519-only') return policy;
   if (!win || typeof win.certificateSha1 !== 'string' || win.certificateSha1.length !== 40 || !/^[a-f0-9]{40}$/.test(win.certificateSha1)
       || typeof win.certificateSha256 !== 'string' || win.certificateSha256.length !== 64 || !/^[a-f0-9]{64}$/.test(win.certificateSha256)
       || typeof win.publisherSubject !== 'string' || !win.publisherSubject.trim() || /[\r\n\0]/.test(win.publisherSubject)) {
@@ -44,7 +46,7 @@ function buildTrust(root, release) {
   const policy = loadPolicy(root);
   return Object.freeze({ enabled: true, repository: policy.repository, repositoryId: policy.repositoryId,
     visibility: policy.visibility, keyId: policy.keyId, publicKeyPem: policy.publicKeyPem,
-    windows: { certificateSha256: policy.windows.certificateSha256, publisherSubject: policy.windows.publisherSubject } });
+    windows: { mode: windowsMode(policy.windows), certificateSha256: policy.windows.certificateSha256, publisherSubject: policy.windows.publisherSubject } });
 }
 module.exports = { keyFingerprint, validatePolicy, loadPolicy, buildTrust };
 

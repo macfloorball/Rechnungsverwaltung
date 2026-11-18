@@ -53,3 +53,19 @@ test('private files, corrupted downloads and rejected Windows signatures cannot 
   assert.throws(() => collectPackages(f.root, f.input, f.release, f.policy, () => ({ ...f.receipt, timestamped: false })), /Signaturnachweis|ungültig/);
   assert.throws(() => collectPackages(f.root, f.input, f.release, f.policy, () => ({ ...f.receipt, version: '1.2.2' })), /Signaturnachweis|ungültig/);
 });
+
+
+test('explicit unsigned bundles require matching native receipts and both source commits', (t) => {
+  const f = fixture(t);
+  f.policy.windows = { mode: 'ed25519-only' };
+  const receipt = { status: 'NotSigned', timestamped: false, version: f.release.version, certificateSha256: null, publisherSubject: null };
+  const infoPath = f.files[0] + '.release.json';
+  const info = JSON.parse(fs.readFileSync(infoPath));
+  info.windowsSignature = receipt;
+  fs.writeFileSync(infoPath, JSON.stringify(info));
+  assert.equal(collectPackages(f.root, f.input, f.release, f.policy, () => receipt).length, 2);
+  assert.throws(() => collectPackages(f.root, f.input, f.release, f.policy, () => ({ ...receipt, status: 'HashMismatch' })));
+  info.commit = 'f'.repeat(40);
+  fs.writeFileSync(infoPath, JSON.stringify(info));
+  assert.throws(() => collectPackages(f.root, f.input, f.release, f.policy, () => receipt), /stimmen/);
+});

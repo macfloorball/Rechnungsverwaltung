@@ -87,6 +87,12 @@ test('installer version and packaged metadata derive from the same release; deve
   assert.doesNotMatch(installerConfig(root, metadata, stable).artifactName, /development/);
   assert.equal(installerConfig(root, metadata, stable).forceCodeSigning, true);
   assert.equal(installerConfig(root, metadata, stable).win.signtoolOptions.certificateSha1, policy.windows.certificateSha1);
+  policy.windows = { mode: 'ed25519-only', certificateSha1: null, certificateSha256: null, publisherSubject: null, timestampUrl: null };
+  fs.writeFileSync(path.join(root, 'desktop-release-policy.json'), JSON.stringify(policy));
+  const unsigned = installerConfig(root, metadata, stable);
+  assert.equal(unsigned.forceCodeSigning, false);
+  assert.equal(unsigned.win.signExecutable, false);
+  assert.equal(unsigned.win.signtoolOptions, undefined);
   assert.throws(() => assertPackageRelease(root, stable), /geprüften/);
   assert.throws(() => installerConfig(root, { ...metadata, version: '1.2.4' }, release), /stimmen/);
 });
