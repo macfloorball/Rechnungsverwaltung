@@ -31,7 +31,8 @@ async function probeAppImage({ app, env = process.env, mountInfo = () => fs.read
   const record = (await mountInfo()).split('\n').map((line) => line.split(' ')).find((fields) => decodeMount(fields[4] || '') === mount);
   const separator = record?.indexOf('-');
   if (!record || separator < 0 || !record[5].split(',').includes('ro')
-      || !['fuse.squashfuse', 'fuse.AppImage', 'fuse.appimage'].includes(record[separator + 1])) throw new UpdateError('INSTALL_UNAVAILABLE');
+      // Type-2 runtimes also use the exact image basename as the FUSE subtype.
+      || !['fuse.squashfuse', 'fuse.AppImage', 'fuse.appimage', `fuse.${path.basename(target)}`].includes(decodeMount(record[separator + 1]))) throw new UpdateError('INSTALL_UNAVAILABLE');
   await secureDirectory(path.dirname(target), true);
   if (await fs.realpath(target) !== target || !LOCAL_FS.has(Number((await fs.statfs(path.dirname(target))).type))) throw new UpdateError('INSTALL_UNAVAILABLE');
   await fs.access(path.dirname(target), fs.constants.W_OK | fs.constants.X_OK);
@@ -173,7 +174,7 @@ function createLinuxInstaller({ config, app, downloader, dialog, getMainWindow, 
         window = getMainWindow();
         const safe = () => window && !window.isDestroyed() && window.webContents.executeJavaScript(`!document.querySelector('dialog[open]:not(#desktop-update-dialog)') && !document.querySelector('[aria-busy="true"]')`, true);
         if (!await safe()) throw new UpdateError('INSTALL_BUSY');
-        const answer = await dialog.showMessageBox(window, { type: 'question', title: 'TTC Rechnungsverwaltung – AppImage-Update',
+        const answer = await dialog.showMessageBox(window, { type: 'question', title: 'TT Rechnungsverwaltung – AppImage-Update',
           message: `Version ${version} jetzt installieren?`, detail: 'Die App und ihr lokaler Server werden kontrolliert beendet. Ungespeicherte Eingaben gehen verloren. Das geprüfte AppImage wird am bisherigen Ort ersetzt und neu gestartet. Rechnungen und persönliche Dateien bleiben erhalten.',
           buttons: ['Abbrechen', 'Jetzt installieren'], defaultId: 0, cancelId: 0, noLink: true });
         if (answer.response !== 1) return;

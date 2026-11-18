@@ -49,7 +49,7 @@ test('main owns one window, clears closed reference and quits on Windows', async
     if (name === 'electron') return { app, dialog: { showErrorBox: () => {} } };
     if (name === './updates.cjs') return { createDesktopUpdates: () => ({ service: { start() {}, stop() {} } }) };
     if (name === './ipc.cjs') return { registerAppIPC: () => () => {} };
-    if (name === './identity.cjs') return { APP_NAME: 'TTC Rechnungsverwaltung', configureIdentity: () => {} };
+    if (name === './identity.cjs') return { APP_NAME: 'TT Rechnungsverwaltung', configureIdentity: () => {} };
     if (name === './backend.cjs') return { createBackend: (options) => {
       assert.equal(options.env.TTC_DATA_DIRECTORY, '/test/user-data');
       return {start:async()=>{backendStarts++;},stop:async()=>{backendStops++;return false;}};

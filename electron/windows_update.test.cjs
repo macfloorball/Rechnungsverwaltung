@@ -24,7 +24,7 @@ async function fixture(t, extra = {}) {
     stopForUpdate: async () => { calls.push('stop'); if (holder.fail === 'stop') throw Error('secret'); },
     resumeAfterUpdate: async () => calls.push('resume') };
   const installer = createWindowsInstaller({ config: f.config, platform: 'win32', now: () => f.now, downloader, getCandidate: service.getCandidate,
-    app: { isPackaged: true, getPath: (key) => key === 'userData' ? profile : path.join(profile, 'Program', 'TTC Rechnungsverwaltung.exe') },
+    app: { isPackaged: true, getPath: (key) => key === 'userData' ? profile : path.join(profile, 'Program', 'TT Rechnungsverwaltung.exe') },
     getMainWindow: () => ({ isDestroyed: () => false, webContents: { executeJavaScript: async (code) => {
       calls.push(code.startsWith('!') ? 'safe' : code.includes('= true') ? 'freeze' : 'unfreeze'); return holder.safe;
     } } }),
@@ -47,6 +47,9 @@ test('Windows handoff is confirmed, drained, stopped and committed before packag
   assert.equal(JSON.stringify(f.installer.getStatus()).includes(f.profile), false);
   assert.equal(f.holder.context.file, f.file);
   assert.ok(f.holder.context.requiredFiles.includes('electron/bootstrap.cjs'));
+  assert.equal(f.holder.context.windowsMode, 'authenticode-required');
+  assert.equal(f.holder.context.trust.repositoryId, 1447003404);
+  assert.match(f.holder.context.publicKeyPem, /^-----BEGIN PUBLIC KEY-----/);
   assert.equal(f.holder.context.commit, 'c'.repeat(40));
   assert.match(f.holder.context.installKey, /HKCU:.*da941357/);
 });
@@ -115,13 +118,15 @@ test('native helper uses fixed system executable and static code, with context o
   assert.equal(writes[2], 'launch\n');
 });
 
-test('Windows PowerShell parses the complete static helper without executing it', (t) => {
+test('Windows PowerShell parses the static helper and unsigned verifier without executing them', (t) => {
   if (process.platform !== 'win32') return t.skip('Native Windows PowerShell parser requires Windows');
   const { execFileSync } = require('node:child_process');
-  const source = Buffer.from(require('./windows_update_helper.cjs'), 'utf16le').toString('base64');
+  for (const text of [require('./windows_update_helper.cjs'), require('node:fs').readFileSync(path.join(__dirname, '../scripts/windows_unsigned.ps1'), 'utf8')]) {
+  const source = Buffer.from(text, 'utf16le').toString('base64');
   const program = `$errors = $null; $tokens = $null; [void][System.Management.Automation.Language.Parser]::ParseInput([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${source}')), [ref]$tokens, [ref]$errors); if ($errors.Count) { throw 'Helper syntax invalid' }`;
   execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '-'], { input: program, timeout: 20000, windowsHide: true });
+  }
 });
 
 test('Windows update registry identity remains the existing NSIS app GUID', () => {

@@ -1,4 +1,4 @@
-# TTC-Rechnungsverwaltung -- Projekt- und Umsetzungsplan
+# TT Rechnungsverwaltung -- Projekt- und Umsetzungsplan
 
 **Ziel:** Eine einfache, private Webanwendung zur Erfassung von
 Trainingstagen und zur automatischen Erstellung der monatlichen
@@ -479,7 +479,7 @@ die Architektur umbauen.
 
 Diesen Auftrag zu Beginn einer Entwicklungsphase verwenden:
 
-> # Arbeitsregeln für die Entwicklung der TTC-Rechnungsverwaltung
+> # Arbeitsregeln für die Entwicklung der TT Rechnungsverwaltung
 >
 > Wir entwickeln eine kleine, private Rechnungsanwendung für meine
 > Tätigkeit als Tischtennis-Trainer beim TTC Köln e.V.
@@ -536,7 +536,7 @@ Diesen Auftrag zu Beginn einer Entwicklungsphase verwenden:
 
 #### Phase 1 -- Projektgerüst erstellen
 
-> Erstelle das Grundgerüst der TTC-Rechnungsverwaltung gemäß unserer
+> Erstelle das Grundgerüst der TT Rechnungsverwaltung gemäß unserer
 > vereinbarten Projektstruktur.
 >
 > Aufgaben: 1. Erstelle alle benötigten Ordner. 2. Erstelle eine
@@ -575,7 +575,7 @@ Diesen Auftrag zu Beginn einer Entwicklungsphase verwenden:
 #### Phase 3 -- Kalender und HTML-Oberfläche
 
 > Entwickle die HTML-, CSS- und JavaScript-Benutzeroberfläche für die
-> TTC-Rechnungsverwaltung.
+> TT Rechnungsverwaltung.
 >
 > Anforderungen: 1. Monatskalender mit Vor- und Zurücknavigation. 2.
 > Reguläre Trainingstage werden aus dem Wochenplan automatisch
@@ -594,7 +594,7 @@ Diesen Auftrag zu Beginn einer Entwicklungsphase verwenden:
 
 #### Phase 4 -- Berechnungen
 
-> Entwickle die Abrechnungslogik der TTC-Rechnungsverwaltung.
+> Entwickle die Abrechnungslogik der TT Rechnungsverwaltung.
 >
 > Anforderungen: - Nur tatsächlich durchgeführte Termine werden
 > berücksichtigt. - Ausgefallene Termine werden nicht berechnet. -
@@ -637,7 +637,7 @@ Diesen Auftrag zu Beginn einer Entwicklungsphase verwenden:
 
 #### Phase 6 -- Gesamttest und Bereitstellung
 
-> Prüfe die vollständige TTC-Rechnungsverwaltung auf Fehler und bereite
+> Prüfe die vollständige TT Rechnungsverwaltung auf Fehler und bereite
 > sie für den späteren privaten Serverbetrieb vor.
 >
 > Teste: 1. Reguläre Trainingstage. 2. Krankheit und ausgefallene

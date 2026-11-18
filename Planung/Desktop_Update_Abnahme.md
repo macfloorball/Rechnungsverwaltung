@@ -1,6 +1,6 @@
 # Desktop-Releases: Betriebs- und native Abnahmeanleitung
 
-Stand: 15.11.2026, Umsetzungsschritt 12. Dieses Dokument beschreibt die
+Stand: 18.11.2026. Aktueller Status: [Protokoll](Desktop_Update_Stand_2026-11-18.md). Dieses Dokument beschreibt die
 auszuführenden Schritte und erforderlichen Nachweise, keine bereits bestandene
 native Installationsabnahme. Einrichtung von Schlüsseln und GitHub-Schutzregeln:
 [Desktop_Release_Einrichtung.md](Desktop_Release_Einrichtung.md).
@@ -11,8 +11,8 @@ Automatisierte Testmatrix: [Desktop_Update_Tests.md](Desktop_Update_Tests.md).
 | Verantwortlich | Erforderliche Einrichtung/Nachweis |
 | --- | --- |
 | Repository-Administration | Actions aktiviert, notwendiges Kontingent, `Entwicklung-App` mit PR-Freigaben und vier erforderlichen CI-Checks geschützt; aktives Tag-Ruleset für `refs/tags/desktop-v*` mit Erstellungs-/Änderungs-/Löschsperre und begrenztem Bypass. |
-| Release-Verantwortliche | `desktop-release` mit Required reviewer, geklärter Selbstfreigabe, deaktiviertem Admin-Bypass und genau einer Deploymentregel vom Typ Tag `desktop-v*`. Tarifunterstützung für das private Repository nachweisen. |
-| Signierverantwortliche | Isolierter Windows-x64-Runner mit Label `desktop-release-signing`, PowerShell 7 und Windows SDK; echter Code-Signing-Schlüssel im Store des Runner-Kontos; Zugriff technisch auf vertrauenswürdigen Release-Workflow beschränken. |
+| Release-Verantwortliche | `desktop-release` mit Required reviewer, geklärter Selbstfreigabe, deaktiviertem Admin-Bypass und genau einer Deploymentregel vom Typ Tag `desktop-v*`. Required-reviewer-Freigabe im öffentlichen Repository tatsächlich prüfen. |
+| Signierverantwortliche (nur `authenticode-required`, aktuell zurückgestellt) | Isolierter Windows-x64-Runner mit Label `desktop-release-signing`, PowerShell 7 und Windows SDK; echter Code-Signing-Schlüssel im Store des Runner-Kontos; Zugriff technisch auf vertrauenswürdigen Release-Workflow beschränken. |
 | Update-Schlüsselverantwortliche | Echtes Ed25519-Paar, unabhängige Prüfung von öffentlichem Schlüssel/Fingerprint, geschützte Sicherung und Rotation; privater PKCS8-PEM nur als Environment-Secret `DESKTOP_UPDATE_PRIVATE_KEY`. |
 | Repository-Administration, bei API-Lesefehlern | Optional `DESKTOP_POLICY_READ_TOKEN` als Repository-Secret: Fine-grained, nur dieses Repository, Contents/Actions/Environments jeweils Read. Keine Schreibrechte. Zugänglichkeit der tatsächlichen Gate-Endpunkte prüfen. |
 | Testverantwortliche | Windows-x64-VM und Ubuntu-LTS-/Fedora-x86_64-Systeme mit funktionierendem FUSE und Schlüsselbund; Snapshots und ausschließlich Testdaten; Befunde mit Paket-/Commit-/Systembezug festhalten. |
@@ -56,18 +56,19 @@ Repository wird dafür nicht automatisch öffentlich gestellt.
    Das Tag-Push-Ereignis startet `desktop-release.yml`; bloße Merges tun das nicht.
 5. Gate prüft Repository, Schutz, Tagziel, Abstammung und erfolgreiche CI für
    genau diesen Commit. Linux wird auf Ubuntu gebaut. Den geschützten
-   Windows-Signierjob erst nach Review freigeben. App-EXE, NSIS und Uninstaller
-   müssen tatsächlich signiert werden; beide Paketprüfungen müssen bestehen.
+   Windows-Buildjob erst nach Review freigeben. Im aktuellen `ed25519-only`-Modus
+   ist kein Signierrechner nötig. Nur im strengen Modus App-EXE, NSIS und
+   Uninstaller signieren; beide Paketprüfungen müssen bestehen.
 6. Den Publishjob erst freigeben, wenn beide vollständigen Pakete vorliegen und
    die vorgesehene erste Verteilung/Abnahme geklärt ist. **Dieser Job veröffentlicht
    nach seinen Prüfungen einen stabilen Release**; er ist kein Dry-Run. Es gibt
    keinen separaten Workflow-Schalter, der nur einen Testentwurf erzeugt.
-7. Publisher prüft lokale Pakete und Windows-Authenticode, erstellt einen neuen
+7. Publisher prüft lokale Pakete und den konfigurierten Windows-Modus, erstellt einen neuen
    Entwurf, lädt nur die sechs erlaubten Dateien hoch, lädt sie erneut herunter
    und prüft die Bytes. Das Ed25519-Manifest bindet beide tatsächlichen Asset-IDs.
    Erst nach erneuter Gate-Prüfung wird der vollständige Release stabil.
 8. Release-URL, Workflowlauf/-versuch, Commit, Tag, sechs Assetnamen, Größen,
-   Hashes, Manifestablauf, Key-ID und Windows-Zertifikatsfingerprint protokollieren.
+   Hashes, Manifestablauf, Key-ID, Windows-Modus und gegebenenfalls Zertifikatsfingerprint protokollieren.
    `make_latest: false` bleibt bestehen; Desktop-Clients wählen stabile
    `desktop-v*` nach Version. Keine Pakete eines veröffentlichten Tags ersetzen.
 
@@ -111,16 +112,18 @@ $signature.TimeStamperCertificate | Select-Object Subject, NotAfter
 Get-FileHash -LiteralPath $setup -Algorithm SHA256
 ```
 
-`X.Y.Z` durch die freigegebene Version ersetzen. Nur bei `Valid`, vorhandenem
-Zeitstempel, erwartetem exaktem Publisher/Fingerprint und passender Version
-fortfahren. Mit den unabhängig bestätigten Freigabedaten vergleichen, nicht
+`X.Y.Z` durch die freigegebene Version ersetzen. Im aktuellen Modus `ed25519-only` ausschließlich bei `NotSigned` und passender
+ProductVersion fortfahren; Publisher/Zertifikat/Zeitstempel werden nicht behauptet.
+Im Modus `authenticode-required` nur bei `Valid`, vorhandenem Zeitstempel,
+erwartetem exaktem Publisher/Fingerprint und passender Version fortfahren.
+Eine fehlerhafte Signatur darf nicht als unsigniert behandelt werden. Mit den unabhängig bestätigten Freigabedaten vergleichen, nicht
 allein mit sich selbst. Der Client benötigt weder Node/npm noch Windows SDK.
 Die Prüfung ist kein Ersatz für die Ed25519-Paketbindung.
 
 ## Gemeinsamer Testbestand und Nachweis des Datenerhalts
 
 Für jeden Fehlerfall zum VM-/Systemsnapshot der alten Version zurückkehren.
-Nicht mit echten Rechnungen testen. Zwei vollständig signierte stabile Builds
+Nicht mit echten Rechnungen testen. Zwei mit demselben Ed25519-Testschlüssel autorisierte stabile Testbuilds
 **A < B** derselben Vertrauenskonfiguration bereitstellen; die bisherige Version
 0.1.0 ohne eingerichtetes Vertrauen ist kein automatischer Update-Ausgangspunkt.
 
@@ -169,8 +172,8 @@ Nicht mit echten Rechnungen testen. Zwei vollständig signierte stabile Builds
 
 ## Native Windows-x64-Abnahme
 
-Windows-VM als normaler Benutzer mit Snapshot, korrekter Uhr und erreichbarer
-Zertifikats-/Sperrprüfung verwenden. A über den vorhandenen NSIS-Installer
+Windows-VM als normaler Benutzer mit Snapshot und korrekter Uhr verwenden.
+Im Authenticode-Modus zusätzlich erreichbare Zertifikats-/Sperrprüfung. A über den vorhandenen NSIS-Installer
 installieren, keine manuell entpackte Variante. Registrierung unter
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\da941357-9ae2-5f27-a221-a8db9727ec79`
 auf DisplayVersion prüfen; InstallLocation steht unter
@@ -179,12 +182,12 @@ auf DisplayVersion prüfen; InstallLocation steht unter
 
 | Fall | Vorgehen und erwartetes Ergebnis |
 | --- | --- |
-| Erkennung/Später | Berechtigten persönlichen Lesetoken im Desktop-Abschnitt speichern. A erkennt B verzögert oder per manueller Prüfung; signierte Notes und Version stimmen. „Später“/Escape lädt kein Paket und unterbricht keine Arbeit. |
+| Erkennung/Später | Im öffentlichen Modus ohne Token prüfen; nur im privaten Testmodus persönlichen Lesetoken verwenden. A erkennt B verzögert oder per manueller Prüfung; signierte Notes und Version stimmen. „Später“/Escape lädt kein Paket und unterbricht keine Arbeit. |
 | Jetzt/zweite Zustimmung | Paket laden, echten Fortschritt beobachten, dann native Installationsbestätigung abbrechen. A bleibt nutzbar und Paket erneut installierbar. Erst bei erneuter Zustimmung folgen Backendende und sichtbarer NSIS ohne Administratoranforderung. |
-| Erfolgreicher Wechsel | B über A installieren, nicht vorher deinstallieren. Erst nach geprüftem Installerende startet B. Version, Registry, App-EXE-Authenticode, Manifest und Datenerhalt vergleichen. Danach normal beenden und erneut starten. |
+| Erfolgreicher Wechsel | B über A installieren, nicht vorher deinstallieren. Erst nach geprüftem Installerende startet B. Version, Registry, App-EXE-Windows-Modus, Manifest und Datenerhalt vergleichen. Danach normal beenden und erneut starten. |
 | Aktive Arbeit | Während Rechnung/Sicherung bzw. offenem Arbeitsdialog Installation anfordern: ablehnen oder laufende Arbeit abwarten. Bei Drain-/Shutdown-Timeout keine Installation und kein erzwungenes Beenden einer Schreiboperation. |
 | Netzwerk/Platz/Abbruch | Verbindung vor Start und während des Downloads trennen; unzureichenden Platz nur in begrenztem Testvolume erzeugen. Lokale Funktionen bleiben nutzbar, keine Teilinstallation. Nutzerabbruch entfernt Teildateien; manuelle Wiederholung nach Wiederherstellung gelingt. |
-| Vertrauensfehler | In separater kontrollierter Testumgebung falsche Manifestsignatur, Paketmanipulation, abgelaufenes Manifest, falschen Windows-Publisher/Zertifikat oder fehlende Registryzuordnung anbieten. Keine Installerausführung. Für nachgelagerte Windows-Prüfungen eine absichtlich passende Test-Manifestsignatur verwenden, sonst blockiert bereits die frühere Stufe. |
+| Vertrauensfehler | In separater kontrollierter Testumgebung falsche Manifestsignatur, Paketmanipulation, abgelaufenes Manifest, falschen Windows-Modus (`NotSigned` gegen strengen Client, `HashMismatch`/`NotTrusted` gegen beide), im strengen Modus falschen Publisher/Zertifikat oder fehlende Registryzuordnung anbieten. Keine Installerausführung. Für nachgelagerte Windows-Prüfungen eine absichtlich passende Test-Manifestsignatur verwenden, sonst blockiert bereits die frühere Stufe. |
 | Dateischutz/Parallelität | Testcache mit Reparse Point/fremder Schreib-ACL bzw. parallelen Appstart prüfen. Übergabe muss sperren; kein fremder Pfad wird ausgeführt, kein zweites Backend startet während der Installation. |
 | Fehler/Neustart | NSIS abbrechen; VM vor/nach Übergabe und während NSIS hart stoppen, jeweils aus eigenem Snapshot. Nach Neustart keine unbeaufsichtigte Installation, keine Datenlöschung. Bei beschädigten Programmdateien gleiche oder höhere vollständige signierte Version zur Reparatur verwenden. |
 | Downgrade | B darf A nicht als Update anbieten; der Installer von A muss die vorhandene höhere registrierte Version ablehnen. Keine ältere App auf die migrierte Datenbank zwingen. |

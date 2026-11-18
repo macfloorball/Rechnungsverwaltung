@@ -15,7 +15,9 @@ def test_only_tag_pushes_can_start_production_release_workflow():
     assert jobs['publish']['needs'] == ['gate', 'linux', 'windows']
     assert jobs['linux']['needs'] == jobs['windows']['needs'] == 'gate'
     assert jobs['windows']['environment'] == jobs['publish']['environment'] == 'desktop-release'
-    assert jobs['windows']['runs-on'] == jobs['publish']['runs-on'] == ['self-hosted', 'Windows', 'X64', 'desktop-release-signing']
+    assert jobs['windows']['runs-on'] == jobs['publish']['runs-on'] == '${{ fromJSON(needs.gate.outputs.windowsRunner) }}'
+    assert jobs['gate']['outputs']['windowsRunner'] == '${{ steps.authorization.outputs.windowsRunner }}'
+    assert any(step.get('id') == 'authorization' and step.get('run') == 'node scripts/release_gate.cjs' for step in jobs['gate']['steps'])
     for name, job in jobs.items():
         assert (job.get('permissions', {}).get('contents') == 'write') == (name == 'publish')
         for step in job['steps']:

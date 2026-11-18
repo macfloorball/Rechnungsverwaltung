@@ -3,8 +3,10 @@ const { releaseFixture } = require('./release_fixture.cjs');
 const { signedManifest } = require('../scripts/release_bundle.cjs');
 const { configuration } = require('../electron/update_manifest.cjs');
 
-function updateFixture(platform = 'linux') {
+function updateFixture(platform = 'linux', { windowsMode = 'authenticode-required', visibility = 'private' } = {}) {
   const { policy, privateKey } = releaseFixture();
+  policy.visibility = visibility;
+  if (windowsMode === 'ed25519-only') policy.windows = { mode: windowsMode, certificateSha1: null, certificateSha256: null, publisherSubject: null, timestampUrl: null };
   const now = Date.parse('2026-11-14T12:00:00Z');
   const metadata = { version: '0.1.0', desktopAppId: 'de.mac-floorball.ttc-rechnungsverwaltung',
     ttcDistribution: platform === 'linux' ? 'appimage' : 'installer',
@@ -13,8 +15,8 @@ function updateFixture(platform = 'linux') {
   };
   const config = configuration(metadata, { packaged: true, currentVersion: '0.1.0', platform, arch: 'x64' });
   const release = { formatVersion: 1, version: '0.2.0', channel: 'stable', tag: 'desktop-v0.2.0', commit: 'c'.repeat(40) };
-  const receipt = { status: 'Valid', version: '0.2.0', certificateSha256: policy.windows.certificateSha256,
-    publisherSubject: policy.windows.publisherSubject, timestamped: true };
+  const receipt = { status: windowsMode === 'ed25519-only' ? 'NotSigned' : 'Valid', version: '0.2.0', certificateSha256: policy.windows.certificateSha256,
+    publisherSubject: policy.windows.publisherSubject, timestamped: windowsMode !== 'ed25519-only' };
   const packages = [
     { platform: 'win32', arch: 'x64', packageFormat: 'nsis', assetId: 10,
       fileName: 'ttc-rechnungsverwaltung-0.2.0-windows-x64-setup.exe', size: 1000001, sha256: 'd'.repeat(64), windowsSignature: receipt },

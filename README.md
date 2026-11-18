@@ -1,4 +1,4 @@
-# TTC Rechnungsverwaltung
+# TT Rechnungsverwaltung
 
 Eine lokale Webanwendung mit zusätzlichem Electron-Desktop-Grundgerüst zur
 Verwaltung von Trainingsterminen und zur Erstellung monatlicher Rechnungen
@@ -19,6 +19,11 @@ jeweiligen Lizenzen und Urheberhinweisen; sie werden dadurch nicht neu lizenzier
 
 Die Lizenz erteilt keinen Schreibzugriff auf dieses Repository und keinen
 Zugriff auf die privaten Signierschlüssel für offizielle Updates.
+
+Eine Übersicht der mitgelieferten Fremdkomponenten und ihrer Lizenzdateien steht
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Der aktuelle Prüfstand und
+offene Punkte vor einer Binärveröffentlichung stehen in der
+[Desktop-Lizenzprüfung](Planung/Desktop_Lizenzpruefung.md).
 
 ## Funktionen
 
@@ -356,7 +361,7 @@ aufgelöst; absolute Pfade sind ebenfalls möglich. Ohne Variable gilt `frontend
 
 ### Fenster, Sicherheit und Beenden
 
-App-Name und Fenstertitel sind **TTC Rechnungsverwaltung**. Das Fenster startet
+App-Name und Fenstertitel sind **TT Rechnungsverwaltung**. Das Fenster startet
 mit 1280 × 800, mindestens 1000 × 650; auf kleineren Arbeitsflächen werden
 beide Werte begrenzt. Minimieren, Wiederherstellen und Maximieren sind nativ.
 Electron-Profile behalten den bisherigen technischen Namen. Die Desktop-Datenbank
@@ -402,8 +407,8 @@ npm ci
 npm run desktop:build:win
 ```
 
-Ausgabe: `dist/windows/TTC Rechnungsverwaltung-win32-x64/` mit
-`TTC Rechnungsverwaltung.exe`. Der gesamte Ordner gehört zum Testbuild;
+Ausgabe: `dist/windows/TT Rechnungsverwaltung-win32-x64/` mit
+`TT Rechnungsverwaltung.exe`. Der gesamte Ordner gehört zum Testbuild;
 Build-Artefakte sind per `.gitignore` ausgeschlossen. Es gibt noch keinen
 Installer, keine Signatur und keinen automatischen Updateprozess.
 
@@ -421,7 +426,7 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Danach `TTC Rechnungsverwaltung.exe` im Hauptordner starten. Die Anwendung
+Danach `TT Rechnungsverwaltung.exe` im Hauptordner starten. Die Anwendung
 findet `resources/app/.venv/Scripts/python.exe` automatisch. Alternativ lässt
 sich der absolute Interpreterpfad über `TTC_PYTHON` vorgeben. Externes Python
 und dessen Pakete sind Voraussetzungen dieses Testbuilds, nicht mitgelieferte
@@ -1103,8 +1108,10 @@ Abnahmegrenzen stehen ebenfalls dort.
 
 Der getrennte [Desktop-Release-Workflow](Planung/Desktop_Release_Einrichtung.md)
 ist für ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags vorbereitet. Er verwendet
-auf Wunsch dasselbe private Repository. Produktive Releases bleiben bis zur
-Einrichtung echter Signaturen und geschützter Freigaben gesperrt.
+dasselbe inzwischen öffentliche Repository. Windows nutzt ausdrücklich den Modus
+`ed25519-only` ohne Authenticode; das gemeinsame Ed25519-Manifest bleibt für beide
+Plattformen verpflichtend. Produktive Releases bleiben bis zur nativen Abnahme,
+Einrichtung echter Update-Schlüssel und ausdrücklichen Freigabe gesperrt.
 
 Die [Update-Erkennung](Planung/Desktop_Update_Erkennung.md) ist im Main-Prozess
 implementiert: verzögerte/wiederkehrende Prüfungen, verifizierte Release-Metadaten
@@ -1130,11 +1137,13 @@ GitHub-Einrichtung, Freigabe, native Windows-/Linux-Prüfungen mit zwei Versione
 Datenerhaltsvergleich und manuelle Wiederherstellung. Der lokale Probelauf ist
 geprüft; signierter Live-Release und native Installationsabnahme stehen aus.
 
-Eine spätere öffentliche Verteilung desselben Repositorys ist vorgesehen.
-Die [Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) beschreibt den
-geprüften Quell-/Historienstand und offene Entscheidungen. Aktuell bleibt das
-Repository privat; öffentliche Sichtbarkeit und produktive Updates sind noch
-nicht freigegeben.
+Das Repository ist laut aktuellem Arbeitsauftrag öffentlich. Die
+[Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) bleibt als historischer
+Prüfstand erhalten; sie belegt keine erledigten Lizenzpflichten für Binärpakete.
+Der [aktuelle Umsetzungsstand](Planung/Desktop_Update_Stand_2026-11-18.md) trennt
+bestandene automatische Tests und den nativen Linux-Testwechsel mit Testfeed
+von ausstehender Gesamt-Abnahme und Einrichtung. Restaufgaben stehen in
+[Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32).
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
@@ -1167,7 +1176,7 @@ Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
 Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
 Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
 Ergebnis ohne Release-Tag:
-`dist/installer/TTC Rechnungsverwaltung-0.1.0-windows-x64-development-setup.exe`.
+`dist/installer/TT Rechnungsverwaltung-0.1.0-windows-x64-development-setup.exe`.
 Produktionsbuilds behalten den Dateinamen ohne `-development`; Einzelheiten zur
 Versionsprüfung stehen unter [Desktop-Release-Versionierung](#desktop-release-versionierung).
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
@@ -1176,7 +1185,7 @@ Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
 
 ### Produktidentität
 
-App-Name: **TTC Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
+App-Name: **TT Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
 Paketversion: **0.1.0** aus `package.json`. Das vorhandene TTC-Symbol wird
 für App, EXE und Installer verwendet. Der technische Profilname bleibt
 `ttc-rechnungsverwaltung`; eine Änderung der Herausgeberangabe verschiebt
@@ -1185,7 +1194,7 @@ Der Installer ist nicht digital signiert. Die Herausgeber-Metadaten ersetzen
 kein Zertifikat; eine SmartScreen-Anzeige eines unbekannten Herausgebers ist möglich.
 
 Der Installer legt für den aktuellen Benutzer eine Desktop-Verknüpfung und
-einen Startmenü-Eintrag **TTC Rechnungsverwaltung** an. Bei Neuinstallation
+einen Startmenü-Eintrag **TT Rechnungsverwaltung** an. Bei Neuinstallation
 beziehungsweise Update werden die Verknüpfungen bereitgestellt. Der Start
 benötigt weder ein Terminal noch einen separaten Backend-Aufruf. Die native
 Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
@@ -1254,8 +1263,10 @@ Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
 2. App vollständig schließen und das Ende ihres lokalen Servers abwarten.
    Keine zweite Instanz oder Schreibprogramme auf dem Datenbestand offen lassen.
 3. Den neuen Installer aus derselben vertrauenswürdigen Bezugsquelle übernehmen,
-   signierte Freigabedaten und Windows-Authenticode einschließlich erwartetem
-   Zertifikat/Publisher/Version prüfen, SHA-256 vergleichen und unter demselben
+   Ed25519-signierte Freigabedaten und den festgelegten Windows-Modus prüfen:
+   aktuell ausdrücklich `NotSigned` mit passender ProductVersion, im optionalen
+   strengen Modus zusätzlich Authenticode/Zertifikat/Publisher/Zeitstempel.
+   SHA-256 vergleichen und unter demselben
    Windows-Benutzer starten. Die [Abnahmeanleitung](Planung/Desktop_Update_Abnahme.md#dateiverteilung-und-manuelles-prüfen)
    beschreibt diese Prüfungen; eine Prüfsummendatei allein genügt nicht.
    App-ID, technischer Profilname und Herausgeber bleiben stabil.

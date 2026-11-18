@@ -1,5 +1,6 @@
 'use strict';
 const path = require('node:path');
+const { windowsMode } = require('../electron/windows_trust.cjs');
 const { validateReleaseMetadata } = require('../electron/version.cjs');
 const { loadPolicy } = require('./release_policy.cjs');
 
@@ -8,6 +9,7 @@ const { loadPolicy } = require('./release_policy.cjs');
 function installerConfig(root, metadata, release = { formatVersion: 1, version: metadata.version, channel: 'development', tag: null, commit: null }) {
   validateReleaseMetadata(release, metadata.version);
   const policy = release.channel === 'stable' ? loadPolicy(root) : null;
+  const signed = Boolean(policy && windowsMode(policy.windows) === 'authenticode-required');
   return {
     appId: metadata.desktopAppId,
     productName: metadata.productName,
@@ -19,11 +21,11 @@ function installerConfig(root, metadata, release = { formatVersion: 1, version: 
     asar: false,
     npmRebuild: false,
     publish: null,
-    forceCodeSigning: Boolean(policy),
+    forceCodeSigning: signed,
     win: { target: [{ target: 'nsis', arch: ['x64'] }],
       icon: path.join(root, 'electron', 'assets', 'app-icon.ico'),
-      signAndEditExecutable: Boolean(policy), signExecutable: Boolean(policy), requestedExecutionLevel: 'asInvoker',
-      ...(policy ? { signtoolOptions: { certificateSha1: policy.windows.certificateSha1,
+      signAndEditExecutable: signed, signExecutable: signed, requestedExecutionLevel: 'asInvoker',
+      ...(signed ? { signtoolOptions: { certificateSha1: policy.windows.certificateSha1,
         publisherName: policy.windows.publisherSubject, signingHashAlgorithms: ['sha256'],
         rfc3161TimeStampServer: policy.windows.timestampUrl } } : {}),
     },

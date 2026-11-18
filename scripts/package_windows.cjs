@@ -17,10 +17,14 @@ async function prepareWindowsSource(root, target, release = getDesktopRelease(ro
     name: metadata.name, productName: metadata.productName, version: metadata.version,
     desktopAppId: metadata.desktopAppId, description: metadata.description,
     main: metadata.main, author: metadata.author || metadata.productName, private: true,
+    license: metadata.license,
     desktopRelease: release,
     desktopUpdateTrust,
   }, null, 2));
   // Positive selection: never copy runtime data, environments, Git, or node_modules.
+  for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
+    await fs.copyFile(path.join(root, name), path.join(target, name));
+  }
   for (const folder of ['electron', 'backend']) {
     await fs.mkdir(path.join(target, folder), { recursive: true });
     for (const entry of await fs.readdir(path.join(root, folder), { withFileTypes: true })) {

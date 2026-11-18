@@ -17,9 +17,9 @@ const { createLinuxInstaller } = require('./linux_update.cjs');
 const { signedManifest } = require('../scripts/release_bundle.cjs');
 const { updateFixture } = require('../tests/update_fixture.cjs');
 
-for (const platform of ['win32', 'linux']) for (const scenario of ['success', 'network-retry', 'signature', 'payload', 'downgrade', 'later', 'install-failure']) {
-  test(`${platform}: complete update chain / ${scenario}`, { skip: platform === 'linux' && process.platform !== 'linux' }, async (t) => {
-    const f = updateFixture(platform), payload = Buffer.alloc(1000001, 42), calls = [], stages = [];
+for (const windowsMode of ['authenticode-required', 'ed25519-only']) for (const platform of ['win32', 'linux']) for (const scenario of ['success', 'network-retry', 'signature', 'payload', 'downgrade', 'later', 'install-failure']) {
+  test(`${platform} / ${windowsMode}: complete update chain / ${scenario}`, { skip: platform === 'linux' && process.platform !== 'linux' }, async (t) => {
+    const f = updateFixture(platform, { windowsMode, visibility: windowsMode === 'ed25519-only' ? 'public' : 'private' }), payload = Buffer.alloc(1000001, 42), calls = [], stages = [];
     if (platform === 'win32') payload.write('MZ');
     else { Buffer.from('7f454c460201','hex').copy(payload); Buffer.from('414902','hex').copy(payload, 8); payload.writeUInt16LE(62,18); }
     const hash = createHash('sha256').update(payload).digest('hex');
@@ -39,13 +39,13 @@ for (const platform of ['win32', 'linux']) for (const scenario of ['success', 'n
         const bytes = Buffer.from(payload); if (scenario === 'payload') bytes[100] ^= 1;
         return new Response(bytes, { headers: { 'content-length': String(bytes.length) } });
       }
-      assert.equal(options.headers.Authorization, `Bearer ${f.token}`);
+      assert.equal(options.headers.Authorization, config.visibility === 'private' ? `Bearer ${f.token}` : undefined);
       if (url.endsWith('/assets/30')) return new Response(packet.bytes);
       if (url.endsWith('/assets/40')) return new Response(scenario === 'signature' ? Buffer.alloc(64) : packet.signature);
       if (url.includes('/assets/')) return new Response(null, { status: 302, headers: { location: 'https://release-assets.githubusercontent.com/pinned-fixture' } });
       if (url.includes('/releases?')) return Response.json([f.feedRelease]);
       if (url.endsWith('/releases/100')) return Response.json(f.feedRelease);
-      return Response.json({ id: config.repositoryId, full_name: config.repository, private: true, archived: false });
+      return Response.json({ id: config.repositoryId, full_name: config.repository, private: config.visibility === 'private', archived: false });
     };
     const transportFactory = args => createUpdateTransport({ ...args, fetchImpl });
     const service = createUpdateService({ config, now: () => f.now, getToken: async () => f.token, transportFactory, minimumIntervalMs: 0 });

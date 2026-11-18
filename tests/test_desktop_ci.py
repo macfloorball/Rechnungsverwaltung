@@ -51,3 +51,14 @@ def test_ci_and_runtime_requirements_have_no_floating_package_versions():
             if not line or line.startswith(("#", "-r ")):
                 continue
             assert re.fullmatch(r"[a-zA-Z0-9_-]+==[0-9]+(?:\.[0-9]+)+(?:; .+)?", line), (name, line)
+
+
+def test_failed_native_tests_preserve_only_scoped_diagnostic_logs():
+    steps = workflow()["jobs"]["tests"]["steps"]
+    pytest_step = next(step for step in steps if step.get("name") == "Python tests")
+    assert '--basetemp "${{ runner.temp }}/ttc-pytest"' in pytest_step["run"]
+    diagnostics = next(step for step in steps if step.get("name") == "Preserve lifecycle diagnostics on failure")
+    assert diagnostics["if"] == "failure()"
+    assert diagnostics["with"]["path"] == "${{ runner.temp }}/ttc-pytest/**/*.log"
+    assert diagnostics["with"]["retention-days"] == "7"
+    assert diagnostics["with"]["if-no-files-found"] == "ignore"

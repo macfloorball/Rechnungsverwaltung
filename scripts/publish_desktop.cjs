@@ -25,7 +25,7 @@ async function publish({ api, policyAPI = api, policy, release, packages, notes,
   await gate(policyAPI, policy, release);
   await checkExisting();
   const draft = await api.request('POST', `${base}/releases`, { body: { tag_name: release.tag,
-    target_commitish: release.commit, name: `TTC Rechnungsverwaltung ${release.version}`, body: notes,
+    target_commitish: release.commit, name: `TT Rechnungsverwaltung ${release.version}`, body: notes,
     draft: true, prerelease: false, generate_release_notes: false, make_latest: 'false' } });
   if (!Number.isSafeInteger(draft.id) || draft.id <= 0 || draft.draft !== true || draft.tag_name !== release.tag) throw Error('Ungültiger Release-Entwurf.');
   const uploaded = [];

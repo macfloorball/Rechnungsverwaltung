@@ -102,7 +102,7 @@ async def lifespan(_: FastAPI):
 # Die eingebauten Dokumentationsoberflächen laden externe CDN-Ressourcen.
 # Das lokale OpenAPI-Schema bleibt für Entwicklung und Werkzeuge verfügbar.
 app = FastAPI(
-    title="TTC-Rechnungsverwaltung",
+    title="TT Rechnungsverwaltung",
     lifespan=lifespan,
     docs_url=None,
     redoc_url=None,

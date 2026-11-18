@@ -88,7 +88,8 @@ function createBackend({ config, root, env, onFailure }) {
       if (!response.ok) throw Error('Backend konnte nicht freigegeben werden.');
     },
     async stopForUpdate() {
-      if (!child || !ready || stopping) throw Error('Backend nicht bereit.');
+      // Recovery may retry after a timeout; it must remain cooperative.
+      if (!child || !ready) throw Error('Backend nicht bereit.');
       stopping = true;
       const forced = await stopTree(child, { force: false });
       if (forced || child.exitCode !== 0) throw Error('Backend nicht fehlerfrei beendet.');

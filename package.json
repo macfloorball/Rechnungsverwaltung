@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Lokale TTC Rechnungsverwaltung für Windows und Linux",
+  "description": "Lokale TT Rechnungsverwaltung f\u00fcr Windows und Linux",
   "main": "electron/main.cjs",
   "scripts": {
     "desktop:version": "node scripts/desktop_release.cjs",
     "desktop:dev": "node scripts/run.cjs desktop-dev",
-    "desktop:check": "node --check electron/linux_update.cjs && node --check electron/windows_update.cjs && node --check electron/windows_update_helper.cjs && node --check electron/update_download.cjs && node --check electron/update_controller.cjs && node --check frontend/js/updates.js && node --check electron/updates.cjs && node --check electron/update_manifest.cjs && node --check electron/update_transport.cjs && node --check electron/update_credentials.cjs && node --check scripts/release_policy.cjs && node --check scripts/release_gate.cjs && node --check scripts/release_bundle.cjs && node --check scripts/github_api.cjs && node --check scripts/windows_signing.cjs && node --check scripts/publish_desktop.cjs && node --check scripts/check_appimage.cjs && node --check scripts/check_installer.cjs && node --check scripts/build_appimage.cjs && node --check electron/version.cjs && node --check scripts/desktop_release.cjs && node --check electron/bootstrap.cjs && node --check electron/installation.cjs && node --check electron/identity.cjs && node --check electron/browser-links.cjs && node --check electron/ipc.cjs && node --check electron/backend.cjs && node --check electron/main.cjs && node --check electron/window.cjs && node --check electron/preload.cjs && node --check electron/startup.cjs && node --check scripts/build_frontend.cjs && node --check scripts/installer_config.cjs && node --check scripts/build_installer.cjs && node --check scripts/package_windows.cjs && node --check scripts/run.cjs && node --test electron/*.test.cjs scripts/*.test.cjs",
+    "desktop:check": "node --check electron/linux_update.cjs && node --check electron/windows_update.cjs && node --check electron/windows_update_helper.cjs && node --check electron/update_download.cjs && node --check electron/update_controller.cjs && node --check frontend/js/updates.js && node --check electron/updates.cjs && node --check electron/update_manifest.cjs && node --check electron/update_transport.cjs && node --check electron/update_credentials.cjs && node --check scripts/check_native_appimage_update.cjs && node --check tests/native_appimage_fixture.cjs && node --check tests/native_appimage_smoke.cjs && node --check scripts/release_policy.cjs && node --check scripts/release_gate.cjs && node --check scripts/release_bundle.cjs && node --check scripts/github_api.cjs && node --check scripts/windows_signing.cjs && node --check scripts/publish_desktop.cjs && node --check scripts/check_appimage.cjs && node --check scripts/check_installer.cjs && node --check scripts/build_appimage.cjs && node --check electron/version.cjs && node --check scripts/desktop_release.cjs && node --check electron/bootstrap.cjs && node --check electron/installation.cjs && node --check electron/identity.cjs && node --check electron/browser-links.cjs && node --check electron/ipc.cjs && node --check electron/backend.cjs && node --check electron/main.cjs && node --check electron/window.cjs && node --check electron/preload.cjs && node --check electron/startup.cjs && node --check scripts/build_frontend.cjs && node --check scripts/installer_config.cjs && node --check scripts/build_installer.cjs && node --check scripts/package_windows.cjs && node --check scripts/run.cjs && node --test electron/*.test.cjs scripts/*.test.cjs",
     "frontend:build": "node scripts/build_frontend.cjs",
     "desktop:start": "node scripts/run.cjs desktop-production",
     "web:start": "node scripts/run.cjs web",
@@ -25,7 +25,7 @@
     "electron": "45.3.1",
     "electron-builder": "26.18.0"
   },
-  "productName": "TTC Rechnungsverwaltung",
+  "productName": "TT Rechnungsverwaltung",
   "author": "mac-floorball",
   "desktopAppId": "de.mac-floorball.ttc-rechnungsverwaltung"
 }

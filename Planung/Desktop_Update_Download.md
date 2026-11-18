@@ -33,7 +33,7 @@ CDN-Weiterleitung entfernt. Cookies und automatische Redirects sind deaktiviert.
 
 Windows lädt ausschließlich das signierte NSIS-Asset, Linux ausschließlich das
 AppImage für x64. Die im signierten Manifest gebundene Windows-Signaturquittung
-wird weiterhin geprüft. **Die native Authenticode-Prüfung unmittelbar vor einer
+wird weiterhin geprüft. **Die native Windows-Modusprüfung unmittelbar vor einer
 Installation gehört zu Schritt 8.** Der Download führt keine Datei aus.
 
 ## Streaming, Prüfung und Dateien

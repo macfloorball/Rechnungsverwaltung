@@ -1,5 +1,6 @@
 'use strict';
 const fs = require('node:fs');
+const { validWindowsReceipt } = require('../electron/windows_trust.cjs');
 const path = require('node:path');
 const { createHash, createPrivateKey, createPublicKey, sign, verify } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
@@ -58,9 +59,7 @@ function collectPackages(root, input, release, policy, verifyWindows) {
       for (const field of ['status', 'certificateSha256', 'publisherSubject', 'timestamped', 'version']) {
         if (info.windowsSignature?.[field] !== windowsSignature[field]) throw Error('Windows-Signaturnachweis stimmt nicht überein.');
       }
-      if (windowsSignature.status !== 'Valid' || windowsSignature.timestamped !== true || windowsSignature.version !== release.version
-          || windowsSignature.certificateSha256 !== policy.windows.certificateSha256
-          || windowsSignature.publisherSubject !== policy.windows.publisherSubject) throw Error('Windows-Code-Signatur ist ungültig.');
+      if (!validWindowsReceipt(windowsSignature, policy.windows, release.version)) throw Error('Windows-Code-Signatur ist ungültig.');
     }
     return { fileName: target.fileName, bytes, platform: target.platform, arch: 'x64',
       packageFormat: target.packageFormat, size, sha256: digest, ...(windowsSignature ? { windowsSignature } : {}) };
@@ -71,7 +70,7 @@ function releaseNotes(root, release) {
   const subjects = execFileSync('git', ['log', '--no-merges', '-30', '--format=%s', release.commit],
     { cwd: root, encoding: 'utf8', timeout: 10000 }).split('\n').filter(Boolean);
   const text = subjects.map((subject) => `- ${subject.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 240)}`).join('\n');
-  return `TTC Rechnungsverwaltung ${release.version}\n\n${text}\n\nQuellstand: ${release.commit}\nWindows x64: NSIS. Linux x64: AppImage.\nVor dem Update eine vollständige Datensicherung erstellen.\n`;
+  return `TT Rechnungsverwaltung ${release.version}\n\n${text}\n\nQuellstand: ${release.commit}\nWindows x64: NSIS. Linux x64: AppImage.\nVor dem Update eine vollständige Datensicherung erstellen.\n`;
 }
 
 function signedManifest(policy, release, packages, notes, key, now = new Date()) {
@@ -92,9 +91,7 @@ function signedManifest(policy, release, packages, notes, key, now = new Date())
           || file.arch !== 'x64' || file.packageFormat !== (windows ? 'nsis' : 'appimage')
           || !Number.isSafeInteger(file.size) || file.size < 1000000 || file.size > 1024 ** 3
           || typeof file.sha256 !== 'string' || file.sha256.length !== 64 || !/^[a-f0-9]{64}$/.test(file.sha256)) throw Error('Ungültige Plattform- oder Asset-Metadaten.');
-      if (windows && (file.windowsSignature?.status !== 'Valid' || file.windowsSignature.timestamped !== true || file.windowsSignature.version !== release.version
-          || file.windowsSignature.certificateSha256 !== policy.windows.certificateSha256
-          || file.windowsSignature.publisherSubject !== policy.windows.publisherSubject)) throw Error('Authenticode-Nachweis fehlt.');
+      if (windows && !validWindowsReceipt(file.windowsSignature, policy.windows, release.version)) throw Error('Authenticode-Nachweis fehlt.');
       return { platform: file.platform, arch: file.arch, packageFormat: file.packageFormat, fileName,
         assetId: file.assetId, size: file.size, sha256: file.sha256,
         url: `https://api.github.com/repos/${policy.repository}/releases/assets/${file.assetId}`,

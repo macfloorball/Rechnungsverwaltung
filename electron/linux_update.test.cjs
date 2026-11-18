@@ -26,6 +26,10 @@ test('only owned writable x64 AppImages in a recognized read-only runtime mount 
   assert.equal(result.target, f.target);
   assert.equal(result.identity.ino, String((await fs.stat(f.target)).ino));
   await assert.rejects(probeAppImage({ ...f, mountInfo: async () => '' }), /INSTALL_UNAVAILABLE/);
+  const namedMount = `1 0 0:1 / ${f.mount.replaceAll(' ', '\\040')} ro,nosuid,nodev - fuse.${path.basename(f.target).replaceAll(' ', '\\040')} AppImage ro\n`;
+  assert.equal((await probeAppImage({ ...f, mountInfo: async () => namedMount })).target, f.target);
+  await assert.rejects(probeAppImage({ ...f, mountInfo: async () => namedMount.replace('ro,nosuid', 'rw,nosuid') }), /INSTALL_UNAVAILABLE/);
+  await assert.rejects(probeAppImage({ ...f, mountInfo: async () => namedMount.replace(`fuse.${path.basename(f.target).replaceAll(' ', '\\040')}`, 'fuse.foreign') }), /INSTALL_UNAVAILABLE/);
   await fs.chmod(f.target, 0o500);
   await assert.rejects(probeAppImage(f), /INSTALL_UNAVAILABLE/);
   await fs.chmod(f.target, 0o700);

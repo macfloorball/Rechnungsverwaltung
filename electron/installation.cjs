@@ -6,7 +6,7 @@ const { validateReleaseMetadata } = require('./version.cjs');
 
 const REQUIRED_FILES = [
   'package.json', 'packaged-runtime.json', 'electron/bootstrap.cjs', 'electron/main.cjs', 'electron/installation.cjs', 'electron/version.cjs',
-  'electron/updates.cjs', 'electron/update_manifest.cjs', 'electron/update_transport.cjs', 'electron/update_credentials.cjs',
+  'electron/windows_trust.cjs', 'electron/updates.cjs', 'electron/update_manifest.cjs', 'electron/update_transport.cjs', 'electron/update_credentials.cjs',
   'electron/update_controller.cjs', 'electron/update_download.cjs', 'electron/windows_update.cjs', 'electron/windows_update_helper.cjs',
   'backend/desktop_update_gate.py', 'backend/linux_update_helper.py', 'electron/linux_update.cjs',
   'scripts/run.cjs', 'scripts/managed_server.py', 'backend/main.py',
