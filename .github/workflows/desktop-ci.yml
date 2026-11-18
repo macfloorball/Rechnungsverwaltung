@@ -55,7 +55,15 @@ jobs:
           npm run desktop:version
           npm run desktop:check
       - name: Python tests
-        run: python -m pytest -q
+        run: python -m pytest -q --basetemp "${{ runner.temp }}/ttc-pytest"
+      - name: Preserve lifecycle diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-test-diagnostics-${{ matrix.os }}
+          path: ${{ runner.temp }}/ttc-pytest/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   windows-build:
     name: Windows NSIS x64 build
