@@ -1,42 +1,22 @@
 # Sichere Desktop-Releases: Einrichtung und Freigabe
 
-Stand: 15.11.2026, ergänzt in Umsetzungsschritt 12. Die Implementierung ist **vorbereitet,
+Stand: 18.11.2026. Die Implementierung ist **vorbereitet,
 aber für produktive Releases gesperrt**. In `desktop-release-policy.json` stehen
 `enabled: false` und nicht eingerichtete Signaturfelder auf `null`. Das bedeutet
 Abbruch vor Veröffentlichung, keine Ersatzschlüssel oder umgehbare Signaturprüfung.
 
-## Entscheidung: dasselbe private Repository
+## Quelle und aktueller Windows-Modus
 
-Auf ausdrücklichen Wunsch bleiben Releases in `macfloorball/Rechnungsverwaltung`,
-Repository-ID **1447003404**, derzeit privat. Ein separates öffentliches
-Binärrepository wurde bewertet und verworfen. Für diese Variante sind weder
-eine zusätzliche GitHub App noch ein fremdes Publish-Repository notwendig.
+Das Repository `macfloorball/Rechnungsverwaltung` (ID **1447003404**) ist laut
+Arbeitsauftrag inzwischen öffentlich; die Policy verwendet jetzt `public`.
+Das Gate prüft die tatsächliche Sichtbarkeit vor jedem Release. Öffentliche
+Clients benötigen keinen Lesetoken. Keine GitHub-Einstellungen wurden hier verändert.
 
-Inzwischen ist eine spätere Veröffentlichung des gesamten Repositorys
-grundsätzlich vorgesehen. Sie wurde noch nicht durchgeführt. Die
-[öffentliche Freigabevorbereitung](Repository_Public_Freigabe.md) dokumentiert
-Inhalts-/Historienprüfung und die notwendige Umstellung des Update-Vertrauens.
-Bis zur ausdrücklichen Sichtbarkeitsfreigabe bleibt die aktuelle private Policy
-maßgeblich; ein anderer Releaseprozess nur wegen GitHub Pro wird nicht eingeführt.
-
-Private Releases und ihre Assets erfordern für Endnutzer eigenen GitHub-Zugriff
-auf dieses Repository. Der implementierte Desktop-Abschnitt nimmt einen eigenen
-Fine-grained Lesetoken mit `Contents: Read-only` für genau dieses Repository an;
-es gibt kein gemeinsames App-Token. Der Kontozugriff muss bereits bestehen.
-Ohne Anmeldung funktionieren die lokale Anwendung und der manuelle Updateweg
-weiter. Main speichert den Zugang mit Electron `safeStorage` verschlüsselt im
-privaten Profil. Linux benötigt einen unterstützten entsperrten Schlüsselbund;
-`basic_text` und Klartext-Fallback sind ausgeschlossen. Dieser Zugang ist vom
-Release-Publish-Token und vom optionalen Policy-Lesetoken getrennt.
-
-Eine spätere Umstellung des gesamten Repositorys auf öffentlich macht auch
-Quellcode, Git-Historie und automatisch von GitHub angebotene Quellarchive
-öffentlich. Der Workflow ändert **niemals** die Repository-Sichtbarkeit. Ändert
-sie sich außerhalb der konfigurierten Freigabe, bricht die Release-Prüfung ab.
-Eine bewusste spätere Umstellung benötigt eine geprüfte Anpassung von
-`visibility` in der Richtlinie. Bereits ausgelieferter Electron-/Python-Code
-ist aus Paketen grundsätzlich extrahierbar; unter der privaten Verteilung haben
-ohnehin nur berechtigte Repository-Nutzer Zugriff auf die Downloads.
+Aktuell ist `windows.mode: "ed25519-only"` gewählt: Windows-Pakete werden bewusst
+ohne Authenticode erstellt. Ed25519-Manifestprüfung bleibt für beide Plattformen
+verpflichtend. SmartScreen, Browser oder Windows können vor unbekanntem Herausgeber
+warnen bzw. eine Ausführung blockieren; Warnungsfreiheit wird nicht zugesagt.
+SignPath und öffentlich vertrauenswürdige Windows-Code-Signierung sind zurückgestellt.
 
 ## Vor der Aktivierung manuell einrichten
 
@@ -72,13 +52,8 @@ Unter **Settings → Environments** die Environment **`desktop-release`** anlege
   für erfolgreiche Tests oder gültige Signaturen.
 - Deployment-Regeln auf **Selected branches and tags** setzen und ausschließlich
   einen **Tag**-Eintrag **`desktop-v*`** zulassen. Keine Branch- oder `*`-Freigabe.
-- GitHub muss diese Schutzregeln im verwendeten Tarif für **private** Repositories
-  unterstützen. Laut [GitHub-Dokumentation zu Pflichtfreigaben](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#required-reviewers)
-  sind Required reviewers unter Free, Pro und Team nur für öffentliche
-  Repositories verfügbar. Die Unterstützung im konkreten privaten Konto ist
-  nicht nachgewiesen. Ist sie nicht
-  vorhanden, bleibt der Workflow gesperrt; eine andere Freigabearchitektur muss
-  ausdrücklich festgelegt werden, statt Schutzregeln wegzulassen.
+- Die tatsächlich gesetzten Required-reviewer- und Tagregeln vor der Freigabe
+  überprüfen. Ein öffentliches Repository ersetzt diese manuelle Freigabe nicht.
 
 Die API-Prüfung bestätigt erforderliche Reviewer und die ausschließliche Tagregel;
 die tatsächlichen Jobfreigaben erzwingt GitHub. Es gibt zwei geschützte Jobs:
@@ -94,7 +69,20 @@ kein Anlass, Prüfungen zu umgehen. Kein Schreibrecht und keine Ausgabe des
 Tokens in Logs oder in der Anwendung. Die konkrete API-Berechtigung und
 Tarifunterstützung müssen vor Aktivierung tatsächlich geprüft werden.
 
-### 3. Windows-Code-Signierung bereitstellen
+### 3. Windows-Modus wählen
+
+Im aktuellen Modus `ed25519-only` alle vier Zertifikats-/Zeitstempelfelder auf
+`null` lassen. Das geprüfte Gate gibt `windows-2025` für Build und Publish aus.
+Beide Jobs behalten die manuelle `desktop-release`-Environmentfreigabe.
+`windows_unsigned.ps1` verlangt nativ `NotSigned` und die exakte ProductVersion;
+Fehler wie `HashMismatch` oder `NotTrusted` werden nicht als unsigned behandelt.
+Der Installer enthält den lokal festgelegten Modus im App-Vertrauensanker.
+Der installierte Client kann den Modus nicht anhand des Feeds lockern.
+
+Für den weiterhin unterstützten Modus `authenticode-required` sind folgende
+zusätzliche Schritte erforderlich (aktuell zurückgestellt):
+
+### Optional: Windows-Code-Signierung bereitstellen
 
 Die vorbereitete Variante verwendet einen **dedizierten Windows-x64-
 Signierrechner** mit:
@@ -135,8 +123,7 @@ App-EXE wird ausdrücklich **vor** der NSIS-Paketierung signiert, weil
 Uninstaller werden über die verpflichtende Signierkonfiguration erzeugt.
 App und Installer müssen mit Windows SDK und Windows-Vertrauenskette gültig sein;
 Herausgeber, Zertifikatsfingerprint, Zeitstempel und die tatsächlich signierte
-ProductVersion werden geprüft. Kein
-`forceCodeSigning: false` für stabile Builds, kein unsigned Fallback.
+ProductVersion werden geprüft. In diesem Modus bleibt `forceCodeSigning: true` zwingend; kein unsigned Fallback.
 
 ### 4. Ed25519-Update-Schlüssel einrichten
 
@@ -168,9 +155,18 @@ erzeugt**. Der Fingerprint-Helfer akzeptiert nur öffentliche SPKI-PEM-Schlüsse
   autorisierte Aktualisierung oder einen unabhängig verifizierten Installer.
 
 Stabile Pakete enthalten nur Public-Key, Fingerprint, Repository-ID und
-Windows-Zertifikatsidentität. Entwicklungsbuilds erhalten
+Windows-Vertrauensmodus und gegebenenfalls Zertifikatsidentität. Entwicklungsbuilds erhalten
 `desktopUpdateTrust: { enabled: false }`. Die Richtlinie selbst, private PEMs,
 Build-/Signierwerkzeuge und GitHub-Tokens werden nicht in die App kopiert.
+
+### Übergang bestehender Installationen
+
+Installationen ohne Vertrauen, mit privater Sichtbarkeit oder verpflichtendem
+Authenticode benötigen für den aktuellen Modus eine manuelle, unabhängig
+verifizierte Erstinstallation als derselbe Benutzer. Vorher vollständiges Backup;
+keine Vorab-Deinstallation. Ein Feed darf diesen Übergang nicht selbst freigeben.
+Auch der spätere Wechsel zu Authenticode oder einem neuen Ed25519-Schlüssel
+benötigt eine gesonderte geprüfte Vertrauensmigration/manuelle Installation.
 
 ### 5. Richtlinie freigeben und Release auslösen
 
@@ -193,12 +189,12 @@ keinen Veröffentlichungsschalter in der Anwendung.
 
 1. `release_gate.cjs`: alle Voraussetzungen read-only prüfen; kein Secret für
    Update-Signierung und kein Schreibrecht im Gate-Job.
-2. Linux-AppImage und nativen signierten Windows-Installer aus demselben Commit
+2. Linux-AppImage und nativen gemäß Windows-Modus geprüften Windows-Installer aus demselben Commit
    bauen. Beide Pakete prüfen, darunter ihre eingebetteten Laufzeiten.
 3. Ausschließlich je drei freigegebene Paket-/Metadatendateien als interne
-   Actions-Artefakte im privaten Repository bereitstellen, Aufbewahrung ein Tag.
+   Actions-Artefakte bereitstellen, Aufbewahrung ein Tag.
 4. Nach Erfolg beider Builds den geschützten Publishjob freigeben. Er prüft die
-   Binärpakete, Versionen, Hashes und Windows-Authenticode erneut, bevor er einen
+   Binärpakete, Versionen, Hashes und den Windows-Modus erneut, bevor er einen
    neuen GitHub-Release-Entwurf anlegt. Existiert bereits ein Release oder Entwurf
    für den Tag, bricht er ab; kein Ersetzen, Löschen oder automatischer Retry.
 5. Beide Pakete unter festen ASCII-Namen hochladen und die hochgeladenen Bytes
@@ -222,13 +218,10 @@ Die sechs Release-Assets sind:
 - `RELEASE_NOTES.md`
 - `SHA256SUMS`
 
-Diese Namen bezeichnen Release-Dateien, **derzeit keine öffentlichen Downloads**.
-Im gewählten privaten Repository bleiben sie zugangsgeschützt. Automatische
-GitHub-Quellarchive und die gesamte Historie würden bei einer Veröffentlichung
-des Repositorys ebenfalls sichtbar. Eine öffentliche Binärverteilung ohne
-öffentlichen Quellcode benötigt eine gesondert freigegebene Architekturänderung;
-ein stiller Wechsel der Sichtbarkeit ist weder Teil des Workflows noch des
-manuellen Updatewegs.
+Diese Namen bezeichnen die sechs Assets des öffentlichen Release-Repositories.
+Vor öffentlicher Binärverteilung bleiben die Lizenz-/NOTICE-/Quellangebots-
+Pflichten aus `THIRD_PARTY_NOTICES.md` tatsächlich zu erfüllen; ihre Erledigung
+wird durch diesen Workflow nicht behauptet.
 
 Manifestformat 1 bindet App-ID, Version, Tag, Quellcommit, Repository-ID und
 Sichtbarkeit, Schlüssel-ID, Veröffentlichungs-/Ablaufzeit, Release Notes sowie

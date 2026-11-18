@@ -1108,8 +1108,10 @@ Abnahmegrenzen stehen ebenfalls dort.
 
 Der getrennte [Desktop-Release-Workflow](Planung/Desktop_Release_Einrichtung.md)
 ist für ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags vorbereitet. Er verwendet
-auf Wunsch dasselbe private Repository. Produktive Releases bleiben bis zur
-Einrichtung echter Signaturen und geschützter Freigaben gesperrt.
+dasselbe inzwischen öffentliche Repository. Windows nutzt ausdrücklich den Modus
+`ed25519-only` ohne Authenticode; das gemeinsame Ed25519-Manifest bleibt für beide
+Plattformen verpflichtend. Produktive Releases bleiben bis zur nativen Abnahme,
+Einrichtung echter Update-Schlüssel und ausdrücklichen Freigabe gesperrt.
 
 Die [Update-Erkennung](Planung/Desktop_Update_Erkennung.md) ist im Main-Prozess
 implementiert: verzögerte/wiederkehrende Prüfungen, verifizierte Release-Metadaten
@@ -1135,11 +1137,11 @@ GitHub-Einrichtung, Freigabe, native Windows-/Linux-Prüfungen mit zwei Versione
 Datenerhaltsvergleich und manuelle Wiederherstellung. Der lokale Probelauf ist
 geprüft; signierter Live-Release und native Installationsabnahme stehen aus.
 
-Eine spätere öffentliche Verteilung desselben Repositorys ist vorgesehen.
-Die [Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) beschreibt den
-geprüften Quell-/Historienstand und offene Entscheidungen. Aktuell bleibt das
-Repository privat; öffentliche Sichtbarkeit und produktive Updates sind noch
-nicht freigegeben.
+Das Repository ist laut aktuellem Arbeitsauftrag öffentlich. Die
+[Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) bleibt als historischer
+Prüfstand erhalten; sie belegt keine erledigten Lizenzpflichten für Binärpakete.
+Der [aktuelle Umsetzungsstand](Planung/Desktop_Update_Stand_2026-11-18.md) trennt
+bestandene automatische Tests von ausstehenden nativen Updates und Einrichtung.
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen
@@ -1259,8 +1261,10 @@ Start mit vorhandenem Bestand genügt eine erneute Installation derselben App.
 2. App vollständig schließen und das Ende ihres lokalen Servers abwarten.
    Keine zweite Instanz oder Schreibprogramme auf dem Datenbestand offen lassen.
 3. Den neuen Installer aus derselben vertrauenswürdigen Bezugsquelle übernehmen,
-   signierte Freigabedaten und Windows-Authenticode einschließlich erwartetem
-   Zertifikat/Publisher/Version prüfen, SHA-256 vergleichen und unter demselben
+   Ed25519-signierte Freigabedaten und den festgelegten Windows-Modus prüfen:
+   aktuell ausdrücklich `NotSigned` mit passender ProductVersion, im optionalen
+   strengen Modus zusätzlich Authenticode/Zertifikat/Publisher/Zeitstempel.
+   SHA-256 vergleichen und unter demselben
    Windows-Benutzer starten. Die [Abnahmeanleitung](Planung/Desktop_Update_Abnahme.md#dateiverteilung-und-manuelles-prüfen)
    beschreibt diese Prüfungen; eine Prüfsummendatei allein genügt nicht.
    App-ID, technischer Profilname und Herausgeber bleiben stabil.

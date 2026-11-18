@@ -1,5 +1,13 @@
 # Windows-Updateinstallation über den vorhandenen NSIS-Installer
 
+Aktualisierung 18.11.2026: Gemeinsame Ed25519-Prüfung bleibt zwingend. Aktuell
+ist `ed25519-only` ohne Windows-Code-Signierung explizit konfiguriert; keine
+Akzeptanz von `HashMismatch`/`NotTrusted` als Fallback. Fehlender Modus bedeutet
+weiterhin verpflichtendes Authenticode. Windows-Warnungen sind möglich.
+Bestehende Installationen mit privater Sichtbarkeit/anderem Modus benötigen eine
+manuelle geprüfte Erstinstallation. Native A→B-Abnahme bleibt offen.
+
+
 Stand: 15.11.2026, Umsetzungsschritt 8. Diese Implementierung ergänzt den
 [verifizierten Download](Desktop_Update_Download.md). Produktive Signatur- und
 Freigabeinfrastruktur ist weiterhin nicht eingerichtet; die Release-Policy bleibt
@@ -58,7 +66,9 @@ Der Helfer prüft vor seiner Bereitschaft:
 - Eine exklusive Profilsperre gegen parallelen Appstart während der Installation.
 - Erneute Dateigröße und SHA-256. Der Installer wird über einen Dateihandle gegen
   Schreiben und Löschen gesperrt gehalten, bis er vollständig beendet ist.
-- Native `Get-AuthenticodeSignature`: `Valid`, Zeitstempelzertifikat, exakt
+- Native `Get-AuthenticodeSignature` gemäß eingebettetem Modus: aktuell
+  `ed25519-only` verlangt `NotSigned` und exakte ProductVersion. Nur im Modus
+  `authenticode-required`: `Valid`, Zeitstempelzertifikat, exakt
   eingebetteter SHA-256-Zertifikatsfingerprint, Publisher-Subject und Zielversion.
   Fehler oder fehlendes Vertrauen führen zum Abbruch; es gibt keinen Fallback
   auf alleinige Dateiprüfsummen oder eine ignorierte Zertifikatsprüfung.
@@ -83,7 +93,9 @@ App-ID, Pfadschutz, Downgrade-Sperre und Verbot von `--delete-app-data` bleiben.
 
 Nach Installer-Exitcode 0 prüft der Helfer zusätzlich Zielversion/App-ID/Distributions-
 und Releasekanal im neuen Paket, den gebundenen Release-Commit, sämtliche Pflichtmodule und Dateien des Installationsmanifests,
-die neue App-EXE mit Authenticode sowie die registrierte Version. Erst dann werden
+die neue App-EXE gemäß eingebettetem Windows-Modus sowie die registrierte Version.
+Zusätzlich müssen Modus, Repository-ID/Sichtbarkeit und Schlüssel-ID des neuen
+Clients unverändert sein. Erst dann werden
 Sitzungspaket und Sperre freigegeben und die neue App gestartet. Bei Abbruch oder
 unvollständigem Ergebnis gibt es eine verständliche native Fehlermeldung und
 keinen automatischen Start ungeprüfter Programmdateien.

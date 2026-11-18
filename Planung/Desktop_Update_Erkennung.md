@@ -76,7 +76,9 @@ Das Schema stimmt mit dem Publisher aus Schritt 4 überein und bindet:
   Minuten tolerierte Zukunftsabweichung der Systemuhr;
 - beide tatsächlich vorhandenen Plattformpakete mit festen Dateinamen, x64,
   Paketformat, Größe, SHA-256, Asset-ID und exakt daraus gebildeter API-URL;
-- Windows-Zertifikatsidentität, Zeitstempel und signierte ProductVersion;
+- Windows-Quittung entsprechend dem lokal eingebetteten Modus: `NotSigned`/
+  ProductVersion für `ed25519-only`, zusätzlich Zertifikatsidentität und Zeitstempel
+  für `authenticode-required`;
 - begrenzte Release Notes als **Text**, der später nicht als HTML auszuführen ist.
 
 Die vollständige Assetliste muss die sechs durch den Publisher vorgesehenen
