@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function fixture({ busy=false, delayReady=false }={}) {
+function fixture({ busy=false, delayReady=false, stopImpl }={}) {
   let spawns=0;let stops=0;let failures=0;let resolveReady;let rejectReady;
   const child=new EventEmitter();
   const module={exports:{}};
@@ -16,7 +16,7 @@ function fixture({ busy=false, delayReady=false }={}) {
       if(name==='../scripts/run.cjs')return {
         launchConfig:()=>({url:'http://127.0.0.1:8000/'}),validateFrontend(){},
         async checkPort(){if(busy)throw Error('Port belegt');},
-        spawnBackend(){spawns++;return child;},async stopTree(){stops++;return false;},
+        spawnBackend(){spawns++;return child;},async stopTree(child, options){stops++;return stopImpl ? stopImpl(child, options) : false;},
       };
       if(name==='./startup.cjs')return {waitForFrontend:()=>delayReady?new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;}):Promise.resolve()};
       return require(name);
@@ -84,4 +84,24 @@ test('Dokumentenfehler liefern beim Start und nach Reload feste Handlungsanweisu
       await f.backend.stop();
     }
   }
+});
+
+
+test('update recovery retries a timed-out shutdown without forcing a live writer', async () => {
+  let completed = false;
+  const calls = [];
+  const f = fixture({ stopImpl: async (child, options) => {
+    calls.push(options);
+    assert.equal(options.force, false);
+    if (!completed) throw Error('writer still active');
+    child.exitCode = 0;
+    return false;
+  } });
+  await f.backend.start();
+  await assert.rejects(f.backend.stopForUpdate(), /writer still active/);
+  await assert.rejects(f.backend.stopForUpdate(), /writer still active/);
+  assert.equal(f.spawns(), 1);
+  completed = true;
+  await f.backend.stopForUpdate();
+  assert.equal(calls.length, 3);
 });

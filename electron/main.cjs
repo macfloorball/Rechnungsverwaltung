@@ -103,7 +103,7 @@ else app.whenReady().then(async () => {
   if (stopping) return;
   try {
     updates = createDesktopUpdates({ app, safeStorage, installation: { dialog, getMainWindow: () => mainWindow, getBackend: () => backend,
-      async restartBackend() { try { await backend.stop(); } catch {} backend = createBackend(backendOptions); await backend.start(); },
+      async restartBackend() { await backend.stopForUpdate(); backend = createBackend(backendOptions); await backend.start(); },
       exitForUpdate() { updateExitApproved = true; app.quit(); },
     } });
     disposeIPC.bindUpdates?.(updates.controller);
