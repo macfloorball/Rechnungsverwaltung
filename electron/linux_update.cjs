@@ -31,7 +31,8 @@ async function probeAppImage({ app, env = process.env, mountInfo = () => fs.read
   const record = (await mountInfo()).split('\n').map((line) => line.split(' ')).find((fields) => decodeMount(fields[4] || '') === mount);
   const separator = record?.indexOf('-');
   if (!record || separator < 0 || !record[5].split(',').includes('ro')
-      || !['fuse.squashfuse', 'fuse.AppImage', 'fuse.appimage'].includes(record[separator + 1])) throw new UpdateError('INSTALL_UNAVAILABLE');
+      // Type-2 runtimes also use the exact image basename as the FUSE subtype.
+      || !['fuse.squashfuse', 'fuse.AppImage', 'fuse.appimage', `fuse.${path.basename(target)}`].includes(decodeMount(record[separator + 1]))) throw new UpdateError('INSTALL_UNAVAILABLE');
   await secureDirectory(path.dirname(target), true);
   if (await fs.realpath(target) !== target || !LOCAL_FS.has(Number((await fs.statfs(path.dirname(target))).type))) throw new UpdateError('INSTALL_UNAVAILABLE');
   await fs.access(path.dirname(target), fs.constants.W_OK | fs.constants.X_OK);
