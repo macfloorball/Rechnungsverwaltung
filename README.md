@@ -1141,7 +1141,9 @@ Das Repository ist laut aktuellem Arbeitsauftrag öffentlich. Die
 [Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) bleibt als historischer
 Prüfstand erhalten; sie belegt keine erledigten Lizenzpflichten für Binärpakete.
 Der [aktuelle Umsetzungsstand](Planung/Desktop_Update_Stand_2026-11-18.md) trennt
-bestandene automatische Tests von ausstehenden nativen Updates und Einrichtung.
+bestandene automatische Tests und den nativen Linux-Testwechsel mit Testfeed
+von ausstehender Gesamt-Abnahme und Einrichtung. Restaufgaben stehen in
+[Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32).
 
 Der vorhandene `@electron/packager` stellt weiterhin ausschließlich ausgewählte
 Programmdateien zusammen. `electron-builder` erzeugt daraus einen deutschen

@@ -49,3 +49,21 @@ und keine abschließende Freigabe zur Binärveröffentlichung.
 
 Quellen: die Lizenzdateien und METADATA der konkreten Laufzeitpakete;
 [Electron-Lizenz](https://github.com/electron/electron/blob/main/LICENSE).
+
+
+## Reproduzierbares Inventar eines konkreten Pakets
+
+Nach Entpacken des jeweiligen Pakets:
+
+```sh
+python scripts/inventory_desktop_licenses.py /absoluter/Programmordner --output /absoluter/neuer/inventar.json
+```
+
+Der Programmordner enthält `resources/app` und die Electron-Dateien (bei Linux
+`squashfs-root`, bei Windows das entpackte Programmverzeichnis). Der Bericht
+enthält relative Pfade und SHA-256 der vorhandenen Lizenznachweise, Python-
+Paketmetadaten sowie native Laufzeitdateien und Schriften zur weiteren Prüfung.
+Die Ausgabedatei muss neu sein. Fehlende bekannte Hauptnachweise führen zu
+Exitcode 1. Ein fehlerfreies Inventar bestätigt vorhandene Dateien; die
+vollständige Zuordnung nativer Unterkomponenten, erforderliche Quellangebote
+und die Freigabe zur Binärverteilung bleiben eine gesonderte Prüfung.

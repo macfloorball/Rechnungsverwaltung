@@ -1,5 +1,13 @@
 # Desktop-Updates: Regressionstestmatrix
 
+Aktualisierung 18.11.2026: Außerhalb der Agent-Sandbox wurde inzwischen ein
+nativer FUSE-Testwechsel A→B mit echtem Helfer, neuem Mount und Rechnungs-/PDF-
+Erhalt erfolgreich geprüft. Feed und Zustimmung sind Testadapter; die vollständige
+Windows-/Distributions-/Fehlerfall-/Live-Verteilabnahme bleibt offen.
+Die folgenden älteren Prüfergebnisse beschreiben ihren damaligen Stand.
+Aktueller Nachweis und Befehle: [Abnahmeprotokoll](Desktop_Update_Stand_2026-11-18.md#nachprüfung-im-selben-arbeitsauftrag).
+Restaufgaben: [Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32).
+
 Stand: 15.11.2026, Umsetzungsschritt 11. Die Tests verwenden temporäre Profile,
 Testschlüssel und Paketfixtures. Sie erzeugen keine GitHub-Releases und richten
 keine produktiven Schlüssel oder Zugänge ein. Produktive Updates bleiben gesperrt.

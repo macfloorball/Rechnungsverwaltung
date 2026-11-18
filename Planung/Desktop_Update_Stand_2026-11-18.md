@@ -141,8 +141,8 @@ OS-/Paketversionen, Commit, Hashes, Meldungen und Belege pro Fall protokollieren
 
 Zuständig: Maintainer mit echter Ubuntu-/Fedora-x64-Testumgebung, `/dev/fuse`,
 `pidfd`, aktiver Electron-Sandbox und entsperrtem Schlüsselbund, soweit benötigt.
-Hier fehlt `/dev/fuse`; keine normale FUSE-Ausführung und kein echter atomarer
-A→B-Updateversuch wurden durchgeführt.
+Im ersten Sandboxlauf fehlte `/dev/fuse`. Die anschließende Ausführung außerhalb
+der Agent-Sandbox ermöglicht den unten protokollierten nativen FUSE-Test.
 
 ```sh
 npm ci --no-audit --no-fund
@@ -179,3 +179,96 @@ außerhalb des Repositorys erzeugen/sichern. Öffentlichen Schlüssel/Fingerprin
 unabhängig prüfen und integrieren; privaten Schlüssel ausschließlich ins
 Release-Environment. Erst nach dokumentierter Abnahme und ausdrücklicher
 Freigabe die produktive Policy aktivieren.
+
+
+## Nachprüfung im selben Arbeitsauftrag
+
+Die Agent-Sandbox blendete `/dev/fuse` aus; außerhalb ist es auf dem lokalen
+Fedora-45-System verfügbar. Die frühere Aussage fehlender nativer Linux-
+Möglichkeiten ist daher auf den Sandboxlauf begrenzt.
+
+- Zehn opt-in Electron-GUI-Tests bestanden (`TTC_RUN_ELECTRON_TESTS=1`,
+  `test_desktop_update_ui.py` und `test_desktop_invoice.py`): Dialog, Download,
+  Abbruch sowie Rechnungs-/Backup-/Neustartabläufe mit isolierten Profilen.
+- Ein unverändertes Entwicklungs-AppImage wurde zweimal normal über FUSE mit
+  eingeschalteter Electron-Sandbox gestartet. Eine echte Rechnung samt PDF,
+  Empfänger und Nummernkreis blieb über kontrolliertes Beenden/Neustart erhalten.
+- Dabei wurde ein echter Fehler festgestellt und korrigiert: die gepinnte
+  Laufzeit meldet `fuse.<exakter AppImage-Dateiname>`, beispielsweise
+  `fuse.TTC.AppImage`. Die bisherige feste Liste lehnte diesen gültigen Mount ab.
+  Die Erkennung berücksichtigt jetzt zusätzlich ausschließlich diesen exakten
+  Subtyp. Read-only-Mount, Dateiformat, Besitzer, Rechte, Zielidentität und
+  sichere Pfade bleiben verpflichtend; Tests lehnen fremde/rw-Mounts weiter ab.
+- Zwei private temporäre Test-AppImages 0.1.0/0.1.1 wurden mit flüchtigem
+  Ed25519-Testvertrauen gebaut. Der reale Client prüfte Manifest und Download,
+  beendete sein echtes Backend kooperativ und übergab an den echten unabhängigen
+  Helfer. Der Helfer ersetzte das FUSE-AppImage, startete B in einem neuen Mount;
+  B bestätigte Version, Bildhash, Ausführrecht, Empfänger, Nummernkreis und
+  unveränderten PDF-Hash. Beleg `native-result.json`: bestanden.
+- Grenze dieses nativen Tests: Feedtransport und Bestätigung sind Testadapter;
+  Commit-/Tagdaten sind absichtlich künstliche Testmetadaten. Das Manifest
+  enthält einen Windows-Platzhalter, keinen nativ gebauten Windows-Installer.
+  Kein freigegebener gemeinsamer GitHub-Liverelease, keine vollständige native
+  Fehlerfall-/Distributionsmatrix und keine Windows-Abnahme werden daraus abgeleitet.
+- `scripts/check_shutdown.py --iterations 3`: drei vollständige Linux-
+  Wiederholungen der beiden betroffenen Lebenszyklus-Testdateien bestanden.
+  Das Skript bewahrt getrennte Logs/Stacks auf und stoppt beim ersten Fehler;
+  unter Windows mit 20 Wiederholungen ausführen. Windows-Ursache bleibt offen.
+- Gewöhnliche CI bewahrt bei Fehlern ausschließlich `*.log` aus ihrem eigenen
+  temporären pytest-Verzeichnis für sieben Tage als Actions-Artefakt auf.
+  Keine Testdatenbanken, PDFs oder Schlüssel werden durch diesen Schritt hochgeladen.
+- Lizenzinventar des aktuellen Linux-Pakets: 18 Python-Distributionen, alle fünf
+  bekannten Hauptnachweise vorhanden, 38 native Laufzeitdateien und 41
+  Schriftdateien zur weiteren Zuordnung. Der vorhandene ältere lokale Windows-
+  Build hat 17 Distributionen und noch keine Projekt-LICENSE/NOTICE; dieser
+  Altbuild ist kein Nachweis für den aktuellen Quellstand. Neuer nativer
+  Windows-Build samt Inventar bleibt erforderlich.
+- GitHub read-only: aktives Branch-Ruleset 27329372 mit den vier erwarteten
+  Pflichtchecks und PR-Pflicht; Approval-Anzahl derzeit 0. Aktives Tag-Ruleset
+  27335514 für `refs/tags/desktop-v*` mit Erstellungs-/Änderungs-/Löschsperre und
+  Administrator-Bypass. Keine Schutzregel wurde verändert. Die Integration kann
+  den administrativen Branch-protection-Endpunkt nicht lesen (403); Release-
+  Environment-/Secretverwaltung steht über diesen Connector nicht zur Verfügung.
+- Der lokale Commit `7b1d688` ist auf GitHub noch nicht vorhanden (Status-API:
+  404). Frühere dortige CI-Erfolge anderer Commits gelten nicht für diese Arbeit.
+  Ohne autorisierten Push wurde kein neuer CI-Lauf für lokale Änderungen erzeugt.
+
+Reproduzierbare zusätzliche Prüfungen außerhalb der Agent-Sandbox:
+
+```sh
+TTC_RUN_ELECTRON_TESTS=1 python -m pytest -q tests/test_desktop_update_ui.py tests/test_desktop_invoice.py
+node tests/native_appimage_smoke.cjs '/absoluter/Pfad/zur/Entwicklungs.AppImage'
+# Entwicklungs-AppImage zuvor in einen privaten Ordner entpacken:
+node scripts/check_native_appimage_update.cjs /absoluter/Pfad/squashfs-root
+python scripts/check_shutdown.py --iterations 20
+python scripts/inventory_desktop_licenses.py /absoluter/Pfad/squashfs-root --output /absoluter/neuer/inventar.json
+```
+
+Die nativen Skripte verwenden ausschließlich temporäre Profile/Testschlüssel.
+Sie behalten ihre Belege im jeweils ausgegebenen privaten `/tmp/ttc-*`-Ordner.
+Das Update-Testskript wird niemals in Produktionspakete kopiert; Testvertrauen
+und Testbestätigung werden ausschließlich in lokalen markierten Testimages
+installiert. Produktionspolicy bleibt deaktiviert, keine Produktionsschlüssel
+wurden erzeugt und keine Tags/Releases/Pushes/Merges durchgeführt.
+
+
+### Nachprüfungsstand und Folgeissue
+
+Die Nachprüfung besteht mit 220 JavaScript-Tests (zwei optionale/native Fälle
+übersprungen), 414 Python-Tests (14 übersprungen), zehn opt-in GUI-Tests und
+je drei Diagnosewiederholungen (11 bestanden, ein Windows-Fall übersprungen).
+Der normale AppImage-Build nach der FUSE-Korrektur und sein erneuter nativer
+Smoke-Test mit zwei Starts und PDF-/Datenerhalt bestanden ebenfalls.
+
+Zusätzliche Commits:
+
+- `1a19cf6` – FUSE-Erkennung und ausführbare native AppImage-Prüfungen.
+- `1e14f8b` – wiederholbarer Shutdown-Prüflauf und CI-Diagnosesicherung.
+
+Alle weiterhin nicht vollständig ausführbaren beziehungsweise gesondert
+freizugebenden Aufgaben sind als [Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32)
+im Repository angelegt: Windows-Abnahme/Timeout-Ursache, Linux-Fehlerfall- und
+Verteilmatrix, CI des neuen Stands, Release-Environment, vollständige
+Binär-Lizenznachweise und Produktionsschlüsseleinrichtung/-freigabe.
+Es wurde ausschließlich dieses angeforderte Folgeissue extern geschrieben;
+keine Produktionsfreigabe oder Änderung von Schutzregeln vorgenommen.
