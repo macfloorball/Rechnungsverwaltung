@@ -2,6 +2,37 @@
 
 Stand: 16.11.2026. Erste Bestandsprüfung, keine abschließende Release-Freigabe.
 
+## Aktueller Umfang: Eigengebrauch (18.11.2026)
+
+Der Maintainer möchte die Anwendung vorerst ausschließlich selbst nutzen.
+Windows-Code-Signierung und die weitere SignPath-Anbindung werden deshalb
+zurückgestellt. Für den manuellen Eigengebrauch ist der vorhandene, ausdrücklich
+als Entwicklungspaket gekennzeichnete unsignierte Build vorgesehen. Es erfolgt
+keine Freigabe produktiver automatischer Updates und keine Abschwächung ihrer
+Signaturprüfung. Code-Signing-Zertifikate und Softwarelizenzen sind getrennte
+Themen; bestehende Drittanbieterlizenzen bleiben unverändert.
+
+Die unten beschriebene vollständige Prüfung vor einer Binärweitergabe ist damit
+nicht als abgeschlossen erklärt. Die während der weiteren Prüfung gesammelten
+Lizenztexte unter `third_party/licenses/` sind noch nicht in die Paketierung
+integriert; diese Arbeit bleibt als Zwischenstand erhalten.
+
+## Gesicherte Nachweise der Folgeprüfung
+
+- 20 zusätzliche CPython-/Bibliothekslizenztexte aus dem vollständigen
+  Linux-Archiv und 101 Cargo-Lizenzsammlungen für pydantic-core sind mit
+  Quellen und Datei-Prüfsummen unter `third_party/licenses/` abgelegt.
+  Die Zuordnung deckt die 101 Einträge beider lokal geprüften Wheel-SBOMs ab;
+  die SBOM enthält auch Komponenten anderer Zielplattformen.
+- ReportLab enthält für DarkGarden bereits `DarkGarden.sfd` (bearbeitbare
+  FontForge-Quelle), `DarkGarden-copying.txt` (Lizenz und Dokumentausnahme)
+  und `DarkGarden-copying-gpl.txt` (GPL-Text). Die frühere Frage nach einer
+  fehlenden Schriftquelle ist damit für diese lokalen Laufzeiten geklärt.
+- Die AppImage-Laufzeit 20251108 und NSIS-Plugins enthalten weitere Komponenten
+  mit eigenen Bedingungen, darunter LGPL-Komponenten. Ihre vollständigen
+  Beigaben und die genaue Zuordnung zu künftigen Endpaketen bleiben vor einer
+  Binärweitergabe zu prüfen; die Sammlung allein schließt das nicht ab.
+
 ## Geprüft
 
 - Beide Requirements-Dateien enthalten dieselben 17 Laufzeitpakete. In den
