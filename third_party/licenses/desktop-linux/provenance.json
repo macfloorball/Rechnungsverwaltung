@@ -91,6 +91,57 @@
         },
         "evidence": "Linux packaged unicodedata reports 15.1.0; same upstream UCD notice as the verified Windows collection."
       }
+    },
+    {
+      "file": "LICENSE.appimage-runtime.txt",
+      "sha256": "aa154fc9070614bbe7921f89db11efd1dba7a1f3a41685958110e2230f9c0ca1",
+      "source": {
+        "archive": "appimage-type2-runtime-dd6cebe-source.tar.gz",
+        "member": "type2-runtime-dd6cebedcbddde9c82f89b011e8e1d40b6e43868/LICENSE",
+        "publicationCatalog": "../../sources/desktop-source-publication.json"
+      }
+    },
+    {
+      "file": "LICENSE.appimage-libfuse.txt",
+      "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+      "source": {
+        "archive": "fuse-3.15.0.tar.xz",
+        "member": "fuse-3.15.0/LGPL2.txt",
+        "publicationCatalog": "../../sources/desktop-source-publication.json"
+      }
+    },
+    {
+      "file": "LICENSE.appimage-squashfuse.txt",
+      "sha256": "9e909cc8a8ba27b1a649c964cf9eda37de911f3138c2b64e6d2f01703904ac13",
+      "source": {
+        "archive": "squashfuse-0.5.2.tar.gz",
+        "member": "squashfuse-0.5.2/LICENSE",
+        "publicationCatalog": "../../sources/desktop-source-publication.json"
+      }
+    },
+    {
+      "file": "LICENSE.appimage-musl.txt",
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "source": {
+        "url": "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5",
+        "scope": "Original license text for runtime dependency; upstream runtime recipe selects Alpine 3.21 packages, not an assertion of exact statically linked package version."
+      }
+    },
+    {
+      "file": "LICENSE.appimage-zstd.txt",
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+      "source": {
+        "url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.6/LICENSE",
+        "scope": "Original license text for runtime dependency; upstream runtime recipe selects Alpine 3.21 packages, not an assertion of exact statically linked package version."
+      }
+    },
+    {
+      "file": "LICENSE.appimage-zlib.txt",
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+      "source": {
+        "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE",
+        "scope": "Original license text for runtime dependency; upstream runtime recipe selects Alpine 3.21 packages, not an assertion of exact statically linked package version."
+      }
     }
   ],
   "components": [
@@ -238,5 +289,11 @@
     }
   ],
   "crateEvidence": "All 101 name/version/archive hashes in the Linux wheel SBOM equal ../pydantic-core/provenance.json. SBOM includes build/other targets; not a link map.",
-  "sourceDistributionRemaining": "FFmpeg and other source obligations must be satisfied at publication; these notices alone are not distribution clearance."
+  "sourceDistributionRemaining": "FFmpeg and other source obligations must be satisfied at publication; these notices alone are not distribution clearance.",
+  "appImageRuntime": {
+    "commit": "dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
+    "sha256": "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
+    "evidence": "Cached x64 runtime byte-equal to complete prefix of the built AppImage. Its --appimage-version identifies this commit. Build recipes pin libfuse 3.15.0 and squashfuse 0.5.2; Alpine 3.21 provides musl/zlib/zstd without exact package version pins.",
+    "sources": "../../sources/desktop-source-publication.json"
+  }
 }

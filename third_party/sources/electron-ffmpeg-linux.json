@@ -9,6 +9,7 @@
   },
   "sourceRecipe": "electron-ffmpeg.json",
   "sourceGenerator": "scripts/prepare_ffmpeg_sources.py",
-  "sourcePublication": "Not yet published; durable URL required before binary distribution.",
-  "codecRights": "No patent or proprietary-codec clearance asserted."
+  "sourcePublication": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/ffmpeg-electron-45.3.1-source.tar.gz",
+  "codecRights": "No patent or proprietary-codec clearance asserted.",
+  "sourcePublicationSha256": "8d63fa202e5353c77024937edb3bf7c7ee9de6042a71a3fdce22c659a4ca7069"
 }

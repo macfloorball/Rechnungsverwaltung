@@ -1,0 +1,80 @@
+{
+  "formatVersion": 1,
+  "releaseTag": "desktop-sources-2026-11-19",
+  "sourceReleaseUrl": "https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-sources-2026-11-19",
+  "scope": "Sources only; no application binaries, no update release, no patent-clearance assertion.",
+  "assets": [
+    {
+      "file": "ffmpeg-electron-45.3.1-source.tar.gz",
+      "description": "FFmpeg for Electron 45.3.1; patched Windows/Linux sources and build inputs",
+      "origin": "scripts/prepare_ffmpeg_sources.py",
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/ffmpeg-electron-45.3.1-source.tar.gz",
+      "size": 37304239,
+      "sha256": "8d63fa202e5353c77024937edb3bf7c7ee9de6042a71a3fdce22c659a4ca7069"
+    },
+    {
+      "file": "StdUtils.2018-10-27.sources.tbz2",
+      "description": "StdUtils 1.14 original complete sources",
+      "origin": "https://github.com/lordmulder/stdutils/releases/download/1.14/StdUtils.2018-10-27.sources.tbz2",
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/StdUtils.2018-10-27.sources.tbz2",
+      "size": 206896,
+      "sha256": "c5e3b1a66219bc9564c2ccc1702691327eecf044ad33404ac268d725d22dca49"
+    },
+    {
+      "file": "python-build-standalone-20261110-source.tar.gz",
+      "description": "Linux Python build recipes and patches",
+      "origin": "https://github.com/astral-sh/python-build-standalone/tree/9244801782b78e4c4afc5c82a4524aa2101d3298",
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/python-build-standalone-20261110-source.tar.gz",
+      "size": 470162,
+      "sha256": "727b1f6b58d90987951c0071eda7c47c0a3a210452d6006c4bc8074236528cc4"
+    },
+    {
+      "file": "db-6.0.19.tar.gz",
+      "description": "Berkeley DB 6.0.19 source (Sleepycat)",
+      "origin": "https://ftp.osuosl.org/pub/blfs/conglomeration/db/db-6.0.19.tar.gz",
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/db-6.0.19.tar.gz",
+      "size": 36541923,
+      "sha256": "2917c28f60903908c2ca4587ded1363b812c4e830a5326aaa77c9879d13ae18e"
+    },
+    {
+      "file": "Python-3.13.18.tar.xz",
+      "description": "CPython 3.13.18 complete source",
+      "origin": "https://www.python.org/ftp/python/3.13.18/Python-3.13.18.tar.xz",
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/Python-3.13.18.tar.xz",
+      "size": 23243936,
+      "sha256": "abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68"
+    },
+    {
+      "file": "PYTHON-linux-3.13.18-build.json",
+      "description": "Unmodified build metadata from the pinned full Linux Python archive",
+      "origin": "third_party/licenses/python-linux/provenance.json",
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/PYTHON-linux-3.13.18-build.json",
+      "size": 127836,
+      "sha256": "53304e0a7215bbe05a08780b6d491e965e02814bf38820819ba26ac15fc54e40"
+    },
+    {
+      "file": "appimage-type2-runtime-dd6cebe-source.tar.gz",
+      "description": "appimage-type2-runtime-dd6cebe-source.tar.gz",
+      "origin": "https://codeload.github.com/AppImage/type2-runtime/tar.gz/dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
+      "sha256": "f5fec23be76e50e2445ed2d018bac49b367490fc483c62c4637e99ec705d27ba",
+      "size": 31069,
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/appimage-type2-runtime-dd6cebe-source.tar.gz"
+    },
+    {
+      "file": "fuse-3.15.0.tar.xz",
+      "description": "fuse-3.15.0.tar.xz",
+      "origin": "https://github.com/libfuse/libfuse/releases/download/fuse-3.15.0/fuse-3.15.0.tar.xz",
+      "sha256": "70589cfd5e1cff7ccd6ac91c86c01be340b227285c5e200baa284e401eea2ca0",
+      "size": 4589124,
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/fuse-3.15.0.tar.xz"
+    },
+    {
+      "file": "squashfuse-0.5.2.tar.gz",
+      "description": "squashfuse-0.5.2.tar.gz",
+      "origin": "https://codeload.github.com/vasi/squashfuse/tar.gz/refs/tags/0.5.2",
+      "sha256": "db0238c5981dabbd80ee09ae15387f390091668ca060a7bc38047912491443d3",
+      "size": 75404,
+      "url": "https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-sources-2026-11-19/squashfuse-0.5.2.tar.gz"
+    }
+  ]
+}

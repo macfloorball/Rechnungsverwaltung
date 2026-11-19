@@ -57,13 +57,12 @@ bevor sie in das AppDir und dessen Installationsmanifest aufgenommen werden.
   `third_party/sources/electron-ffmpeg-linux.json`. Der Generator
   `scripts/prepare_ffmpeg_sources.py` bereitet die zum festgelegten Stand
   gehörenden FFmpeg-Quellen mit Electron-Patches und beiden Plattform-
-  konfigurationen vor. Vor Veröffentlichung fehlen noch ein dauerhafter
-  Quellenbezugsort und die Klärung der gemeinsamen Codec-Weitergabefragen.
+  konfigurationen vor. Die Archive stehen im unten verlinkten Quellenrelease;
+  mögliche Codec-Patentrechte sind von den Softwarelizenzen zu unterscheiden.
 
 Konkrete Archiv-/Wheelquellen, Binär- und Nachweishashes stehen unter
 `third_party/licenses/desktop-linux/provenance.json`. Diese technische
-Zuordnung ersetzt nicht die Quellenbereitstellung bei Veröffentlichung oder
-noch offene gemeinsame FFmpeg-/Codec-Weitergabefragen.
+Zuordnung wird durch das unten verlinkte öffentliche Quellenangebot ergänzt.
 
 ### Ergänzende Nachweise im Windows-Installer
 
@@ -127,7 +126,7 @@ Versionswechsel sind sie erneut abzugleichen.
 - **NSIS:** Das Paket führt die Originalhinweise aus der 3.0.4.1-Toolchain
   sowie aus den bytegleich zugeordneten UAC-, StdUtils-, Nsis7z- und
   nsProcess-Archiven mit. Für StdUtils enthält es den LGPL-Zusatz des
-  Autors. Erforderliche Quellbereitstellung bleibt Teil der Veröffentlichung.
+  Autors. Die vollständigen StdUtils-Quellen sind im Quellenrelease verfügbar.
   WinShell und nsProcess werden deshalb nicht mehr eingebettet. Prozessprüfung,
   AppUserModel-ID und Shell-Bereinigung verwenden dokumentierte Windows-APIs
   über das mit NSIS lizenzierte System-Plugin. Die Zuordnung der früheren
@@ -195,6 +194,35 @@ und keine abschließende Freigabe zur Binärveröffentlichung.
 Quellen: die Lizenzdateien und METADATA der konkreten Laufzeitpakete;
 [Electron-Lizenz](https://github.com/electron/electron/blob/main/LICENSE).
 
+
+## Öffentliches Quellenangebot und Austausch von Bibliotheken
+
+Die zu dieser Verteilung gehörenden Quellarchive stehen kostenlos und ohne
+Anmeldung im [Desktop-Quellenrelease](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-sources-2026-11-19).
+`third_party/sources/desktop-source-publication.json` nennt die einzelnen URLs,
+Archivgrößen und SHA-256. Dort liegen die gepatchten FFmpeg-Quellen samt
+Originalpatches und Buildvorgaben, vollständige StdUtils-Quellen sowie Linux-
+CPython-/Berkeley-DB-Quellen mit den zugehörigen Buildrezepten. Für AppImage
+liegen die exakten Runtime-Rezepte sowie libfuse-/squashfuse-Quellen bei.
+Die Runtime-Lizenztexte werden unter `licenses/desktop-linux/` mitgeliefert;
+`--appimage-help` zeigt zusätzlich ihre ursprünglichen Quellenhinweise.
+Die Anwendung selbst ist unter MIT lizenziert und ihr vollständiger Quellcode
+ist über den jeweiligen `desktop-v*`-Tag dieses Repositorys zugänglich.
+
+Diese Software verwendet Bibliotheken des FFmpeg-Projekts unter LGPL-2.1-or-later.
+`ffmpeg.dll` (Windows) bzw. `libffmpeg.so` (Linux) liegt separat neben Electron.
+Eine selbst gebaute kompatible Bibliothek darf dort ausgetauscht werden. Unter
+Linux dazu das AppImage mit `--appimage-extract` entpacken und die geänderte App
+über `squashfs-root/AppRun` starten oder selbst wieder paketieren. Ein solcher
+Umbau ist kein vom Herausgeber signiertes Update. Die Lizenz schränkt die
+Änderung oder das zur Fehlersuche an Bibliotheksänderungen notwendige Reverse
+Engineering nicht ein. Das separate NSIS-Plugin StdUtils darf ebenfalls unter
+seiner LGPL-Lizenz geändert und der öffentlich vorliegende Installer neu gebaut
+werden. Auf ein eigenes Lizenzverbot solcher Änderungen wird verzichtet.
+
+Die Softwarelizenzen und das Quellenangebot erteilen keine pauschale Freigabe
+möglicher Codec-Patente. Es wird keine weltweite Patentfreiheit zugesichert.
+Siehe die [Hinweise des FFmpeg-Projekts](https://ffmpeg.org/legal.html).
 
 ## Reproduzierbares Inventar eines konkreten Pakets
 
