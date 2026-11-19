@@ -18,6 +18,41 @@ ersetzt keine mitgelieferten vollständigen Lizenztexte.
 - Das mit Linux-Python ausgelieferte pip enthält weitere Komponenten samt
   Lizenzdateien unter `pip/_vendor/` und `pip-*.dist-info/licenses/`.
 
+### Ergänzende Nachweise im Linux-AppImage
+
+Unter `resources/app/runtime/python/licenses/` werden die Sammlungen
+`python-linux`, `pydantic-core` und `desktop-linux` mitgeliefert. Die
+Paketierung prüft die SHA-256 aller in den Provenienzdateien genannten Texte,
+bevor sie in das AppDir und dessen Installationsmanifest aufgenommen werden.
+
+- **CPython 3.13.18, Build 20261110:** Die 20 Originaltexte stammen aus dem
+  hashgeprüften vollständigen python-build-standalone-Archiv desselben Builds.
+  Dessen originale `PYTHON.json` dokumentiert Abhängigkeiten, Linkinformationen
+  und zugehörige Lizenzen; das schlanke Laufzeitarchiv enthält diese Nachweise
+  nicht vollständig. Dazu gehört `_dbm` mit statisch eingebundenem Berkeley DB
+  (Sleepycat); erforderliche Quellenbereitstellung bleibt eine Releaseaufgabe.
+- **pydantic_core 2.50.4:** Alle 101 Crate-Namen, Versionen und Archivhashes
+  des tatsächlichen Linux-Wheel-SBOMs stimmen mit der vorhandenen Sammlung
+  überein. Diese enthält auch Build- und fremde Zielplattformen, keine reine
+  Liste gelinkter Komponenten. Die nativen Wheeldateien wurden bytegenau
+  abgeglichen. Die ELF nennt Rust-Revision
+  `58cf8f9c35b355199727627d07ae34a4e2846d67`; der Standardbibliothekshinweis
+  stammt aus dem hashgeprüften Linux-rustc-1.99.1-Archiv dieser Revision.
+- **Pillow 13.0.0:** Die nativen Dateien, gebündelten Shared Libraries und
+  SBOMs wurden gegen das offizielle Linux-Wheel geprüft. Der vollständige
+  Wheel-Lizenztext bleibt erhalten, einschließlich der Xau-/XCB-, Codec-,
+  FreeType- und IJG-Texte. Diese Software basiert teilweise auf der Arbeit
+  des FreeType-Teams und der Independent JPEG Group.
+- **ReportLab:** Das verbliebene `hb-test.ttf` ist bytegleich zum auf Windows
+  geprüften Subset; der Noto-OFL-Text wird auch auf Linux mitgeliefert.
+  Vera, CALLIG15 und DarkGarden samt Lizenz- und Quelldateien bleiben erhalten;
+  die unten ausdrücklich aufgeführten 32 AFM-/PFB-Dateien werden ausgelassen.
+
+Konkrete Archiv-/Wheelquellen, Binär- und Nachweishashes stehen unter
+`third_party/licenses/desktop-linux/provenance.json`. Diese technische
+Zuordnung ersetzt nicht die Quellenbereitstellung bei Veröffentlichung oder
+noch offene gemeinsame FFmpeg-/Codec-Weitergabefragen.
+
 ### Ergänzende Nachweise im Windows-Installer
 
 Unter `resources/app/runtime/python/licenses/desktop-windows/` liegen die

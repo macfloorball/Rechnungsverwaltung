@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { prepareWindowsSource: prepareDesktopSource } = require('./package_windows.cjs');
 const { copyDesktopRuntime } = require('./package_desktop_runtime.cjs');
+const { copyLinuxLicenseNotices } = require('./linux_license_notices.cjs');
 const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
 const { createInstallationManifest, validateInstallation } = require('../electron/installation.cjs');
 
@@ -43,6 +44,7 @@ async function buildAppImage(root = path.join(__dirname, '..')) {
     Object.assign(appMetadata, { ttcDistribution: 'appimage', main: 'electron/bootstrap.cjs' });
     await fs.writeFile(path.join(source, 'package.json'), JSON.stringify(appMetadata, null, 2));
     await copyDesktopRuntime(runtime, path.join(source, 'runtime', 'python'), 'linux');
+    await copyLinuxLicenseNotices(root, path.join(source, 'runtime', 'python'));
     await fs.writeFile(path.join(source, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python, platform: 'linux-x64' }));
     await fs.writeFile(path.join(source, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(source, 'linux'), null, 2));
     validateInstallation(source, true, 'linux');

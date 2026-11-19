@@ -24,8 +24,10 @@ Dateien dieser Sammlung enthalten unveränderte Textinhalte, bei Cargo mit
 Trennzeilen für die ursprünglichen Dateipfade.
 
 Die Sammlung enthält keine ausführbaren Dateien, Schlüssel oder Benutzerdaten.
-Der Windows-Installer liefert auch `pydantic-core` mit. Die Sammlung
-`python-linux` ist noch nicht in die Desktop-Paketierung integriert.
+Der Windows-Installer liefert auch `pydantic-core` mit. Das Linux-AppImage liefert `python-linux`, `pydantic-core` und
+`desktop-linux` mit. Letztere Sammlung enthält das originale Python-Buildmanifest,
+den Linux-Rust-Standardbibliothekshinweis und den Noto-OFL-Nachweis mit
+Linux-spezifischen Wheel-/Binärprüfsummen.
 Die Nachweise ersetzen weder erforderliche
 Quellcodebeigaben noch eine abschließende Lizenzfreigabe.
 Versionen und Prüfsummen bei Änderungen der Laufzeiten erneut abgleichen.
