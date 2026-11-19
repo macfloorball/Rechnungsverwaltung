@@ -477,7 +477,11 @@
         "https://learn.microsoft.com/en-us/visualstudio/releases/2026/redistribution",
         "https://learn.microsoft.com/en-us/windows/apps/windows-sdk/"
       ],
-      "open": "Publisher signature and origin are verified. Applicable entitlement and terms for this distributor are not established by these files."
+      "redistributionBasis": {
+        "VC runtime": "Unmodified official CPython Windows binary redistribution under its LICENSE.txt Additional Conditions for this Windows binary build; preserved notices and recipient conditions shown by the installer.",
+        "D3DCompiler": "Microsoft documents application-local redistribution of D3DCompiler 46/47: https://learn.microsoft.com/en-us/windows/win32/directx-sdk--august-2009-",
+        "scope": "Windows-only bundled components; no modification, separate component sale, system-directory installation or Microsoft endorsement."
+      }
     },
     {
       "name": "NSIS installer and plugins",

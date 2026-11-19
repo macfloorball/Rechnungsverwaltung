@@ -117,8 +117,13 @@ Versionswechsel sind sie erneut abzugleichen.
 - **Microsoft-Dateien:** Der CPython-Text enthält den Hinweis zu Microsoft
   Distributable Code. Die Herkunft und Microsoft-Signatur von
   `vcruntime140.dll`, `vcruntime140_1.dll` und `d3dcompiler_47.dll` sind
-  verifiziert. Die jeweils anwendbare Weitergabeberechtigung bleibt für die
-  konkrete Verteilung zu belegen.
+  verifiziert. Die unveränderte Python-Laufzeit wird unter den mitgelieferten
+  CPython-Bedingungen weitergegeben; deren zusätzliche Microsoft-Bedingungen
+  stehen auch auf der Lizenzseite des Windows-Installers. Sie betreffen nur
+  den Microsoft-Code, nicht die MIT-lizenzierte Anwendung. Microsoft gestattet
+  die anwendungslokale Weitergabe von D3DCompiler 46/47 ausdrücklich in
+  [Where is the DirectX SDK?](https://learn.microsoft.com/en-us/windows/win32/directx-sdk--august-2009-).
+  Die DLL verbleibt neben der App; sie wird nicht in Systemverzeichnisse kopiert.
 - **NSIS:** Das Paket führt die Originalhinweise aus der 3.0.4.1-Toolchain
   sowie aus den bytegleich zugeordneten UAC-, StdUtils-, Nsis7z- und
   nsProcess-Archiven mit. Für StdUtils enthält es den LGPL-Zusatz des
