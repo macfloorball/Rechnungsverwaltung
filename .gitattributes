@@ -1,3 +1,5 @@
 third_party/licenses/desktop-windows/*.txt -text
 third_party/licenses/desktop-windows/*.html -text
 third_party/licenses/pydantic-core/*.txt text eol=lf
+third_party/licenses/python-linux/* -text
+third_party/licenses/desktop-linux/* -text
