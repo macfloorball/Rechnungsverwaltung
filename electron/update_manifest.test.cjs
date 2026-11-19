@@ -62,3 +62,16 @@ test('discovery uses numeric desktop versions, ignores drafts, prereleases, web 
   assert.equal(newestRelease(rows, '0.3.0'), null);
   assert.throws(() => newestRelease([f.feedRelease, f.feedRelease], '0.1.0'));
 });
+
+
+test('RPM installs delegate updates to DNF and cannot enable the AppImage updater', () => {
+  const metadata = { version: '0.1.1', desktopAppId: 'de.mac-floorball.ttc-rechnungsverwaltung',
+    ttcDistribution: 'rpm', desktopUpdateTrust: { enabled: false },
+    desktopRelease: { formatVersion: 1, version: '0.1.1', channel: 'development', tag: null, commit: null },
+    rpmRelease: { formatVersion: 1, version: '0.1.1', release: 1, channel: 'stable', tag: 'rpm-v0.1.1-1', commit: 'a'.repeat(40) } };
+  const options = { packaged: true, currentVersion: '0.1.1', platform: 'linux', arch: 'x64' };
+  assert.deepEqual(configuration(metadata, options), { enabled: false, reason: 'package_manager' });
+  assert.throws(() => configuration({ ...metadata, desktopUpdateTrust: { enabled: true } }, options));
+  assert.throws(() => configuration({ ...metadata, rpmRelease: { ...metadata.rpmRelease, tag: 'desktop-v0.1.1' } }, options));
+  assert.equal(configuration(metadata, { ...options, platform: 'win32' }).enabled, false);
+});

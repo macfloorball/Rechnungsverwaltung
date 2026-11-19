@@ -70,7 +70,7 @@ export function initializeDesktopUpdates({ document: doc = document, api = globa
     status = next;
     get("desktop-current-version").textContent = validVersion(next.currentVersion) ? next.currentVersion : "–";
     const labels = {
-      disabled: next.reason === "development" ? "Diese App-Version prüft nicht automatisch auf Updates." : "Automatische Updates sind noch nicht eingerichtet.",
+      disabled: next.reason === "package_manager" ? "Diese Installation wird über die Softwareverwaltung (DNF) aktualisiert." : next.reason === "development" ? "Diese App-Version prüft nicht automatisch auf Updates." : "Automatische Updates sind noch nicht eingerichtet.",
       idle: "Updates können manuell geprüft werden.", checking: "Updates werden geprüft …",
       available: validVersion(next.availableVersion) ? `Version ${next.availableVersion} ist verfügbar.` : "Keine gültige Update-Freigabe verfügbar.",
       up_to_date: "Deine App ist auf dem aktuellen Stand.", authentication_required: "Für private Updates ist ein eigener GitHub-Zugang erforderlich.",
