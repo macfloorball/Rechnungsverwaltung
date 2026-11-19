@@ -72,6 +72,8 @@ function Installed {
   if ($installed.DisplayVersion -cne $context.version) { throw 'INCOMPLETE' }
 }
 try {
+  $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
+  Import-Module ([IO.Path]::Combine($env:PSModulePath, 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Security.psd1'))
   $line = [Console]::In.ReadLine()
   if ($line.Length -gt 65536) { throw 'CONTEXT' }
   $context = $line | ConvertFrom-Json
@@ -96,6 +98,7 @@ try {
   $committed = $true
   [Console]::Out.WriteLine('TTC_UPDATE_COMMITTED'); [Console]::Out.Flush()
   if ([Console]::In.ReadLine() -cne 'launch') { throw 'CANCELLED' }
+  [Console]::Out.WriteLine('TTC_UPDATE_LAUNCHED'); [Console]::Out.Flush()
   if (-not $parent.WaitForExit(60000)) { throw 'PARENT' }
   # The exact installer remains locked against write/delete until it finishes.
   Signature $context.file

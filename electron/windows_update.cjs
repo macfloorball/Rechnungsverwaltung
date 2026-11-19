@@ -8,6 +8,21 @@ const { REQUIRED_FILES } = require('./installation.cjs');
 const helperSource = require('./windows_update_helper.cjs');
 const GUID = 'da941357-9ae2-5f27-a221-a8db9727ec79';
 const FAILURE = 'Die Windows-Aktualisierung konnte nicht vorbereitet werden. Persönliche Daten bleiben erhalten. Bitte erneut prüfen oder einen vollständigen geprüften Installer verwenden.';
+// Node puts non-detached Windows children in a job tied to the launching
+// process. PowerShell 5.1 cannot run detached directly, so start it from the
+// bundled Python and let that launcher exit before NSIS replaces its files.
+const relaySource = `
+import subprocess, sys
+helper = subprocess.Popen(
+    [sys.argv[1], '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', sys.argv[2]],
+    stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr,
+    creationflags=subprocess.CREATE_NO_WINDOW,
+)
+with helper.stdin:
+    for line in sys.stdin.buffer:
+        helper.stdin.write(line)
+        helper.stdin.flush()
+`;
 
 async function checkWindowsUpdateLock(profile) {
   const file = path.join(profile, 'updates', 'windows-install.lock');
@@ -18,15 +33,16 @@ async function checkWindowsUpdateLock(profile) {
     if (error.code !== 'ENOENT') throw Error('Ein Windows-Update ist aktiv oder sein Sperrverzeichnis ist nicht zugänglich. Bitte die Installation abschließen und die App danach erneut starten.');
   }
 }
-function startWindowsHelper(context, { spawnImpl = spawn, systemRoot = process.env.SystemRoot } = {}) {
-  if (!systemRoot || !path.win32.isAbsolute(systemRoot)) throw new UpdateError('INSTALL_UNAVAILABLE');
+function startWindowsHelper(context, { pythonPath, spawnImpl = spawn, systemRoot = process.env.SystemRoot } = {}) {
+  if (!systemRoot || !path.win32.isAbsolute(systemRoot) || !pythonPath || !path.win32.isAbsolute(pythonPath)) throw new UpdateError('INSTALL_UNAVAILABLE');
   const executable = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const command = Buffer.from(helperSource, 'utf16le').toString('base64');
   if (command.length > 29000) throw new UpdateError('INSTALL_UNAVAILABLE');
-  const child = spawnImpl(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', command], {
+  const child = spawnImpl(pythonPath, ['-I', '-B', '-c', relaySource, executable, command], {
     detached: true, windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'ignore'],
   });
   let buffer = '', phase = 'ready', settle, closed = false;
+  let launchAcknowledged = false, launcherExited = false;
   const wait = () => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new UpdateError('INSTALL_UNAVAILABLE')), 180000);
     settle = (error) => { clearTimeout(timer); error ? reject(new UpdateError('INSTALL_UNAVAILABLE')) : resolve(); };
@@ -35,22 +51,37 @@ function startWindowsHelper(context, { spawnImpl = spawn, systemRoot = process.e
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk) => {
     buffer = (buffer + chunk).slice(-4096);
-    const marker = phase === 'ready' ? 'TTC_UPDATE_READY' : 'TTC_UPDATE_COMMITTED';
+    const marker = { ready: 'TTC_UPDATE_READY', committed: 'TTC_UPDATE_COMMITTED', launch: 'TTC_UPDATE_LAUNCHED' }[phase];
     if (buffer.includes('TTC_UPDATE_REJECTED')) settle?.(true);
-    else if (buffer.includes(marker)) { buffer = ''; settle?.(false); }
+    else if (buffer.includes(marker)) {
+      buffer = '';
+      if (phase === 'launch') launchAcknowledged = true;
+      if (phase !== 'launch' || launcherExited) settle?.(false);
+    }
   });
   child.once('error', () => { closed = true; settle?.(true); });
-  child.once('exit', () => { closed = true; settle?.(true); });
+  child.once('exit', (code) => {
+    if (code !== 0) { closed = true; settle?.(true); return; }
+    launcherExited = true;
+    if (launchAcknowledged) settle?.(false);
+  });
+  child.stdout.once('end', () => { closed = true; settle?.(true); });
   child.stdin.on('error', () => settle?.(true));
   child.stdin.write(JSON.stringify(context) + '\n');
   return { ready,
     async commit() { if (closed) throw new UpdateError('INSTALL_UNAVAILABLE'); phase = 'committed'; const response = wait(); child.stdin.write('commit\n'); await response; },
-    launch() { if (closed) throw new UpdateError('INSTALL_UNAVAILABLE'); child.stdin.end('launch\n'); child.stdout.destroy(); child.unref(); },
+    async launch() {
+      if (closed) throw new UpdateError('INSTALL_UNAVAILABLE');
+      phase = 'launch'; const response = wait(); child.stdin.end('launch\n'); await response;
+      child.stdout.destroy(); child.unref();
+    },
     cancel() { settle?.(true); child.stdin.end(); child.kill(); },
   };
 }
 function createWindowsInstaller({ config, app, downloader, dialog, getMainWindow, getBackend, restartBackend,
-  exitForUpdate, getCandidate, helperFactory = startWindowsHelper, now = Date.now, platform = process.platform } = {}) {
+  exitForUpdate, getCandidate, helperFactory = context => startWindowsHelper(context, {
+    pythonPath: path.join(app.getAppPath(), 'runtime', 'python', 'python.exe'),
+  }), now = Date.now, platform = process.platform } = {}) {
   let status = null, busy = false;
   const listeners = new Set();
   const enabled = platform === 'win32' && app?.isPackaged && config.enabled && config.platform === 'win32';
@@ -109,8 +140,8 @@ function createWindowsInstaller({ config, app, downloader, dialog, getMainWindow
         current(version);
         await helper.commit();
         downloader.releaseForInstall(packet.file);
+        await helper.launch();
         emit(Object.freeze({ state: 'install_handoff', version, error: null }));
-        helper.launch();
         exitForUpdate();
       } catch (error) {
         helper?.cancel();

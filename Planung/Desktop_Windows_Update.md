@@ -51,8 +51,11 @@ zurückgesetzt.
 ## Separater Windows-Helfer und Verifikation
 
 `windows_update_helper.cjs` enthält ausschließlich statischen PowerShell-Code.
-Main startet die Windows-eigene PowerShell über ihren vollständigen Systempfad,
-ohne Shell, PATH-Suche, Elevation oder Änderung der ExecutionPolicy. Code und
+Ein kurzer Starter in der eingebetteten Python-Laufzeit startet die Windows-eigene
+PowerShell über ihren vollständigen Systempfad und gibt seine Programmdateien vor
+dem NSIS-Start frei. Die PowerShell läuft nach dem App-Ende weiter. Sie bestätigt
+den Übergabebefehl über die Pipe, bevor die App beendet wird. Der Start verwendet
+keine Shell, PATH-Suche, Elevation oder Änderung der ExecutionPolicy. Code und
 JSON-Kontext sind getrennt: Code als konstantes EncodedCommand, Werte über UTF-8-
 stdin. Publisher-/Benutzerpfade werden niemals zu PowerShell-Code zusammengesetzt.
 Es werden weder zusätzliches PowerShell 7 noch Windows SDK am Zielgerät benötigt.

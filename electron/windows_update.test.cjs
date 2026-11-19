@@ -97,15 +97,18 @@ test('journal detects failed or interrupted installation and accepts only matchi
   await checkWindowsUpdateLock(f.profile);
 });
 
-test('native helper uses fixed system executable and static code, with context only on stdin', async () => {
+test('native helper uses the bundled relay and fixed system executable with context only on stdin', async () => {
   const child = new EventEmitter(), stdout = new EventEmitter(), stdin = new EventEmitter();
   const writes = [];
   stdout.setEncoding = () => {}; stdout.destroy = () => {};
   stdin.write = (value) => writes.push(value); stdin.end = (value) => { if (value) writes.push(value); }; child.stdin = stdin; child.stdout = stdout;
   child.kill = () => {}; child.unref = () => {};
   const secretPath = 'C:\\profile\\literal `$code.exe';
-  const helper = startWindowsHelper({ file: secretPath }, { systemRoot: 'C:\\Windows', spawnImpl: (file, args, options) => {
-    assert.equal(file, 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+  const pythonPath = 'C:\\Program Files\\TTC\\runtime\\python\\python.exe';
+  const helper = startWindowsHelper({ file: secretPath }, { pythonPath, systemRoot: 'C:\\Windows', spawnImpl: (file, args, options) => {
+    assert.equal(file, pythonPath);
+    assert.equal(args[4], 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    assert.equal(options.detached, true);
     assert.equal(options.shell, false);
     assert.equal(Buffer.from(args.at(-1), 'base64').toString('utf16le').includes(secretPath), false);
     return child;
@@ -113,7 +116,7 @@ test('native helper uses fixed system executable and static code, with context o
   assert.equal(JSON.parse(writes[0]).file, secretPath);
   stdout.emit('data', 'TTC_UPDATE_READY\n'); await helper.ready;
   const commit = helper.commit(); stdout.emit('data', 'TTC_UPDATE_COMMITTED\n'); await commit;
-  helper.launch();
+  const launch = helper.launch(); stdout.emit('data', 'TTC_UPDATE_LAUNCHED\n'); child.emit('exit', 0); await launch;
   assert.equal(writes[1], 'commit\n');
   assert.equal(writes[2], 'launch\n');
 });
@@ -126,6 +129,47 @@ test('Windows PowerShell parses the static helper and unsigned verifier without 
   const program = `$errors = $null; $tokens = $null; [void][System.Management.Automation.Language.Parser]::ParseInput([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${source}')), [ref]$tokens, [ref]$errors); if ($errors.Count) { throw 'Helper syntax invalid' }`;
   execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '-'], { input: program, timeout: 20000, windowsHide: true });
+  }
+});
+
+test('Windows PowerShell reads stdin through the detached Python launcher', { skip: process.platform !== 'win32', timeout: 20000 }, async () => {
+  const { execFileSync, spawn } = require('node:child_process');
+  const pythonPath = execFileSync('python', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
+  let output = '';
+  const helper = startWindowsHelper({}, { pythonPath, spawnImpl(file, args, options) {
+    const child = spawn(file, args, options);
+    child.stdout.on('data', (chunk) => { output += chunk.toString(); });
+    return child;
+  } });
+  try {
+    await assert.rejects(helper.ready, { code: 'INSTALL_UNAVAILABLE' });
+    assert.match(output, /TTC_UPDATE_REJECTED/);
+  } finally {
+    helper.cancel();
+  }
+});
+
+test('Windows launcher keeps the handoff pipe open until PowerShell accepts launch', { skip: process.platform !== 'win32', timeout: 20000 }, async () => {
+  const { execFileSync, spawn } = require('node:child_process');
+  const pythonPath = execFileSync('python', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
+  const protocol = Buffer.from(`
+if ([Console]::In.ReadLine() -cne '{}') { exit 1 }
+[Console]::Out.WriteLine('TTC_UPDATE_READY'); [Console]::Out.Flush()
+if ([Console]::In.ReadLine() -cne 'commit') { exit 1 }
+[Console]::Out.WriteLine('TTC_UPDATE_COMMITTED'); [Console]::Out.Flush()
+if ([Console]::In.ReadLine() -cne 'launch') { exit 1 }
+[Console]::Out.WriteLine('TTC_UPDATE_LAUNCHED'); [Console]::Out.Flush()
+Start-Sleep -Milliseconds 500
+`, 'utf16le').toString('base64');
+  const helper = startWindowsHelper({}, { pythonPath, spawnImpl(file, args, options) {
+    return spawn(file, [...args.slice(0, -1), protocol], options);
+  } });
+  try {
+    await helper.ready;
+    await helper.commit();
+    await helper.launch();
+  } finally {
+    helper.cancel();
   }
 });
 
