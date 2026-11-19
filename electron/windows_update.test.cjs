@@ -97,15 +97,18 @@ test('journal detects failed or interrupted installation and accepts only matchi
   await checkWindowsUpdateLock(f.profile);
 });
 
-test('native helper uses fixed system executable and static code, with context only on stdin', async () => {
+test('native helper uses the bundled relay and fixed system executable with context only on stdin', async () => {
   const child = new EventEmitter(), stdout = new EventEmitter(), stdin = new EventEmitter();
   const writes = [];
   stdout.setEncoding = () => {}; stdout.destroy = () => {};
   stdin.write = (value) => writes.push(value); stdin.end = (value) => { if (value) writes.push(value); }; child.stdin = stdin; child.stdout = stdout;
   child.kill = () => {}; child.unref = () => {};
   const secretPath = 'C:\\profile\\literal `$code.exe';
-  const helper = startWindowsHelper({ file: secretPath }, { systemRoot: 'C:\\Windows', spawnImpl: (file, args, options) => {
-    assert.equal(file, 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+  const pythonPath = 'C:\\Program Files\\TTC\\runtime\\python\\python.exe';
+  const helper = startWindowsHelper({ file: secretPath }, { pythonPath, systemRoot: 'C:\\Windows', spawnImpl: (file, args, options) => {
+    assert.equal(file, pythonPath);
+    assert.equal(args[4], 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    assert.equal(options.detached, true);
     assert.equal(options.shell, false);
     assert.equal(Buffer.from(args.at(-1), 'base64').toString('utf16le').includes(secretPath), false);
     return child;
@@ -113,7 +116,7 @@ test('native helper uses fixed system executable and static code, with context o
   assert.equal(JSON.parse(writes[0]).file, secretPath);
   stdout.emit('data', 'TTC_UPDATE_READY\n'); await helper.ready;
   const commit = helper.commit(); stdout.emit('data', 'TTC_UPDATE_COMMITTED\n'); await commit;
-  helper.launch();
+  const launch = helper.launch(); stdout.emit('data', 'TTC_UPDATE_LAUNCHED\n'); child.emit('exit', 0); await launch;
   assert.equal(writes[1], 'commit\n');
   assert.equal(writes[2], 'launch\n');
 });
@@ -127,6 +130,185 @@ test('Windows PowerShell parses the static helper and unsigned verifier without 
   execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '-'], { input: program, timeout: 20000, windowsHide: true });
   }
+});
+
+test('Windows PowerShell reads stdin through the detached Python launcher', { skip: process.platform !== 'win32', timeout: 20000 }, async () => {
+  const { execFileSync, spawn } = require('node:child_process');
+  const pythonPath = execFileSync('python', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
+  let output = '';
+  const helper = startWindowsHelper({}, { pythonPath, spawnImpl(file, args, options) {
+    const child = spawn(file, args, options);
+    child.stdout.on('data', (chunk) => { output += chunk.toString(); });
+    return child;
+  } });
+  try {
+    await assert.rejects(helper.ready, { code: 'INSTALL_UNAVAILABLE' });
+    assert.match(output, /TTC_UPDATE_REJECTED/);
+  } finally {
+    helper.cancel();
+  }
+});
+
+test('Windows launcher keeps the handoff pipe open until PowerShell accepts launch', { skip: process.platform !== 'win32', timeout: 20000 }, async () => {
+  const { execFileSync, spawn } = require('node:child_process');
+  const pythonPath = execFileSync('python', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
+  const protocol = Buffer.from(`
+if ([Console]::In.ReadLine() -cne '{}') { exit 1 }
+[Console]::Out.WriteLine('TTC_UPDATE_READY'); [Console]::Out.Flush()
+if ([Console]::In.ReadLine() -cne 'commit') { exit 1 }
+[Console]::Out.WriteLine('TTC_UPDATE_COMMITTED'); [Console]::Out.Flush()
+if ([Console]::In.ReadLine() -cne 'launch') { exit 1 }
+[Console]::Out.WriteLine('TTC_UPDATE_LAUNCHED'); [Console]::Out.Flush()
+Start-Sleep -Milliseconds 500
+`, 'utf16le').toString('base64');
+  const helper = startWindowsHelper({}, { pythonPath, spawnImpl(file, args, options) {
+    return spawn(file, [...args.slice(0, -1), protocol], options);
+  } });
+  try {
+    await helper.ready;
+    await helper.commit();
+    await helper.launch();
+  } finally {
+    helper.cancel();
+  }
+});
+
+test('Windows PowerShell atomically replaces an existing install journal without a backup path', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-journal-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const journal = path.join(root, 'state.json');
+  const helper = require('./windows_update_helper.cjs');
+  const definitions = helper.slice(0, helper.indexOf('function Installed {'));
+  const context = Buffer.from(JSON.stringify({ journal, version: '0.1.2', currentVersion: '0.1.1' })).toString('base64');
+  const script = definitions + `
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Journal 'handoff'
+Journal 'installed'
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(JSON.parse(await fs.readFile(journal, 'utf8')).phase, 'installed');
+  assert.deepEqual(await fs.readdir(root), ['state.json']);
+});
+
+test('Windows journal reports the native sharing violation and preserves the previous phase', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-journal-sharing-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const journal = path.join(root, 'state.json');
+  const helper = require('./windows_update_helper.cjs');
+  const context = Buffer.from(JSON.stringify({ journal, version: '0.1.2', currentVersion: '0.1.1', parentPid: process.pid })).toString('base64');
+  const script = helper.slice(0, helper.indexOf('function Installed {')) + `
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Journal 'handoff'
+$reader = [IO.File]::Open($context.journal,'Open','Read','Read')
+try { Journal 'installed'; throw 'Sharing violation expected' }
+catch { if ($_.Exception.GetBaseException().HResult -ne -2147024864) { throw } }
+finally { $reader.Dispose() }
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(JSON.parse(await fs.readFile(journal, 'utf8')).phase, 'handoff');
+  const traces = (await fs.readdir(root)).filter(name => name.endsWith('.error.json'));
+  assert.equal(traces.length, 1);
+  const trace = JSON.parse(await fs.readFile(path.join(root, traces[0]), 'utf8'));
+  assert.equal(trace.hresult, '0x80070020');
+  assert.equal(trace.operation, 'replace');
+  assert.equal(trace.attempts, 5);
+  assert.equal(trace.parentPid, process.pid);
+  assert.equal(trace.journal, journal);
+  assert.equal(JSON.parse(await fs.readFile(trace.temporary, 'utf8')).phase, 'installed');
+});
+
+test('Windows journal completes after a transient reader releases the previous file', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-journal-retry-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const journal = path.join(root, 'state.json');
+  const helper = require('./windows_update_helper.cjs');
+  const context = Buffer.from(JSON.stringify({ journal, version: '0.1.2', currentVersion: '0.1.1' })).toString('base64');
+  const script = helper.slice(0, helper.indexOf('function Installed {')) + `
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Journal 'handoff'
+$reader = [IO.File]::Open($context.journal,'Open','Read','Read')
+function Start-Sleep([int]$Milliseconds) {
+  if ($Milliseconds -ne 20 -or $reader.SafeFileHandle.IsClosed) { throw 'Unexpected retry' }
+  $reader.Dispose()
+}
+try { Journal 'installed' } finally { $reader.Dispose() }
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(JSON.parse(await fs.readFile(journal, 'utf8')).phase, 'installed');
+  assert.deepEqual(await fs.readdir(root), ['state.json']);
+});
+
+test('Windows helper restarts with independent standard handles', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-restart-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'Test Restart.exe');
+  const python = execFileSync('python', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
+  const helper = require('./windows_update_helper.cjs');
+  const restart = helper.slice(helper.indexOf('function RestartApplication {'), helper.indexOf('\ntry {\n  $env:PSModulePath'));
+  const context = Buffer.from(JSON.stringify({ executable, directory: root, python })).toString('base64');
+  const script = restart.replace(/^  \$restart.FileName = .*$/m, '  $$restart.FileName = $context.python') + `
+$ErrorActionPreference = 'Stop'
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Add-Type -OutputAssembly $context.executable -OutputType ConsoleApplication -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+public static class RestartProbe {
+    [DllImport("kernel32.dll")] private static extern IntPtr GetStdHandle(int handle);
+    [DllImport("kernel32.dll")] private static extern uint GetFileType(IntPtr handle);
+    public static void Main() {
+        if (GetFileType(GetStdHandle(-10)) != 2 ||
+            GetFileType(GetStdHandle(-11)) != 2 ||
+            GetFileType(GetStdHandle(-12)) != 2 || Console.Read() != -1) return;
+        Console.WriteLine("stdout");
+        Console.Error.WriteLine("stderr");
+        File.WriteAllText("restarted.txt", "ok");
+    }
+}
+'@
+RestartApplication
+$marker = [IO.Path]::Combine($context.directory, 'restarted.txt')
+for ($i = 0; $i -lt 100 -and !(Test-Path -LiteralPath $marker); $i++) { Start-Sleep -Milliseconds 50 }
+if (!(Test-Path -LiteralPath $marker)) { throw 'Restart did not receive NUL standard handles' }
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(await fs.readFile(path.join(root, 'restarted.txt'), 'utf8'), 'ok');
+});
+
+test('Windows helper releases the profile lock before showing the failure message', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-helper-failure-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const fixture = { lock: path.join(root, 'update.lock'), journal: path.join(root, 'state.json'), version: '0.1.2', currentVersion: '0.1.1' };
+  const encoded = Buffer.from(JSON.stringify(fixture)).toString('base64');
+  const helper = require('./windows_update_helper.cjs').replace('  $env:PSModulePath =', `
+  $context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')) | ConvertFrom-Json
+  $lock = [IO.File]::Open($context.lock,'Create','ReadWrite','None')
+  $committed = $true
+  throw 'DISPOSABLE_TEST_FAILURE'
+  $env:PSModulePath =`).replace(/^    try \{ Add-Type.*MessageBox.*$/m, `
+    $probe = [IO.File]::Open($context.lock,'Open','ReadWrite','None')
+    $probe.Dispose()
+    [Console]::Out.WriteLine('LOCK_RELEASED')`);
+  const launcher = "$script = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String([Console]::In.ReadLine())); Invoke-Expression $script";
+  const result = spawnSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', launcher],
+    { input: Buffer.from(helper, 'utf16le').toString('base64') + '\n', timeout: 15000, windowsHide: true, encoding: 'utf8' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /LOCK_RELEASED/);
+  assert.equal(JSON.parse(await fs.readFile(fixture.journal, 'utf8')).phase, 'failed');
 });
 
 test('Windows update registry identity remains the existing NSIS app GUID', () => {

@@ -287,3 +287,18 @@ Primärquellen: [GitHub Environments](https://docs.github.com/en/rest/deployment
 [Release-API](https://docs.github.com/en/rest/releases/releases),
 [private Release-Assets](https://docs.github.com/en/rest/releases/assets),
 [electron-builder Windows-Code-Signierung](https://www.electron.build/v26/docs/features/code-signing/code-signing-win/).
+
+
+## Nachweis des deaktivierten Administrator-Bypasses
+
+Das Release-Gate verlangt beim GET des Environments explizit
+`can_admins_bypass: false`. `true`, ein fehlendes Feld oder ein nicht boolescher
+Wert sperren die Veröffentlichung. Ein unbekannter Status ist keine Freigabe.
+Vor Aktivierung muss das für das tatsächliche `desktop-release`-Environment mit
+dem Gate-Lesezugang nachgewiesen werden. Diese Codeprüfung verändert keine
+GitHub-Einstellung. Required reviewers und ausschließlich Tag-Deployments
+`desktop-v*` bleiben zusätzlich erforderlich; die bewusste Entscheidung zur
+Selbstfreigabe bleibt separat zu dokumentieren.
+
+GitHub beschreibt die Einstellung unter
+[Deployment-Schutzregeln](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#allow-administrators-to-bypass-configured-protection-rules).

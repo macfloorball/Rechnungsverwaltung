@@ -27,6 +27,7 @@ async function checkGate(api, policy, release) {
   }
   if (ref.object.type !== 'commit' || ref.object.sha !== release.commit) throw Error('Release-Tag wurde verändert.');
   const environment = await api.request('GET', `${base}/environments/${policy.environment}`);
+  if (environment.can_admins_bypass !== false) throw Error('Administrator-Bypass des Release-Environments ist aktiv oder nicht nachgewiesen.');
   if (!environment.protection_rules?.some((rule) => rule.type === 'required_reviewers' && rule.reviewers?.length > 0)
       || environment.deployment_branch_policy?.custom_branch_policies !== true) throw Error('Geschützte manuelle Release-Freigabe fehlt.');
   const deployments = await api.pages(`${base}/environments/${policy.environment}/deployment-branch-policies`, 'branch_policies');

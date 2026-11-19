@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 Set-StrictMode -Version Latest
-$lock = $null; $package = $null; $context = $null; $committed = $false
+$lock = $null; $package = $null; $context = $null; $installer = $null; $committed = $false; $failed = $false
 function HashBytes($bytes) {
   $sha = [Security.Cryptography.SHA256]::Create()
   try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
@@ -41,8 +41,33 @@ function Signature([string]$file) {
 function Journal([string]$phase) {
   $json = @{formatVersion=1; phase=$phase; version=$context.version; previousVersion=$context.currentVersion; time=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Compress
   $temporary = $context.journal + '.tmp-' + [Guid]::NewGuid().ToString('N')
-  [IO.File]::WriteAllText($temporary,$json,[Text.UTF8Encoding]::new($false))
-  if (Test-Path -LiteralPath $context.journal) { [IO.File]::Replace($temporary,$context.journal,$null) } else { [IO.File]::Move($temporary,$context.journal) }
+  $operation = 'write'
+  $attempt = 1
+  try {
+    $output = [IO.File]::Open($temporary,'CreateNew','Write','None')
+    try { $bytes = [Text.Encoding]::UTF8.GetBytes($json); $output.Write($bytes,0,$bytes.Length); $output.Flush($true) } finally { $output.Dispose() }
+    if (Test-Path -LiteralPath $context.journal) {
+      $operation = 'replace'
+      while ($true) {
+        try { [IO.File]::Replace($temporary,$context.journal,[NullString]::Value); break } catch {
+          # Retry only Win32 ERROR_SHARING_VIOLATION while both files still exist.
+          if ($_.Exception.GetBaseException().HResult -ne 0x80070020 -or $attempt -ge 5 -or ![IO.File]::Exists($temporary) -or ![IO.File]::Exists($context.journal)) { throw }
+          Start-Sleep -Milliseconds (20 -shl ($attempt - 1))
+          $attempt++
+        }
+      }
+    } else { $operation = 'move'; [IO.File]::Move($temporary,$context.journal) }
+  } catch {
+    $cause = $_.Exception.GetBaseException()
+    try {
+      $trace = @{phase=$phase; operation=$operation; attempts=$attempt; hresult=('0x{0:X8}' -f $cause.HResult); type=$cause.GetType().FullName; time=[DateTime]::UtcNow.ToString('o'); helperPid=$PID; journal=$context.journal; temporary=$temporary; lockHeld=($null -ne $lock)}
+      if ($null -ne $context.PSObject.Properties['parentPid']) { $trace.parentPid = $context.parentPid }
+      if ($null -ne $installer) { $trace.installerPid = $installer.Id; $trace.installerExit = $installer.ExitCode; $trace.installerEnded = $installer.ExitTime.ToUniversalTime().ToString('o') }
+      $output = [IO.File]::Open($temporary + '.error.json','CreateNew','Write','None')
+      try { $bytes = [Text.Encoding]::UTF8.GetBytes(($trace | ConvertTo-Json -Compress)); $output.Write($bytes,0,$bytes.Length); $output.Flush($true) } finally { $output.Dispose() }
+    } catch {}
+    throw
+  }
 }
 function Installed {
   $root = [IO.Path]::Combine($context.directory,'resources','app')
@@ -71,7 +96,20 @@ function Installed {
   $installed = Get-ItemProperty -LiteralPath $context.uninstallKey
   if ($installed.DisplayVersion -cne $context.version) { throw 'INCOMPLETE' }
 }
+function RestartApplication {
+  $restart = [Diagnostics.ProcessStartInfo]::new()
+  $restart.FileName = [IO.Path]::Combine($context.directory,'resources','app','runtime','python','python.exe')
+  $restart.WorkingDirectory = $context.directory
+  $restart.UseShellExecute = $false
+  # PowerShell's protocol pipe belongs to A. Give B valid independent handles.
+  $restart.Arguments = '-I -B -c "import subprocess,sys;subprocess.Popen([sys.argv[1]],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)" "' + $context.executable + '"'
+  $starter = [Diagnostics.Process]::Start($restart)
+  $starter.WaitForExit()
+  if ($starter.ExitCode -ne 0) { throw 'RESTART' }
+}
 try {
+  $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
+  Import-Module ([IO.Path]::Combine($env:PSModulePath, 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Security.psd1'))
   $line = [Console]::In.ReadLine()
   if ($line.Length -gt 65536) { throw 'CONTEXT' }
   $context = $line | ConvertFrom-Json
@@ -96,6 +134,7 @@ try {
   $committed = $true
   [Console]::Out.WriteLine('TTC_UPDATE_COMMITTED'); [Console]::Out.Flush()
   if ([Console]::In.ReadLine() -cne 'launch') { throw 'CANCELLED' }
+  [Console]::Out.WriteLine('TTC_UPDATE_LAUNCHED'); [Console]::Out.Flush()
   if (-not $parent.WaitForExit(60000)) { throw 'PARENT' }
   # The exact installer remains locked against write/delete until it finishes.
   Signature $context.file
@@ -112,17 +151,21 @@ try {
   $package.Dispose(); $package = $null
   Remove-Item -LiteralPath $context.slot -Recurse -Force
   $lock.Dispose(); $lock = $null
-  $restart = [Diagnostics.ProcessStartInfo]::new()
-  $restart.FileName = $context.executable; $restart.WorkingDirectory = $context.directory; $restart.UseShellExecute = $false
-  [void][Diagnostics.Process]::Start($restart)
+  RestartApplication
 } catch {
+  $failed = $true
   if ($null -ne $context -and $committed) {
     try { Journal 'failed' } catch {}
-    try { Add-Type -AssemblyName System.Windows.Forms; [void][Windows.Forms.MessageBox]::Show('Das Update wurde abgebrochen oder konnte nicht vollständig geprüft werden. Persönliche Daten bleiben erhalten. Bitte die App manuell starten oder den vollständigen geprüften Installer verwenden.','TT Rechnungsverwaltung - Update') } catch {}
   } else { try { [Console]::Out.WriteLine('TTC_UPDATE_REJECTED'); [Console]::Out.Flush() } catch {} }
-  exit 1
 } finally {
   if ($null -ne $package) { $package.Dispose() }
   if ($null -ne $lock) { $lock.Dispose() }
+}
+if ($failed) {
+  if ($committed) {
+    # Release the installer and profile lock before waiting for dismissal.
+    try { Add-Type -AssemblyName System.Windows.Forms; [void][Windows.Forms.MessageBox]::Show('Das Update wurde abgebrochen oder konnte nicht vollständig geprüft werden. Persönliche Daten bleiben erhalten. Bitte die App manuell starten oder den vollständigen geprüften Installer verwenden.','TT Rechnungsverwaltung - Update') } catch {}
+  }
+  exit 1
 }
 `;

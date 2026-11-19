@@ -122,6 +122,9 @@ def main():
     config = uvicorn.Config(
         args.app, host=args.host, port=args.port, reload=args.reload,
         reload_dirs=args.reload_dir, timeout_graceful_shutdown=15,
+        # A TCP reset can raise from Proactor's socket.shutdown before it
+        # detaches the transport, leaving Server.wait_closed() blocked.
+        loop="asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto",
     )
     stop = multiprocessing.get_context("spawn").Event()
 

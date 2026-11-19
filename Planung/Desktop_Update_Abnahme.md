@@ -1,6 +1,6 @@
 # Desktop-Releases: Betriebs- und native Abnahmeanleitung
 
-Stand: 18.11.2026. Aktueller Status: [Protokoll](Desktop_Update_Stand_2026-11-18.md). Dieses Dokument beschreibt die
+Stand: 19.11.2026. Historisches Testprotokoll: [Protokoll](Desktop_Update_Stand_2026-11-18.md). Dieses Dokument beschreibt die
 auszuführenden Schritte und erforderlichen Nachweise, keine bereits bestandene
 native Installationsabnahme. Einrichtung von Schlüsseln und GitHub-Schutzregeln:
 [Desktop_Release_Einrichtung.md](Desktop_Release_Einrichtung.md).
@@ -23,20 +23,33 @@ Publishjob `contents: write`; es ist kein Client-Zugang. Der Windows-Schlüssel
 ist kein zusätzliches PFX-Secret dieses Workflows. Private Schlüssel und Tokens
 gehören weder in Testprotokolle, Screenshots, Repositorydateien noch Release-Assets.
 
-Die GitHub-Verbindung bestätigte am 15.11.2026 Repository-ID 1447003404,
-Sichtbarkeit privat und administrativen Zugriff des verbundenen Kontos. Das
-belegt weder eingerichtete Schutzregeln noch einen geeigneten Tarif oder einen
-verfügbaren Signierrechner. Diese Konfiguration wurde hier nicht verändert und
-ist vor Aktivierung separat nachzuweisen. Die verfügbare GitHub-Verbindung bietet
-keine Endpunkte zur vollständigen Prüfung dieser Einstellungen.
+Das Repository `macfloorball/Rechnungsverwaltung` (ID 1447003404) ist öffentlich.
+Die aktuelle Policy verwendet `visibility: public`; öffentliche Clients benötigen
+keinen GitHub-Token. Private Verteilung bleibt ein gesonderter Konfigurationsfall.
+Die Sichtbarkeit ersetzt weder die Manifestprüfung noch die Freigabe des
+Release-Environments. Dessen Required reviewer, Selbstfreigabe, Admin-Bypass und
+Tag-Deploymentregel sowie die Leserechte des Release-Gates sind vor Aktivierung
+an der tatsächlichen Konfiguration nachzuweisen.
 
-GitHub nennt Required reviewers unter Free/Pro/Team ausschließlich für
-öffentliche Repositories. Bleibt die erforderliche private Freigabe im konkreten
-Konto unerreichbar, bleibt dieser Workflow gesperrt. Eine andere
-Freigabearchitektur benötigt eine eigene Entscheidung und Umsetzung; das
-Repository wird dafür nicht automatisch öffentlich gestellt.
-[GitHub: Deployment-Schutz](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments),
-[Environment-API und Verfügbarkeit](https://docs.github.com/en/rest/deployments/environments).
+## Nachgewiesene Integration, noch keine Produktionsfreigabe
+
+[PR #33](https://github.com/macfloorball/Rechnungsverwaltung/pull/33) wurde am
+18.11.2026 nach `Entwicklung-App` integriert. Der vollständige
+[Push-CI-Lauf 44416112471](https://github.com/macfloorball/Rechnungsverwaltung/actions/runs/44416112471)
+für Commit `5814b07d96fbc8b7f0018bb0798fed62f0895d95` bestand:
+
+| Job | Nachweis |
+| --- | --- |
+| Ubuntu-Tests | 220 JavaScript-Tests bestanden, 2 übersprungen; 414 Python-Tests bestanden, 14 übersprungen. |
+| Windows-Tests | 197 JavaScript-Tests bestanden, 25 übersprungen; 398 Python-Tests bestanden, 30 übersprungen. |
+| Windows NSIS x64 build | Entwicklungsinstaller gebaut; 7 paketierte Laufzeittests bestanden. |
+| Linux AppImage x64 build | Entwicklungs-AppImage gebaut; 13 paketierte Laufzeittests bestanden, AppImage hierfür extrahiert. |
+
+Diese vorhandenen CI-Logs wurden am 19.11.2026 geprüft. Sie ersetzen weder eine
+interaktive Windows-11-Abnahme noch native FUSE-Fehlerfälle oder die wiederholte
+Windows-Shutdown-Diagnose. Für spätere Quelländerungen ist erneut CI für genau
+deren Commit erforderlich. Die Policy bleibt deaktiviert, Produktionsvertrauen
+ist nicht eingerichtet. Die nachstehenden Abnahmeschritte bleiben erforderlich.
 
 ## Branch, Version und kontrollierter Release-Ablauf
 
@@ -86,8 +99,10 @@ Die erlaubten Dateien sind Windows-NSIS und Linux-AppImage sowie
 `RELEASE_NOTES.md` und `SHA256SUMS`. Die Pakete heißen
 `ttc-rechnungsverwaltung-X.Y.Z-windows-x64-setup.exe` bzw.
 `ttc-rechnungsverwaltung-X.Y.Z-linux-x64.AppImage`.
-Im gewählten Repository sind dies **private Release-Assets**. Es gibt keinen
-öffentlichen Downloadkanal. Pakete enthalten extrahierbaren Anwendungscode.
+Im gewählten öffentlichen Repository sind freigegebene Release-Assets ohne
+GitHub-Token abrufbar. Ein tatsächlich veröffentlichter und nativ abgenommener
+Updatekanal ist damit noch nicht nachgewiesen. Pakete enthalten extrahierbaren
+Anwendungscode.
 
 Manuelle Verteilung benötigt einen unabhängig bestätigten Vertrauensanker und
 die signierten Metadaten. Zuerst die Ed25519-Signatur über die unveränderten
@@ -224,6 +239,33 @@ verschiedenen lokalen Dateisystemen testen.
 | Manipulation/Abbruch | Signatur/Hash/Version/Zeitgültigkeit und Zieländerung zwischen Vorbereitung und Austausch prüfen. Vor Ersetzen bleibt A erhalten. Abbruch ohne finales Startsignal darf auch nach Main-Ende keinen Austausch auslösen. |
 | Platz/Absturz/Parallelstart | Begrenztes Testvolume statt Hostdateisystem füllen; vor und nach atomarem Replace hart stoppen. Keine halbe ausführbare Datei, keine Datenlöschung. Journal meldet unbestätigten Abschluss; Sperre verhindert Parallelstart während der Übergabe. Nach Ersetzen kein automatischer Rücktausch. |
 | Offline/Wiederholung | A und B ohne Internet starten; Rechnungen/PDF/Sicherung vollständig lokal bedienen. Updatefehler beheben und manuell erneut prüfen. Downgrade bleibt gesperrt. |
+
+Die vorhandene lokale FUSE-Teststrecke kann alle zehn isolierten Szenarien
+mit einem einzigen Paar temporärer Testimages ausführen:
+
+```sh
+node scripts/check_native_appimage_update.cjs /absoluter/Pfad/squashfs-root --all
+```
+
+Alternativ das letzte Argument durch `success`, `offline`, `signature`, `hash`,
+`interrupted`, `defer`, `cancel-install`, `read-only`, `writable-directory` oder
+`hardlink` ersetzen. `--locations` führt nur die letzten drei Ortsprüfungen aus. Ohne letztes Argument wird
+nur `success` ausgeführt. Jeder Fall erhält eigene Profile und Dokumente. Vor
+der expliziten Wiederholung prüfen Fehlerfälle das unveränderte A-Image sowie
+Rechnung, PDF und Nummernkreis; danach folgt der echte FUSE-Wechsel zu B.
+Fehlerhafte Downloads müssen ihre Teildateien entfernen. Aufschieben darf keinen
+Download auslösen, Installationsabbruch muss das geprüfte Paket erneut anbieten.
+
+Ausschließlich ein entpacktes Entwicklungs-AppImage mit deaktiviertem Vertrauen
+verwenden. Der Prüfer baut getrennte A/B-Testimages mit flüchtigem Testschlüssel
+und künstlichen Commitdaten. Feed, Netzwerkfehler und Zustimmungen sind
+Testadapter; Windows-Metadaten sind ein Platzhalter. Die Strecke ist kein
+GitHub-Liverelease, keine Windows-Abnahme und kein vollständiger OS-Netzausfall.
+Die Ortsprüfungen ändern ausschließlich temporäre Testverzeichnisse bzw.
+erzeugen einen eigenen Hardlink; anschließend werden sichere Bedingungen
+wiederhergestellt und das Update erneut angeboten. Systemabsturz, Ubuntu-
+Zielmatrix, systemweite/verlinkte Installationsorte und parallele Starts bleiben zusätzlich nach obigem Katalog zu prüfen. Testschlüssel dürfen
+nicht als Produktionsvertrauen ausgeliefert werden.
 
 DEB, RPM und Paketmanagerintegration sind nicht Teil dieser Abnahme. Details und
 konservative Pfadvoraussetzungen: [Desktop_Linux_Update.md](Desktop_Linux_Update.md).
