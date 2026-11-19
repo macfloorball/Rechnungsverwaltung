@@ -37,8 +37,11 @@ function startWindowsHelper(context, { pythonPath, spawnImpl = spawn, systemRoot
   if (!systemRoot || !path.win32.isAbsolute(systemRoot) || !pythonPath || !path.win32.isAbsolute(pythonPath)) throw new UpdateError('INSTALL_UNAVAILABLE');
   const executable = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const command = Buffer.from(helperSource, 'utf16le').toString('base64');
-  if (command.length > 29000) throw new UpdateError('INSTALL_UNAVAILABLE');
-  const child = spawnImpl(pythonPath, ['-I', '-B', '-c', relaySource, executable, command], {
+  const args = ['-I', '-B', '-c', relaySource, executable, command];
+  // Include quoting, escaped backslashes and the terminating NUL in both CreateProcess calls.
+  const fits = (values) => values.reduce((length, value) => length + 3 + value.length + (value.match(/[\\"]/g)?.length ?? 0), 1) <= 32767;
+  if (!fits([pythonPath, ...args]) || !fits([executable, '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', command])) throw new UpdateError('INSTALL_UNAVAILABLE');
+  const child = spawnImpl(pythonPath, args, {
     detached: true, windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'ignore'],
   });
   let buffer = '', phase = 'ready', settle, closed = false;

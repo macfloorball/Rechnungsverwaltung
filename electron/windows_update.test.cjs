@@ -217,9 +217,34 @@ finally { $reader.Dispose() }
   const trace = JSON.parse(await fs.readFile(path.join(root, traces[0]), 'utf8'));
   assert.equal(trace.hresult, '0x80070020');
   assert.equal(trace.operation, 'replace');
+  assert.equal(trace.attempts, 5);
   assert.equal(trace.parentPid, process.pid);
   assert.equal(trace.journal, journal);
   assert.equal(JSON.parse(await fs.readFile(trace.temporary, 'utf8')).phase, 'installed');
+});
+
+test('Windows journal completes after a transient reader releases the previous file', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-journal-retry-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const journal = path.join(root, 'state.json');
+  const helper = require('./windows_update_helper.cjs');
+  const context = Buffer.from(JSON.stringify({ journal, version: '0.1.2', currentVersion: '0.1.1' })).toString('base64');
+  const script = helper.slice(0, helper.indexOf('function Installed {')) + `
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Journal 'handoff'
+$reader = [IO.File]::Open($context.journal,'Open','Read','Read')
+function Start-Sleep([int]$Milliseconds) {
+  if ($Milliseconds -ne 20 -or $reader.SafeFileHandle.IsClosed) { throw 'Unexpected retry' }
+  $reader.Dispose()
+}
+try { Journal 'installed' } finally { $reader.Dispose() }
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(JSON.parse(await fs.readFile(journal, 'utf8')).phase, 'installed');
+  assert.deepEqual(await fs.readdir(root), ['state.json']);
 });
 
 test('Windows helper releases the profile lock before showing the failure message', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {

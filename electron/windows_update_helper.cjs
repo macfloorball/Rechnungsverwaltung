@@ -42,17 +42,25 @@ function Journal([string]$phase) {
   $json = @{formatVersion=1; phase=$phase; version=$context.version; previousVersion=$context.currentVersion; time=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Compress
   $temporary = $context.journal + '.tmp-' + [Guid]::NewGuid().ToString('N')
   $operation = 'write'
+  $attempt = 1
   try {
-    [IO.File]::WriteAllText($temporary,$json,[Text.UTF8Encoding]::new($false))
+    $output = [IO.File]::Open($temporary,'CreateNew','Write','None')
+    try { $bytes = [Text.Encoding]::UTF8.GetBytes($json); $output.Write($bytes,0,$bytes.Length); $output.Flush($true) } finally { $output.Dispose() }
     if (Test-Path -LiteralPath $context.journal) {
       $operation = 'replace'
-      # Windows PowerShell marshals $null to an empty .NET string.
-      [IO.File]::Replace($temporary,$context.journal,[NullString]::Value)
+      while ($true) {
+        try { [IO.File]::Replace($temporary,$context.journal,[NullString]::Value); break } catch {
+          # Retry only Win32 ERROR_SHARING_VIOLATION while both files still exist.
+          if ($_.Exception.GetBaseException().HResult -ne 0x80070020 -or $attempt -ge 5 -or ![IO.File]::Exists($temporary) -or ![IO.File]::Exists($context.journal)) { throw }
+          Start-Sleep -Milliseconds (20 -shl ($attempt - 1))
+          $attempt++
+        }
+      }
     } else { $operation = 'move'; [IO.File]::Move($temporary,$context.journal) }
   } catch {
     $cause = $_.Exception.GetBaseException()
     try {
-      $trace = @{phase=$phase; operation=$operation; hresult=('0x{0:X8}' -f $cause.HResult); type=$cause.GetType().FullName; time=[DateTime]::UtcNow.ToString('o'); helperPid=$PID; journal=$context.journal; temporary=$temporary; lockHeld=($null -ne $lock)}
+      $trace = @{phase=$phase; operation=$operation; attempts=$attempt; hresult=('0x{0:X8}' -f $cause.HResult); type=$cause.GetType().FullName; time=[DateTime]::UtcNow.ToString('o'); helperPid=$PID; journal=$context.journal; temporary=$temporary; lockHeld=($null -ne $lock)}
       if ($null -ne $context.PSObject.Properties['parentPid']) { $trace.parentPid = $context.parentPid }
       if ($null -ne $installer) { $trace.installerPid = $installer.Id; $trace.installerExit = $installer.ExitCode; $trace.installerEnded = $installer.ExitTime.ToUniversalTime().ToString('o') }
       $output = [IO.File]::Open($temporary + '.error.json','CreateNew','Write','None')
