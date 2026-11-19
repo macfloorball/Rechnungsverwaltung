@@ -147,7 +147,9 @@
           "sha256": "be0407f060aea48787ff9e75d8d3aedef70aef113b3ce9aca26fdaacd10b1870",
           "sourceMember": "OFL.txt"
         }
-      ]
+      ],
+      "reservedFontNames": [],
+      "namingEvidence": "The OFL.txt distributed in the 2.004 archive has no Reserved Font Name declaration after the copyright line. Clause 3 therefore imposes no rename for this subset."
     },
     {
       "name": "Expat",
@@ -188,6 +190,57 @@
         "path": "LICENSES.chromium.html",
         "section": "zlib (heading: version 1.2.12)"
       }
+    },
+    {
+      "name": "DarkGarden",
+      "version": "1.1",
+      "source": {
+        "url": "https://downloads.sourceforge.net/darkgarden/darkgarden-1.1.src.zip",
+        "sha256": "3c4c6161eb4668f5fc0c9ff0bab693d7a88c2371e0978c0e5d4da25dcce2fea5"
+      },
+      "evidence": "The packaged SFD, README, ChangeLog and both GPL/font-exception notices match all five files in the author’s source archive after line-ending normalization. ReportLab’s exact Type 1 export was not reproduced.",
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/reportlab/fonts/DarkGardenMK.afm",
+          "sha256": "932bb1acc08358d87f326e891b78cde9e7ef60bfd4fb749cfb48ab9e2a2fe6eb"
+        },
+        {
+          "path": "Lib/site-packages/reportlab/fonts/DarkGardenMK.pfb",
+          "sha256": "3633d5aed5c0fc3ec9302ee6995d0bb87a2926793ede5bb654287d9cb896ec95"
+        }
+      ],
+      "existingSourceFiles": [
+        {
+          "sourceMember": "darkgarden-1.1/DarkGarden.sfd",
+          "sourceSha256": "bba0fb8b19bddc0ddd65e82273e1f513cd725318d48acda87bc96c9b266856bc",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden.sfd",
+          "sha256": "7ff67c9eda02fc751f5ca04394109c38b2d723e105506e58141fc9363662d6ba"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/README.txt",
+          "sourceSha256": "329ca1f4ae60d64937237cf716326a4f16a4cfff36cbd193aa6e554dd9041727",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-readme.txt",
+          "sha256": "b327963fcf0d88333d293751dd0b113c8c02f35d61440f578a14681a8ea734a0"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/ChangeLog.txt",
+          "sourceSha256": "42f968d904b7e41348e88cb5018cad82c8e9b25b8390b1c05fa01cabc7ff2e8c",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-changelog.txt",
+          "sha256": "dbb09ff331d1597125f754d9426bb8cef78fb956397790de44269db8c0a9e54d"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/COPYING.txt",
+          "sourceSha256": "8faf6efc80cd9b9a3b19ce721daed4b0a32beda5c92b6237cdde75fb6fbf645a",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-copying.txt",
+          "sha256": "3cd1020510efa7f6b3166a5a2740f92bd664a695ea179e0bda442e74cd0ef3a4"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/COPYING-GPL.txt",
+          "sourceSha256": "dffa9644cabd7f7e54057a0aa27edf90cba4c1a8688536dd2dc38442cb5b9053",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-copying-gpl.txt",
+          "sha256": "1b2a567f289f66a143c56353e7b3d4fa5862514a5e3c5cfdf8b02ee5e5aaa953"
+        }
+      ]
     }
   ]
 }

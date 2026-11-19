@@ -30,6 +30,8 @@ Originaltexte mit Quellen und SHA-256-Prüfsummen in `provenance.json`:
   aus dem von CPython 3.13.17 eingebundenen HACL*-Quellcode.
 - Noto Sans Khmer 2.004 (SIL OFL 1.1) für die bearbeitete Testschrift
   `reportlab/fonts/hb-test.ttf` aus ReportLab 5.1.0.
+  Die OFL dieser Version deklariert keinen Reserved Font Name. Die
+  Namensbedingung in Ziffer 3 erfordert für dieses Subset keine Umbenennung.
 
 Der vollständige Expat-Text für CPythons Expat 2.8.5 steht bereits unter
 „Expat XML Parser“ in `LICENSES.chromium.html`. Derselbe Lizenztext und
@@ -39,6 +41,21 @@ der Chromium-Credits. Die CPython-Versionen sind in `provenance.json` belegt.
 
 Diese Zuordnungen beziehen sich auf die geprüfte Windows-Laufzeit. Bei einem
 Versionswechsel sind sie erneut abzugleichen.
+
+### Weitere Schriften in ReportLab 5.1.0
+
+- **DarkGarden 1.1** wird als Type-1-Schriftprogramm und AFM-Metrik mit
+  GPL-2.0-or-later und Einbettungsausnahme mitgeliefert. Im Windows-Paket
+  entsprechen `DarkGarden.sfd`, README, ChangeLog und beide Lizenzdateien
+  unter `reportlab/fonts/` bis auf die Zeilenenden sämtlichen Dateien im
+  [Quellarchiv des Autors](https://downloads.sourceforge.net/darkgarden/darkgarden-1.1.src.zip).
+  Die Zuordnung mit Prüfsummen steht in `provenance.json`. Der Export des
+  konkreten Type-1-Schriftprogramms wurde nicht bytegenau reproduziert.
+- **Adobe-/Monotype-Dateien**: Für die mitgelieferten AFM-Metriken und
+  PFB-Schriftprogramme von Arial, Times New Roman, Courier, Symbol,
+  Zapf Dingbats, AdobeSansMM und AdobeSerifMM bleibt der Nachweis der
+  Weitergaberechte offen. Adobes Core-14-AFM-Archiv enthält andere Metrikdateien
+  und sein Hinweis bezieht sich auf die darin enthaltenen AFMs.
 
 ## Direkte Python-Abhängigkeiten
 
