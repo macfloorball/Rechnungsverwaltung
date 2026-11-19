@@ -73,6 +73,61 @@ def test_runtime_does_not_replace_existing_directory(tmp_path):
     assert marker.read_bytes() == b"keep"
 
 
+def test_packaged_reportlab_fonts_and_notices():
+    linux = os.environ.get("TTC_LINUX_PYTHON")
+    windows = os.environ.get("TTC_WINDOWS_PYTHON")
+    if not (linux or windows):
+        pytest.skip("Set TTC_WINDOWS_PYTHON or TTC_LINUX_PYTHON for packaged runtime checks")
+    if linux:
+        python = Path(linux).resolve().parents[1]
+        site_packages = python / "lib/python3.13/site-packages"
+    else:
+        python = Path(windows).resolve().parent
+        site_packages = python / "Lib/site-packages"
+    fonts = site_packages / "reportlab/fonts"
+    assert {file.name for file in fonts.iterdir()} == {
+        "00readme.txt", "bitstream-vera-license.txt",
+        "Vera.ttf", "VeraBd.ttf", "VeraBI.ttf", "VeraIt.ttf",
+        "DarkGardenMK.afm", "DarkGardenMK.pfb", "DarkGarden.sfd",
+        "DarkGarden-copying.txt", "DarkGarden-copying-gpl.txt",
+        "DarkGarden-readme.txt", "DarkGarden-changelog.txt",
+        "callig15.afm", "callig15.pfb", "hb-test.ttf",
+    }
+    assert (site_packages / "reportlab/license.txt").is_file()
+    app = python.parents[1]
+    manifest = json.loads((app / "installation-manifest.json").read_text(encoding="utf-8"))["files"]
+    assert {name for name in manifest if name.startswith(fonts.relative_to(app).as_posix() + "/")} == {
+        file.relative_to(app).as_posix() for file in fonts.iterdir()
+    }
+    if not linux:
+        assert "runtime/python/licenses/desktop-windows/LICENSE.noto-sans-khmer.txt" in manifest
+
+
+def test_packaged_windows_native_license_evidence():
+    executable = os.environ.get("TTC_WINDOWS_PYTHON")
+    if not executable:
+        pytest.skip("Set TTC_WINDOWS_PYTHON for the Windows license checks")
+    python = Path(executable).resolve().parent
+    app = python.parents[1]
+    manifest = json.loads((app / "installation-manifest.json").read_text(encoding="utf-8"))["files"]
+    evidence = python / "licenses/desktop-windows"
+    provenance = json.loads((evidence / "provenance.json").read_text(encoding="utf-8"))
+    components = {component["name"]: component for component in provenance["components"]}
+    for name in ("Rust standard library", "Pillow native wheel", "NSIS installer and plugins"):
+        assert components[name]["notices"]
+        for notice in components[name]["notices"]:
+            file = evidence / notice["file"]
+            assert hashlib.sha256(file.read_bytes()).hexdigest() == notice["sha256"]
+            assert manifest[file.relative_to(app).as_posix()] == notice["sha256"]
+    crate_dir = python / "licenses/pydantic-core"
+    crates = json.loads((crate_dir / "provenance.json").read_text(encoding="utf-8"))
+    assert len(crates["files"]) == 101
+    for crate in crates["files"]:
+        file = crate_dir / crate["file"]
+        assert hashlib.sha256(file.read_bytes()).hexdigest() == crate["sha256"]
+        assert manifest[file.relative_to(app).as_posix()] == crate["sha256"]
+
+
 @pytest.mark.parametrize("packaged", [False, True])
 def test_migration_in_separate_interpreter(tmp_path, packaged):
     root = Path(__file__).resolve().parent.parent

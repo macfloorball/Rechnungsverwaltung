@@ -1,0 +1,627 @@
+{
+  "platform": "win32-x64",
+  "python": "3.13.17",
+  "pythonBinarySource": {
+    "url": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip",
+    "sha256": "9e35319bffedab8b36ad44d8f377cb4f1733bcec257a0b6d04d94f01486ddb38"
+  },
+  "components": [
+    {
+      "name": "distlib",
+      "version": "0.4.0",
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl",
+        "sha256": "9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16"
+      },
+      "evidence": "Each launcher starts with the exact distlib/t64.exe bytes from the wheel.",
+      "launcherPrefixSha256": "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7",
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/bin/fastapi.exe",
+          "sha256": "786c852bb6698759178bc934440a5dc325e82febd0e7b013d162efd2f8c1fd8e"
+        },
+        {
+          "path": "Lib/site-packages/bin/idna.exe",
+          "sha256": "4332d2fae6082e1c37af5f6ea7eaa55003249265cdba4825d244e02be03a6297"
+        },
+        {
+          "path": "Lib/site-packages/bin/normalizer.exe",
+          "sha256": "f9e53e2c993f580bce8e7848704c39b8094ebf127b4e8a4dcc3387d6b06bcdb0"
+        },
+        {
+          "path": "Lib/site-packages/bin/uvicorn.exe",
+          "sha256": "94e52c4b71259aca705009ae6b726091def099ca491edde75811eaffb418217e"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.distlib.txt",
+          "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d",
+          "sourceMember": "distlib-0.4.0.dist-info/LICENSE.txt"
+        }
+      ]
+    },
+    {
+      "name": "libmpdec",
+      "version": "4.0.0",
+      "source": {
+        "url": "https://www.bytereef.org/software/mpdecimal/releases/mpdecimal-4.0.0.tar.gz",
+        "sha256": "942445c3245b22730fd41a67a7c5c231d11cb1b9936b9c0f76334fb7d0b4468c"
+      },
+      "evidence": "_decimal.__libmpdec_version__ and CPython 3.13.17 PCbuild/get_externals.bat.",
+      "packageFiles": [
+        {
+          "path": "_decimal.pyd",
+          "sha256": "7e8e5d026e22be2669b2ac6175fece6b7fbe2faf1e456fa4785130832d244955"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.mpdecimal.txt",
+          "sha256": "2713324211652ce4a60e6e21e54f9dc3004299e591b0933a352f1a89c5fb53c2",
+          "sourceMember": "mpdecimal-4.0.0/COPYRIGHT.txt"
+        }
+      ]
+    },
+    {
+      "name": "Unicode Character Database",
+      "version": "15.1.0",
+      "source": {
+        "url": "https://www.unicode.org/Public/zipped/15.1.0/UCD.zip",
+        "sha256": "cb1c663d053926500cd501229736045752713a066bd75802098598b7a7056177"
+      },
+      "evidence": "unicodedata.unidata_version and the UCD ReadMe.txt for the release.",
+      "packageFiles": [
+        {
+          "path": "unicodedata.pyd",
+          "sha256": "541f46cf1ab49239b008a563eee6762086c7288f64631cb5cf59451cf22fc70c"
+        },
+        {
+          "path": "python313.dll",
+          "sha256": "26026530507a7389e7892ce130e7c1753b32a2df03ec3721d45ad8c1705d40eb"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.unicode.txt",
+          "sha256": "9ba0dc030e14ab692310b5395ea4f3a4921bcdbc1b9dbcebb1f81d83eb08f4e6",
+          "sourceUrl": "https://raw.githubusercontent.com/unicode-org/unicodetools/final-15.1-20230908/LICENSE"
+        },
+        {
+          "file": "NOTICE.unicode-ucd.txt",
+          "sha256": "0d2da782ead4e85630d510f50808355e8c3355e670841d257dd1e6fbd40db9fa",
+          "sourceMember": "ReadMe.txt"
+        }
+      ]
+    },
+    {
+      "name": "HACL*",
+      "version": "bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0",
+      "source": {
+        "url": "https://www.python.org/ftp/python/3.13.17/Python-3.13.17.tgz",
+        "sha256": "9cb057caa588f122577a5054a22531cd9c23ab6706f1a19bc95a55380a895177"
+      },
+      "evidence": "Modules/_hacl/refresh.sh pins the revision. PCbuild/pythoncore.vcxproj compiles all four vendored hash implementations, whose MIT headers are identical.",
+      "packageFiles": [
+        {
+          "path": "python313.dll",
+          "sha256": "26026530507a7389e7892ce130e7c1753b32a2df03ec3721d45ad8c1705d40eb"
+        }
+      ],
+      "copyrightHeaders": [
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_MD5.c",
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA1.c",
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA2.c",
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA3.c"
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.hacl.txt",
+          "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c",
+          "sourceMember": "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA2.c"
+        }
+      ]
+    },
+    {
+      "name": "Noto Sans Khmer",
+      "version": "2.004",
+      "source": {
+        "url": "https://github.com/notofonts/khmer/releases/download/NotoSansKhmer-v2.004/NotoSansKhmer-v2.004.zip",
+        "sha256": "19382ca97d62febea1c735ebee35a5aa4f03beca9b6ea6f6d86b7a7a0025a688"
+      },
+      "reportlabSource": {
+        "url": "https://files.pythonhosted.org/packages/89/22/c18474be40b9bbb52fdb7051177d4d25f1ea59fada17eb181026411e93b1/reportlab-5.1.0.tar.gz",
+        "sha256": "6878200464527e87672d19e9f7cfc6bb890e3a6931e74ac6a1a8d1754aa55671",
+        "member": "reportlab-5.1.0/src/reportlab/fonts/hb-test.ttf"
+      },
+      "evidence": "ReportLab 5.1.0 ships a modified test subset. Identical to the sdist font, with the upstream Regular font copyright, unique name ID, PostScript name and matching outlines for several glyphs. The exact subsetting procedure is unknown.",
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/reportlab/fonts/hb-test.ttf",
+          "sha256": "4df8840ec8382efa2c06bda01e31e1a5a975cd46e13f7c0b0be696a8542f1ba0"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.noto-sans-khmer.txt",
+          "sha256": "be0407f060aea48787ff9e75d8d3aedef70aef113b3ce9aca26fdaacd10b1870",
+          "sourceMember": "OFL.txt"
+        }
+      ],
+      "reservedFontNames": [],
+      "namingEvidence": "The OFL.txt distributed in the 2.004 archive has no Reserved Font Name declaration after the copyright line. Clause 3 therefore imposes no rename for this subset."
+    },
+    {
+      "name": "Expat",
+      "version": "2.8.5",
+      "source": {
+        "url": "https://www.python.org/ftp/python/3.13.17/Python-3.13.17.tgz",
+        "sha256": "9cb057caa588f122577a5054a22531cd9c23ab6706f1a19bc95a55380a895177"
+      },
+      "evidence": "pyexpat.EXPAT_VERSION. The full vendored COPYING text matches the Expat XML Parser section after decoding HTML entities and normalizing whitespace.",
+      "packageFiles": [
+        {
+          "path": "pyexpat.pyd",
+          "sha256": "4095f444c5d0fe9d24c1a46a8630459f8488c5392dc82be9af67f4045ea9c368"
+        }
+      ],
+      "existingNotice": {
+        "path": "LICENSES.chromium.html",
+        "section": "Expat XML Parser",
+        "sourceMember": "Python-3.13.17/Modules/expat/COPYING",
+        "sourceTextSha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
+      }
+    },
+    {
+      "name": "zlib",
+      "version": "1.3.1",
+      "source": {
+        "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE",
+        "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+      },
+      "evidence": "zlib.ZLIB_RUNTIME_VERSION and CPython 3.13.17 PCbuild/get_externals.bat. The credits section headed 1.2.12 contains the same copyright holders, years and license terms as the 1.3.1 LICENSE.",
+      "packageFiles": [
+        {
+          "path": "python313.dll",
+          "sha256": "26026530507a7389e7892ce130e7c1753b32a2df03ec3721d45ad8c1705d40eb"
+        }
+      ],
+      "existingNotice": {
+        "path": "LICENSES.chromium.html",
+        "section": "zlib (heading: version 1.2.12)"
+      }
+    },
+    {
+      "name": "DarkGarden",
+      "version": "1.1",
+      "source": {
+        "url": "https://downloads.sourceforge.net/darkgarden/darkgarden-1.1.src.zip",
+        "sha256": "3c4c6161eb4668f5fc0c9ff0bab693d7a88c2371e0978c0e5d4da25dcce2fea5"
+      },
+      "evidence": "The packaged SFD, README, ChangeLog and both GPL/font-exception notices match all five files in the author’s source archive after line-ending normalization. ReportLab’s exact Type 1 export was not reproduced.",
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/reportlab/fonts/DarkGardenMK.afm",
+          "sha256": "932bb1acc08358d87f326e891b78cde9e7ef60bfd4fb749cfb48ab9e2a2fe6eb"
+        },
+        {
+          "path": "Lib/site-packages/reportlab/fonts/DarkGardenMK.pfb",
+          "sha256": "3633d5aed5c0fc3ec9302ee6995d0bb87a2926793ede5bb654287d9cb896ec95"
+        }
+      ],
+      "existingSourceFiles": [
+        {
+          "sourceMember": "darkgarden-1.1/DarkGarden.sfd",
+          "sourceSha256": "bba0fb8b19bddc0ddd65e82273e1f513cd725318d48acda87bc96c9b266856bc",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden.sfd",
+          "sha256": "7ff67c9eda02fc751f5ca04394109c38b2d723e105506e58141fc9363662d6ba"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/README.txt",
+          "sourceSha256": "329ca1f4ae60d64937237cf716326a4f16a4cfff36cbd193aa6e554dd9041727",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-readme.txt",
+          "sha256": "b327963fcf0d88333d293751dd0b113c8c02f35d61440f578a14681a8ea734a0"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/ChangeLog.txt",
+          "sourceSha256": "42f968d904b7e41348e88cb5018cad82c8e9b25b8390b1c05fa01cabc7ff2e8c",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-changelog.txt",
+          "sha256": "dbb09ff331d1597125f754d9426bb8cef78fb956397790de44269db8c0a9e54d"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/COPYING.txt",
+          "sourceSha256": "8faf6efc80cd9b9a3b19ce721daed4b0a32beda5c92b6237cdde75fb6fbf645a",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-copying.txt",
+          "sha256": "3cd1020510efa7f6b3166a5a2740f92bd664a695ea179e0bda442e74cd0ef3a4"
+        },
+        {
+          "sourceMember": "darkgarden-1.1/COPYING-GPL.txt",
+          "sourceSha256": "dffa9644cabd7f7e54057a0aa27edf90cba4c1a8688536dd2dc38442cb5b9053",
+          "path": "Lib/site-packages/reportlab/fonts/DarkGarden-copying-gpl.txt",
+          "sha256": "1b2a567f289f66a143c56353e7b3d4fa5862514a5e3c5cfdf8b02ee5e5aaa953"
+        }
+      ]
+    },
+    {
+      "name": "Rust standard library",
+      "version": "1.99.1",
+      "revision": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+      "source": {
+        "url": "https://static.rust-lang.org/dist/rustc-1.99.1-x86_64-pc-windows-msvc.tar.xz",
+        "sha256": "7da83c2af1f209606b0160f25174d2867c7c7b73667c32c9e5fbcef4f5f45348"
+      },
+      "standardLibraryDistribution": {
+        "url": "https://static.rust-lang.org/dist/rust-std-1.99.1-x86_64-pc-windows-msvc.tar.xz",
+        "sha256": "4fe09430ded40b8b3092b49f0a651178eb1f8154ef4d1f1a73f2a3595b2d956f"
+      },
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/pydantic_core/_pydantic_core.cp313-win_amd64.pyd",
+          "sha256": "c9f3e057f95bf8796675cdd7fc7483ea0df577186f44683d11cb312cce65baf4"
+        }
+      ],
+      "notices": [
+        {
+          "file": "NOTICE.rust-standard-library.html",
+          "sha256": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
+          "sourceMember": "rustc-1.99.1-x86_64-pc-windows-msvc/rustc/share/doc/rust/COPYRIGHT-library.html"
+        },
+        {
+          "file": "LICENSE.rust-mit.txt",
+          "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "sourceMember": "rustc-1.99.1-x86_64-pc-windows-msvc/LICENSE-MIT"
+        }
+      ],
+      "evidence": "Windows wheel binary names this rustc revision in its std paths. Both official build archives carry the same git-commit-hash. The standard library notice lists in-tree code and out-of-tree dependencies. Apache-2.0 text is already in Chromium and the crate notices."
+    },
+    {
+      "name": "Pillow native wheel",
+      "version": "13.0.0",
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/d7/ed/1b16fb66a37e1b9e41370b93b2c614c7da761a5b2a41dc333f7af4639962/pillow-13.0.0-cp313-cp313-win_amd64.whl",
+        "sha256": "9dda0788a9932776a75d8bcc020076edc308ce2508b51f6739a45e3158b3fc42"
+      },
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/PIL/_avif.cp313-win_amd64.pyd",
+          "sha256": "6c6e5d33db5ecd8a28252103c97ac7867d376371875b6baa609947d8e778022a"
+        },
+        {
+          "path": "Lib/site-packages/PIL/_imaging.cp313-win_amd64.pyd",
+          "sha256": "832167d2ecd950dc2382a9866e346d5886262bc8790bbf24613f56ad19d52f82"
+        },
+        {
+          "path": "Lib/site-packages/PIL/_imagingcms.cp313-win_amd64.pyd",
+          "sha256": "4ab7b14029ea0a6bdb7f94b069ad3399d53fd192aaeed7460fbabba61d065b76"
+        },
+        {
+          "path": "Lib/site-packages/PIL/_imagingft.cp313-win_amd64.pyd",
+          "sha256": "91f0a8e145163803637620517bad32ad5cb551d8a4dc02c3309811af24dbcbcc"
+        },
+        {
+          "path": "Lib/site-packages/PIL/_imagingmath.cp313-win_amd64.pyd",
+          "sha256": "d1aafa904aa69eed5008d1ced3b20c049670cd521593d1f0a4ff2ef44f9371cb"
+        },
+        {
+          "path": "Lib/site-packages/PIL/_imagingmorph.cp313-win_amd64.pyd",
+          "sha256": "e50c8f830f06ced4cca8fd9f5cb10f0918a2d12c6263dd7bc1de1a3666b2102b"
+        },
+        {
+          "path": "Lib/site-packages/PIL/_imagingtk.cp313-win_amd64.pyd",
+          "sha256": "a7af2e099caae412470919646d5d1cf36566fbed697c4cd44e926029dd2c4ccf"
+        },
+        {
+          "path": "Lib/site-packages/PIL/_webp.cp313-win_amd64.pyd",
+          "sha256": "77ec2f34c0a33151c7b020dfc987163678e1e3428508117ca8cbc68dfb2af2b1"
+        },
+        {
+          "path": "Lib/site-packages/pillow-13.0.0.dist-info/licenses/LICENSE",
+          "sha256": "988ffe8ab3480b0f4e9a0ab2702bffd73d9fb6b47198043fb3ba101a62fac236"
+        }
+      ],
+      "buildSources": [
+        {
+          "url": "https://raw.githubusercontent.com/python-pillow/Pillow/13.0.0/winbuild/build_prepare.py",
+          "sha256": "cfb3dd98c881cf2aea051e9d57e751d8d9613d7c9a48dd1b71ae68d2de69e570"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/python-pillow/Pillow/13.0.0/.github/dependencies.json",
+          "sha256": "63413d6dccf72367fc4c04c2560999e7a40ea14cf226dcc995d238cf3d25533b"
+        }
+      ],
+      "evidence": "Extensions and assembled wheel license byte-equal to the official wheel. FreeType build uses libpng, Brotli and HarfBuzz; libTIFF build uses liblzma and libwebp per Windows recipe. libavif codec_versions reports dav1d 1.5.3-0-gb546257 and aom 3.14.1 in the packaged _avif extension.",
+      "av1": {
+        "binary": {
+          "path": "Lib/site-packages/PIL/_avif.cp313-win_amd64.pyd",
+          "sha256": "6c6e5d33db5ecd8a28252103c97ac7867d376371875b6baa609947d8e778022a"
+        },
+        "aom": {
+          "version": "3.14.1",
+          "existingNotice": "LICENSES.chromium.html",
+          "originalTexts": [
+            {
+              "url": "https://aomedia.googlesource.com/aom/+/refs/tags/v3.14.1/LICENSE",
+              "sha256": "4764a286d8b2faeaf42f4418e7d7a28d58fc8fd4d00a3d0a7f44b0a4099de7f2"
+            },
+            {
+              "url": "https://aomedia.googlesource.com/aom/+/refs/tags/v3.14.1/PATENTS",
+              "sha256": "661fb8e504744e95587b556b94a58343448300606a41bea8c7a9b97125696e61"
+            }
+          ]
+        },
+        "dav1d": {
+          "version": "1.5.3",
+          "source": {
+            "url": "https://download.videolan.org/pub/videolan/dav1d/1.5.3/dav1d-1.5.3.tar.xz",
+            "sha256": "732010aa5ef461fa93355ed2c6c5fedb48ddc4b74e697eaabe8907eaeb943011"
+          }
+        }
+      },
+      "notices": [
+        {
+          "file": "LICENSE.dav1d.txt",
+          "sha256": "dd92c3c2247c5651606fc23a5e2d6a1ebc5ace9a3e49cbde0e12f05ad1cb1ee5",
+          "sourceMember": "dav1d-1.5.3/COPYING"
+        }
+      ]
+    },
+    {
+      "name": "Electron Chromium FFmpeg",
+      "version": "Electron 45.3.1 / Chromium 156.0.8078.96",
+      "revision": "9db86ce5b5b454dfc96c435f9f0723012980c37f",
+      "binaryArchive": {
+        "url": "https://github.com/electron/electron/releases/download/v45.3.1/electron-v45.3.1-win32-x64.zip",
+        "sha256": "d92d1aa4700e3a7e7f174731f5086ebd9c21f9773e642b260160fe0a6ebe12d2"
+      },
+      "binary": {
+        "path": "ffmpeg.dll",
+        "sha256": "fadaac6d021d2141488ecffd1ddaf3088bb6c78f5e729ee8fd7964bdcef3930c"
+      },
+      "source": {
+        "url": "https://chromium.googlesource.com/chromium/third_party/ffmpeg/+archive/9db86ce5b5b454dfc96c435f9f0723012980c37f.tar.gz",
+        "sha256": "b844e02c546509e6b42e1c4cb8597e7a39dca1fddf60f92076a55781cc5448df"
+      },
+      "buildSources": [
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/DEPS",
+          "sha256": "ec15235507cd5f2fdd8413dbe75c1c9d3986bed4c219aaf9d4076d402bf8adf3"
+        },
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/156.0.8078.96/DEPS",
+          "sha256": "9c0e1453ffdd22f00d7bdd309d10e6b0f45c28a4090b4f49070cc5718b5fffc3"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/build/args/all.gn",
+          "sha256": "3b375c2f45b6bf9b3221e53e779b9f4666f472493f957b6894127ccf766d44ea"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/build/args/release.gn",
+          "sha256": "b4490cee911e0ed136a6d095c69a7914cb3f4aa2d5517e3f987a2b5f45d3cd56"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/patches/ffmpeg/.patches",
+          "sha256": "9f6ecf225a7a6141e74cc1b30a6b0eb157baa16db027824d38c879f8a7a996ef"
+        }
+      ],
+      "patchesInApplicationOrder": [
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/patches/ffmpeg/link_with_loader_path.patch",
+          "sha256": "e2f63a2036ffa803db9a50dfec74c4f5628abc476cb44a5ede9d7e775bc7b238"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/patches/ffmpeg/cherry-pick-f4bee18dadeb.patch",
+          "sha256": "058d8da4c2c7ca0ca6a78a6b70b8f9d7f599f2b8244aadd8a14283e0988c36e6"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/patches/ffmpeg/cherry-pick-5eed87f44b0a.patch",
+          "sha256": "f036e4f0c6d131ec832c3727bb0dc5da51810cedcc146c0c8128c3a89e2e4ade"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/electron/electron/v45.3.1/patches/ffmpeg/cherry-pick-fb424c4f78d1.patch",
+          "sha256": "37bf2d50981a61f42cb3907aa9e3e612eecb5322c6a0ca53a6c68b3415df868f"
+        }
+      ],
+      "buildConfiguration": {
+        "member": "chromium/config/Chrome/win/x64/config.h",
+        "sha256AfterPatches": "fc42f237b764b456eb25e4dfbc511b7682315d7bcf14ffa307af95f6152cdc7d",
+        "componentFfmpeg": true,
+        "ffmpegBranding": "Chrome",
+        "proprietaryCodecs": true,
+        "configGpl": 0,
+        "configNonfree": 0,
+        "configVersion3": 0
+      },
+      "existingNotice": {
+        "path": "LICENSES.chromium.html",
+        "sourceTexts": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/third_party/ffmpeg/+/9db86ce5b5b454dfc96c435f9f0723012980c37f/COPYING.LGPLv2.1",
+            "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+          },
+          {
+            "url": "https://chromium.googlesource.com/chromium/third_party/ffmpeg/+/9db86ce5b5b454dfc96c435f9f0723012980c37f/LICENSE.md",
+            "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Microsoft Windows binaries",
+      "binaries": [
+        {
+          "path": "d3dcompiler_47.dll",
+          "sha256": "f5c95e919b4ffa1ac71049cd45b9f986d2965e6888395ca2806337985334fa56",
+          "fileVersion": "10.0.28000.2270",
+          "authenticode": "Valid (Microsoft Windows)"
+        },
+        {
+          "path": "resources/app/runtime/python/vcruntime140.dll",
+          "sha256": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
+          "fileVersion": "14.51.36247.0",
+          "authenticode": "Valid (Microsoft Windows)"
+        },
+        {
+          "path": "resources/app/runtime/python/vcruntime140_1.dll",
+          "sha256": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
+          "fileVersion": "14.51.36247.0",
+          "authenticode": "Valid (Microsoft Windows)"
+        }
+      ],
+      "sources": {
+        "D3DCompiler": "https://github.com/electron/electron/releases/download/v45.3.1/electron-v45.3.1-win32-x64.zip",
+        "VC runtime": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip"
+      },
+      "existingNotice": "CPython runtime LICENSE.txt (Microsoft Distributable Code section)",
+      "redistributionTerms": [
+        "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files",
+        "https://learn.microsoft.com/en-us/visualstudio/releases/2026/redistribution",
+        "https://learn.microsoft.com/en-us/windows/apps/windows-sdk/"
+      ],
+      "redistributionBasis": {
+        "VC runtime": "Unmodified official CPython Windows binary redistribution under its LICENSE.txt Additional Conditions for this Windows binary build; preserved notices and recipient conditions shown by the installer.",
+        "D3DCompiler": "Microsoft documents application-local redistribution of D3DCompiler 46/47: https://learn.microsoft.com/en-us/windows/win32/directx-sdk--august-2009-",
+        "scope": "Windows-only bundled components; no modification, separate component sale, system-directory installation or Microsoft endorsement."
+      }
+    },
+    {
+      "name": "NSIS installer and plugins",
+      "version": "NSIS toolset 3.0.4.1 / nsis-resources 3.4.1",
+      "source": {
+        "url": "https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z",
+        "sha256": "9877df902530f96357d13a7a31ae2b9df67f48b11ffc9a1700a7c961574ec5fa"
+      },
+      "resources": {
+        "url": "https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-resources-3.4.1/nsis-resources-3.4.1.7z",
+        "sha256": "593a9a92ef958321293ac6a2ee61e64bf1bd543142a5bd6b3d310709cc924103"
+      },
+      "notices": [
+        {
+          "file": "LICENSE.nsis.txt",
+          "sha256": "3c8de989f6504d52f5f8dfafedb6668cd47201f5d01f1319570727c091425dd6",
+          "sourceMember": "COPYING"
+        },
+        {
+          "file": "LICENSE.nsis-uac.txt",
+          "sha256": "997fd014643f27a2f240faf9b9b54a98371775c63eb38134829154794f7326fa",
+          "sourceMember": "License.txt",
+          "plugin": "UAC.dll"
+        },
+        {
+          "file": "NOTICE.nsis-stdutils-lgpl.txt",
+          "sha256": "ae0ab3f49b4473152181c1fe5670435faaca079eda0b261ee31a51a6180bc9e7",
+          "sourceMember": "LGPL_CLARIFICATION.txt",
+          "plugin": "StdUtils.dll"
+        },
+        {
+          "file": "NOTICE.nsis-stdutils.txt",
+          "sha256": "31b67e463c6e5695e9ffaf62dd077d9bd62df34026593c2f29bc9ea87fdac72f",
+          "sourceMember": "ReadMe.txt",
+          "plugin": "StdUtils.dll"
+        },
+        {
+          "file": "LICENSE.nsis-stdutils-blake2.txt",
+          "sha256": "f4e7f373b9b996950337e8d41a4a2939c2d90b7725e9baf3d5084a22717ad328",
+          "sourceMember": "Contrib/StdUtils/src/blake2/COPYING.txt",
+          "plugin": "StdUtils.dll",
+          "source": "sourceArchive"
+        },
+        {
+          "file": "LICENSE.nsis-stdutils-rhash.txt",
+          "sha256": "842fef4921191943e531c6cc939b0334f1c2658c9204e30dd35d13f51fdf70dd",
+          "sourceMember": "Contrib/StdUtils/src/rhash/COPYING.txt",
+          "plugin": "StdUtils.dll",
+          "source": "sourceArchive"
+        },
+        {
+          "file": "LICENSE.nsis7z-sdk.txt",
+          "sha256": "63fcfe54826809b5a9f9df8a8ff53c04330122319ec67a2dd815085586adaf0e",
+          "sourceMember": "Contrib/nsis7z/DOC/License.txt",
+          "plugin": "nsis7z.dll"
+        },
+        {
+          "file": "NOTICE.nsis7z.txt",
+          "sha256": "881f8ba4da0a0c30e281d324408baa596f14211b03d1f3bf99fe18c4621916c3",
+          "sourceMember": "Contrib/nsis7z/DOC/nsis7z.txt",
+          "plugin": "nsis7z.dll"
+        },
+        {
+          "file": "NOTICE.nsprocess.txt",
+          "sha256": "27a9855be0ebc9ba8d38d97e54356c18e98e5498b50db8fd66013a5d6a5c9fbb",
+          "sourceMember": "Readme.txt",
+          "plugin": "nsProcess.dll"
+        }
+      ],
+      "plugins": [
+        {
+          "name": "System.dll",
+          "archiveMember": "Plugins/x86-unicode/System.dll",
+          "sha256": "3eb38ae99653a7dbc724132ee240f6e5c4af4bfe7c01d31d23faf373f9f2eaca"
+        },
+        {
+          "name": "nsDialogs.dll",
+          "archiveMember": "Plugins/x86-unicode/nsDialogs.dll",
+          "sha256": "1e40211af65923c2f4fd02ce021458a7745d28e2f383835e3015e96575632172"
+        },
+        {
+          "name": "UAC.dll",
+          "version": "0.2.4c",
+          "sha256": "2f7f8fc05dc4fd0d5cda501b47e4433357e887bbfed7292c028d99c73b52dc08",
+          "vendorArchive": {
+            "url": "https://nsis.sourceforge.io/mediawiki/images/8/8f/UAC.zip",
+            "sha256": "20e3192af5598568887c16d88de59a52c2ce4a26e42c5fb8bee8105dcbbd1760"
+          },
+          "vendorMember": "Plugins/x86-unicode/UAC.dll"
+        },
+        {
+          "name": "StdUtils.dll",
+          "version": "1.14 (PE 1.1.4.0)",
+          "sha256": "b72e9013a6204e9f01076dc38dabbf30870d44dfc66962adbf73619d4331601e",
+          "vendorArchive": {
+            "url": "https://github.com/lordmulder/stdutils/releases/download/1.14/StdUtils.2018-10-27.zip",
+            "sha256": "3ffe893dc7477fdb1cac551a86ae017509e1f2d0ebdc7185fd0fbaf20870688c"
+          },
+          "vendorMember": "Plugins/Unicode/StdUtils.dll",
+          "sourceArchive": {
+            "url": "https://github.com/lordmulder/stdutils/releases/download/1.14/StdUtils.2018-10-27.sources.tbz2",
+            "sha256": "c5e3b1a66219bc9564c2ccc1702691327eecf044ad33404ac268d725d22dca49"
+          },
+          "existingLgplText": "LICENSES.chromium.html"
+        },
+        {
+          "name": "nsis7z.dll",
+          "version": "19.00",
+          "sha256": "b393f05e8ff919ef071181050e1873c9a776e1a0ae8329aefff7007d0cadf592",
+          "vendorArchive": {
+            "url": "https://nsis.sourceforge.io/mediawiki/images/6/69/Nsis7z_19.00.7z",
+            "sha256": "6f2f3730049926f40442ee0c8b7d3e3dee7ace544d82467ff8059ea3f4201c58"
+          },
+          "vendorMember": "Plugins/x86-unicode/nsis7z.dll"
+        },
+        {
+          "name": "nsProcess.dll",
+          "version": "1.6 Unicode",
+          "sha256": "30c6c3dd3cc7fcea6e6081ce821adc7b2888542dae30bf00e881c0a105eb4d11",
+          "vendorArchive": {
+            "url": "https://nsis.sourceforge.io/mediawiki/images/archive/1/18/20261029203037%21NsProcess.zip",
+            "sha256": "fc19fc66a5219a233570fafd5daeb0c9b85387b379f6df5ac8898159a57c5944"
+          },
+          "vendorMember": "Plugin/nsProcessW.dll",
+          "open": "Byte match establishes origin. The applicable redistribution permission has not been verified.",
+          "distribution": "Excluded from newly built installers; replaced by Windows APIs via the NSIS System plugin."
+        },
+        {
+          "name": "WinShell.dll",
+          "version": "20121005",
+          "sha256": "9be85b986ea66a6997dde658abe82b3147ed2a1a3dcb784bb5176f41d22815a6",
+          "vendorArchive": {
+            "url": "https://nsis.sourceforge.io/mediawiki/images/5/54/WinShell.zip",
+            "sha256": "34e111f8aacf64c540d848fd06b9d6f3e2c10cb825ec9329a01d1141973e749b"
+          },
+          "vendorMember": "Plugins/x86-unicode/WinShell.dll",
+          "open": "Byte match establishes origin. The applicable redistribution permission has not been verified.",
+          "distribution": "Excluded from newly built installers; replaced by Windows APIs via the NSIS System plugin."
+        }
+      ]
+    }
+  ]
+}

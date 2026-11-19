@@ -1110,8 +1110,10 @@ Der getrennte [Desktop-Release-Workflow](Planung/Desktop_Release_Einrichtung.md)
 ist für ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags vorbereitet. Er verwendet
 dasselbe inzwischen öffentliche Repository. Windows nutzt ausdrücklich den Modus
 `ed25519-only` ohne Authenticode; das gemeinsame Ed25519-Manifest bleibt für beide
-Plattformen verpflichtend. Produktive Releases bleiben bis zur nativen Abnahme,
-Einrichtung echter Update-Schlüssel und ausdrücklichen Freigabe gesperrt.
+Plattformen verpflichtend. Das produktive Ed25519-Vertrauen und das geschützte
+GitHub-Environment sind eingerichtet. Ein Release benötigt weiterhin die
+erfolgreiche exakte Merge-CI und die geschützten Jobfreigaben; der abschließende
+Live-A/B-Nachweis ist separat zu erbringen.
 
 Die [Update-Erkennung](Planung/Desktop_Update_Erkennung.md) ist im Main-Prozess
 implementiert: verzögerte/wiederkehrende Prüfungen, verifizierte Release-Metadaten

@@ -4,10 +4,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 
-test('NSIS compiles installation and data-protection hooks', (t) => {
+test('NSIS compiles installation and data-protection hooks', async (t) => {
   if (!process.env.TTC_MAKENSIS || !process.env.TTC_NSIS_PLUGINS) return t.skip('Set TTC_MAKENSIS and TTC_NSIS_PLUGINS for hook compilation');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-nsis-hooks-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -15,6 +15,7 @@ test('NSIS compiles installation and data-protection hooks', (t) => {
   const executable = path.join(directory, 'check.exe');
   const registryKey = `Software\\TTC-hook-check-${randomUUID()}`;
   fs.writeFileSync(filename, `
+Unicode true
 !include LogicLib.nsh
 !include FileFunc.nsh
 !addplugindir /x86-unicode "${process.env.TTC_NSIS_PLUGINS}"
@@ -24,7 +25,7 @@ test('NSIS compiles installation and data-protection hooks', (t) => {
 !define APP_EXECUTABLE_FILENAME "TTC-not-running-test.exe"
 !include "${path.join(__dirname, '..', 'build', 'windows', 'installer.nsh')}"
 Name "TTC hook compilation"
-Unicode true
+RequestExecutionLevel user
 OutFile "${executable}"
 Var isForceCurrentInstall
 Function .onInit
@@ -37,6 +38,10 @@ Function un.onInit
   !insertmacro customCheckAppRunning
 FunctionEnd
 Section
+  CreateShortCut "$EXEDIR\\hook-check.lnk" "$SYSDIR\\notepad.exe"
+  !insertmacro TTC_SetLnkAUMI "$EXEDIR\\hook-check.lnk" "TTC.NativeHookCheck"
+  !insertmacro TTC_UninstShortcut "$EXEDIR\\hook-check.lnk"
+  !insertmacro TTC_UninstAppUserModelId "TTC.NativeHookCheck"
   WriteUninstaller "$EXEDIR\\uninstall-check.exe"
 SectionEnd
 Section Uninstall
@@ -48,6 +53,38 @@ SectionEnd
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.equal(fs.readFileSync(executable).subarray(0, 2).toString(), 'MZ');
+  if (process.platform === 'win32') {
+    const run = (exe, args = []) => spawnSync(exe, args, { encoding: 'utf8', timeout: 60000 });
+    assert.equal(run(executable, ['/S', '/D=C:\\TTC-hook-data']).status, 4);
+    assert.equal(run(executable, ['/S']).status, 0);
+    const property = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `$s=New-Object -ComObject Shell.Application; $f=$s.NameSpace('${directory.replaceAll("'", "''")}'); $f.ParseName('hook-check.lnk').ExtendedProperty('System.AppUserModel.ID')`]);
+    assert.equal(property.status, 0, property.stderr);
+    assert.equal(property.stdout.trim(), 'TTC.NativeHookCheck');
+    const processCopy = path.join(directory, 'TTC-not-running-test.exe');
+    fs.copyFileSync(process.execPath, processCopy);
+    const child = spawn(processCopy, ['-e', 'process.stdout.write("ready\\n");setInterval(()=>{},1000)'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    t.after(() => child.kill());
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error('Process probe did not start')), 10000);
+      child.once('error', reject);
+      child.stdout.once('data', () => { clearTimeout(timer); resolve(); });
+    });
+    assert.equal(run(executable, ['/S']).status, 5, 'live app must block file changes');
+    const stopped = new Promise((resolve) => child.once('exit', resolve));
+    child.kill();
+    await stopped;
+    assert.equal(run(executable, ['/S']).status, 0, 'installation resumes after process exit');
+    const uninstaller = path.join(directory, 'uninstall-check.exe');
+    assert.equal(run(uninstaller, ['/S', '--delete-app-data', `_?=${directory}`]).status, 2);
+    const key = `HKCU\\${registryKey.replaceAll('\\\\', '\\')}`;
+    try {
+      assert.equal(run('reg.exe', ['add', key, '/v', 'DisplayVersion', '/d', '0.2.0', '/f']).status, 0);
+      assert.equal(run(executable, ['/S']).status, 3);
+    } finally {
+      assert.equal(run('reg.exe', ['delete', key, '/f']).status, 0);
+    }
+  }
   if (process.env.TTC_WINE && process.env.TTC_WINE_PREFIX) {
     const env = { ...process.env, WINEPREFIX: process.env.TTC_WINE_PREFIX, WINEDEBUG: '-all' };
     const run = (args) => spawnSync(process.env.TTC_WINE, args, { env, encoding: 'utf8', timeout: 60000 });

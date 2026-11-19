@@ -70,7 +70,7 @@ function releaseNotes(root, release) {
   const subjects = execFileSync('git', ['log', '--no-merges', '-30', '--format=%s', release.commit],
     { cwd: root, encoding: 'utf8', timeout: 10000 }).split('\n').filter(Boolean);
   const text = subjects.map((subject) => `- ${subject.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 240)}`).join('\n');
-  return `TT Rechnungsverwaltung ${release.version}\n\n${text}\n\nQuellstand: ${release.commit}\nWindows x64: NSIS. Linux x64: AppImage.\nVor dem Update eine vollständige Datensicherung erstellen.\n`;
+  return `TT Rechnungsverwaltung ${release.version}\n\n${text}\n\nQuellstand: ${release.commit}\nWindows x64: NSIS. Linux x64: AppImage.\nVor dem Update eine vollständige Datensicherung erstellen.\n\nDiese Software verwendet FFmpeg unter LGPL-2.1-or-later. Drittanbieter-Quellen und Lizenzhinweise: https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-sources-2026-11-19 .\n`;
 }
 
 function signedManifest(policy, release, packages, notes, key, now = new Date()) {

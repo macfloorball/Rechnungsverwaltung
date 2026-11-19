@@ -165,3 +165,21 @@ Windows-ACLs, Installationsdialoge, Datenträgerfehler und SmartScreen müssen
 weiterhin nativ abgenommen werden. Die Programmdateien besitzen bei einem
 Stromausfall keinen garantierten automatischen Rollback; der Datenbestand liegt
 getrennt und der vollständige Installer dient zur Reparatur.
+
+
+## Pluginersatz vor dem ersten Release
+
+Die eigenen NSIS-Hooks prüfen laufende Prozesse über einen Toolhelp-Snapshot.
+Nur `ERROR_NO_MORE_FILES` bestätigt, dass die App nicht läuft; API-Fehler sperren
+Installation und Deinstallation weiterhin. Es werden keine Prozesse beendet.
+Shell-Verknüpfungen erhalten dieselbe AppUserModel-ID über `IPropertyStore`;
+Unpin-/JumpList-Bereinigung verwendet die Windows-COM-Schnittstellen.
+
+`scripts/nsis_templates.cjs` ersetzt ausschließlich die bekannten WinShell-Aufrufe
+in einer privaten Kopie der hashgepinnten electron-builder-26.18.0-Templates.
+Unbekannte Templates sperren den Build. Die Standard-Installerdatei sowie der
+Uninstaller-Signierpfad bleiben erhalten; `node_modules` wird nicht verändert.
+`scripts/check_native_installer_hooks.ps1` prüft auf dem Windows-Buildrunner die
+Prozesssperre mit echtem Prozess, Wiederanlauf nach dessen Ende, die gespeicherte
+Verknüpfungs-ID, Downgrade-/Datenschutzsperren und das Fehlen beider Plugin-DLLs
+im fertigen Installer. Der abschließende GitHub-A/B-Lauf bleibt zusätzlich nötig.

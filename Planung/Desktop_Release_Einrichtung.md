@@ -1,16 +1,23 @@
 # Sichere Desktop-Releases: Einrichtung und Freigabe
 
-Stand: 18.11.2026. Die Implementierung ist **vorbereitet,
-aber für produktive Releases gesperrt**. In `desktop-release-policy.json` stehen
-`enabled: false` und nicht eingerichtete Signaturfelder auf `null`. Das bedeutet
-Abbruch vor Veröffentlichung, keine Ersatzschlüssel oder umgehbare Signaturprüfung.
+Stand: 19.11.2026. Das produktive Ed25519-Vertrauen ist eingerichtet.
+`desktop-release-policy.json` enthält den öffentlichen Schlüssel mit Fingerprint
+`9cf4270e853bdaff8d771ed671c8a14cccc430091ccc1d4793b04eb8ab8e9f4c`.
+Der private PKCS8-Schlüssel liegt ausschließlich als geschütztes Environment-Secret
+`desktop-release/DESKTOP_UPDATE_PRIVATE_KEY` und in einer zugriffsbeschränkten
+lokalen Sicherung außerhalb des Repositorys. Eine Signaturprobe war erfolgreich.
+`enabled: true` erlaubt den geschützten Releaseprozess mit diesem Vertrauen.
+Dies ersetzt weder die exakte Merge-CI noch Tagprüfung und Required-reviewer-
+Freigaben. Der erste Live-A/B-Lauf auf Windows und Linux bleibt vor Abschluss
+der Produktionsabnahme erforderlich.
 
 ## Quelle und aktueller Windows-Modus
 
 Das Repository `macfloorball/Rechnungsverwaltung` (ID **1447003404**) ist laut
 Arbeitsauftrag inzwischen öffentlich; die Policy verwendet jetzt `public`.
 Das Gate prüft die tatsächliche Sichtbarkeit vor jedem Release. Öffentliche
-Clients benötigen keinen Lesetoken. Keine GitHub-Einstellungen wurden hier verändert.
+Clients benötigen keinen Lesetoken. Branch-/Tagschutz und die geschützte
+Release-Environment sind eingerichtet; das Gate prüft diese vor jeder Freigabe.
 
 Aktuell ist `windows.mode: "ed25519-only"` gewählt: Windows-Pakete werden bewusst
 ohne Authenticode erstellt. Ed25519-Manifestprüfung bleibt für beide Plattformen
@@ -141,8 +148,9 @@ node scripts/release_policy.cjs --fingerprint /sicherer/schluesselordner/desktop
 
 Den Beispielpfad zuerst durch eine tatsächlich geschützte Ablage ersetzen. Unter
 Windows entsprechend restriktive NTFS-ACLs und eine kontrollierte OpenSSL-
-Installation verwenden. Es wurde in dieser Sitzung **kein Produktionsschlüssel
-erzeugt**. Der Fingerprint-Helfer akzeptiert nur öffentliche SPKI-PEM-Schlüssel.
+Installation verwenden. Das Beispiel dient einer zukünftigen Neueinrichtung;
+den eingerichteten Produktionsschlüssel nicht damit überschreiben. Der
+Fingerprint-Helfer akzeptiert nur öffentliche SPKI-PEM-Schlüssel.
 
 - **Öffentlichen** PEM-Inhalt und den ausgegebenen SHA-256-Fingerprint unter
   `publicKeyPem` und `keyId` in der Richtlinie eintragen und unabhängig prüfen.

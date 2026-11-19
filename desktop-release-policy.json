@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
-  "enabled": false,
+  "enabled": true,
   "repository": "macfloorball/Rechnungsverwaltung",
   "repositoryId": 1447003404,
   "visibility": "public",
   "environment": "desktop-release",
-  "keyId": null,
-  "publicKeyPem": null,
+  "keyId": "9cf4270e853bdaff8d771ed671c8a14cccc430091ccc1d4793b04eb8ab8e9f4c",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAPDAfM76VMYn7HcERG2W079OUhjBtfAi5saGFTuFHHZU=\n-----END PUBLIC KEY-----\n",
   "manifestLifetimeDays": 90,
   "windows": {
     "certificateSha1": null,

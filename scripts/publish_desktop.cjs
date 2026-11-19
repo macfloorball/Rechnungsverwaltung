@@ -75,7 +75,7 @@ if (require.main === module) {
     const result = await publish({ api: githubAPI(process.env.GITHUB_TOKEN),
       policyAPI: githubAPI(process.env.DESKTOP_POLICY_READ_TOKEN || process.env.GITHUB_TOKEN),
       policy, release, packages, notes: releaseNotes(root, release), key });
-    console.log(`Privater Desktop-Release veröffentlicht: ${result.html_url}`);
+    console.log(`Desktop-Release veröffentlicht: ${result.html_url}`);
   })().catch((error) => { console.error(`Release nicht bestätigt: ${error.message}`); process.exitCode = 1; });
 }
 module.exports = { publish };

@@ -1,21 +1,27 @@
-# Lizenzprüfung der Desktop-Verteilung
+# Lizenznachweise der Desktop-Verteilung
 
-Stand: 16.11.2026. Erste Bestandsprüfung, keine abschließende Release-Freigabe.
+Stand: 19.11.2026. Dieser technische Nachweis dokumentiert die konkrete
+Paketierung; die Veröffentlichung erfolgt über den geschützten Releaseprozess.
 
-## Aktueller Umfang: Eigengebrauch (18.11.2026)
+Die Laufzeitnachweise werden inzwischen auf beiden Plattformen mitgeliefert.
+Die 32 ungeklärten Adobe-/Monotype-Schriftdateien sind ausgeschlossen.
+WinShell und nsProcess sind durch Windows-APIs ersetzt. Die unveränderten
+Microsoft-Laufzeitdateien behalten ihre Hinweise; CPythons zusätzliche
+Weitergabebedingungen erscheinen auch auf der Installer-Lizenzseite.
+Die Herkunfts- und Hashnachweise stehen in den jeweiligen Provenienzdateien.
 
-Der Maintainer möchte die Anwendung vorerst ausschließlich selbst nutzen.
-Windows-Code-Signierung und die weitere SignPath-Anbindung werden deshalb
-zurückgestellt. Für den manuellen Eigengebrauch ist der vorhandene, ausdrücklich
-als Entwicklungspaket gekennzeichnete unsignierte Build vorgesehen. Es erfolgt
-keine Freigabe produktiver automatischer Updates und keine Abschwächung ihrer
-Signaturprüfung. Code-Signing-Zertifikate und Softwarelizenzen sind getrennte
-Themen; bestehende Drittanbieterlizenzen bleiben unverändert.
+Das [öffentliche Quellenangebot](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-sources-2026-11-19)
+enthält FFmpeg, StdUtils, Linux-Python/Berkeley DB und AppImage-/FUSE-Quellen.
+Alle hochgeladenen Dateien wurden nach Download erneut geprüft; die
+Einzelarchive und SHA-256 stehen in
+`third_party/sources/desktop-source-publication.json`. DarkGarden-Quellen und
+Begleittexte liegen bereits neben den Fonts in der Anwendung. Patentfreiheit
+von Multimedia-Codecs wird nicht zugesichert; dies ist von den konkreten
+Softwarelizenz- und Quellenpflichten zu unterscheiden.
 
-Die unten beschriebene vollständige Prüfung vor einer Binärweitergabe ist damit
-nicht als abgeschlossen erklärt. Die während der weiteren Prüfung gesammelten
-Lizenztexte unter `third_party/licenses/` sind noch nicht in die Paketierung
-integriert; diese Arbeit bleibt als Zwischenstand erhalten.
+Die folgenden Abschnitte dokumentieren die frühere Bestandsaufnahme. Bei
+Abweichungen gelten die aktuellen Provenienzdateien, Paketierung und Hinweise
+in `THIRD_PARTY_NOTICES.md`.
 
 ## Gesicherte Nachweise der Folgeprüfung
 

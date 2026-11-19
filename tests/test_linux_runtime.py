@@ -68,3 +68,28 @@ def test_linux_runtime_never_replaces_existing_directory(tmp_path):
     with pytest.raises(ValueError, match="existiert"):
         runtime.prepare(target)
     assert (target / "marker").read_text() == "preserve"
+
+
+def test_packaged_linux_license_collections_match_provenance():
+    import json
+    import os
+    from pathlib import Path
+
+    executable = os.environ.get('TTC_LINUX_PYTHON')
+    if not executable:
+        pytest.skip('Set TTC_LINUX_PYTHON for real packaged evidence')
+    python = Path(executable).resolve().parents[1]
+    for group in ['python-linux', 'pydantic-core', 'desktop-linux']:
+        directory = python / 'licenses' / group
+        provenance = json.loads((directory / 'provenance.json').read_text())
+        for item in provenance['files']:
+            assert hashlib.sha256((directory / item['file']).read_bytes()).hexdigest() == item['sha256']
+    evidence = json.loads((python / 'licenses/desktop-linux/provenance.json').read_text())
+    for component in evidence['components']:
+        for item in component['nativeFiles']:
+            assert hashlib.sha256((python / item['file']).read_bytes()).hexdigest() == item['sha256']
+    font = python / 'lib/python3.13/site-packages/reportlab/fonts'
+    assert len(list(font.glob('*.afm'))) + len(list(font.glob('*.pfb'))) + len(list(font.glob('*.ttf'))) == 9
+    assert (font / 'Vera.ttf').is_file()
+    assert (font / 'DarkGarden.sfd').is_file()
+    assert not (font / '_a______.pfb').exists()

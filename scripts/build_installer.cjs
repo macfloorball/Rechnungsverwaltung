@@ -3,7 +3,9 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { packageWindows } = require('./package_windows.cjs');
+const { copyDesktopRuntime } = require('./package_desktop_runtime.cjs');
 const { installerConfig } = require('./installer_config.cjs');
+const { withNsisTemplates } = require('./nsis_templates.cjs');
 const { createInstallationManifest, validateInstallation } = require('../electron/installation.cjs');
 const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
 const { loadPolicy } = require('./release_policy.cjs');
@@ -30,9 +32,14 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
   for (const destination of output) {
     // electron-builder skips app executable signing for prepackaged inputs.
     if (policy) authenticode(path.join(destination, `${metadata.productName}.exe`), policy, true, release.version);
-    await fs.cp(runtime, path.join(destination, 'resources', 'app', 'runtime', 'python'), { recursive: true });
-    await fs.writeFile(path.join(destination, 'resources', 'app', 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
     const appRoot = path.join(destination, 'resources', 'app');
+    const packagedPython = path.join(appRoot, 'runtime', 'python');
+    await copyDesktopRuntime(runtime, packagedPython, 'win32');
+    await fs.cp(path.join(root, 'third_party', 'licenses', 'desktop-windows'),
+      path.join(packagedPython, 'licenses', 'desktop-windows'), { recursive: true });
+    await fs.cp(path.join(root, 'third_party', 'licenses', 'pydantic-core'),
+      path.join(packagedPython, 'licenses', 'pydantic-core'), { recursive: true });
+    await fs.writeFile(path.join(appRoot, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
     assertPackageRelease(appRoot, release);
     const appMetadata = JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8'));
     appMetadata.ttcDistribution = 'installer';
@@ -48,8 +55,9 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     // A failed compiler/Wine run must not replace a usable installer with its
     // small intermediate uninstaller generator.
     config.directories.output = staging;
-    const artifacts = await build({ projectDir: root, prepackaged: output[0],
-      targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), config, publish: 'never' });
+    const artifacts = await withNsisTemplates(path.join(staging, 'templates'), () =>
+      build({ projectDir: root, prepackaged: output[0],
+        targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), config, publish: 'never' }));
     const installers = artifacts.filter((name) => name.endsWith('.exe'));
     if (!installers.length) throw Error('Installer wurde nicht erzeugt.');
     const checksums = [];

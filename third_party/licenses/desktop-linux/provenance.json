@@ -1,0 +1,299 @@
+{
+  "formatVersion": 1,
+  "platform": "linux-x64",
+  "python": "3.13.18",
+  "runtimeArchiveSha256": "f2d2199eb25880e07863b391cf7124e7ffa1338b0d65600dfcec117c4223a7fb",
+  "files": [
+    {
+      "file": "PYTHON.json",
+      "sha256": "53304e0a7215bbe05a08780b6d491e965e02814bf38820819ba26ac15fc54e40",
+      "source": {
+        "archiveProvenance": "../python-linux/provenance.json",
+        "member": "python/PYTHON.json"
+      }
+    },
+    {
+      "file": "NOTICE.rust-standard-library.html",
+      "sha256": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
+      "source": {
+        "url": "https://static.rust-lang.org/dist/rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f",
+        "memberSuffix": "COPYRIGHT-library.html",
+        "revision": "58cf8f9c35b355199727627d07ae34a4e2846d67"
+      }
+    },
+    {
+      "file": "LICENSE.rust-mit.txt",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "source": {
+        "url": "https://static.rust-lang.org/dist/rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f",
+        "memberSuffix": "LICENSE-MIT",
+        "revision": "58cf8f9c35b355199727627d07ae34a4e2846d67"
+      }
+    },
+    {
+      "file": "LICENSE.noto-sans-khmer.txt",
+      "sha256": "be0407f060aea48787ff9e75d8d3aedef70aef113b3ce9aca26fdaacd10b1870",
+      "source": {
+        "upstream": {
+          "url": "https://github.com/notofonts/khmer/releases/download/NotoSansKhmer-v2.004/NotoSansKhmer-v2.004.zip",
+          "sha256": "19382ca97d62febea1c735ebee35a5aa4f03beca9b6ea6f6d86b7a7a0025a688"
+        },
+        "reportlabSource": {
+          "url": "https://files.pythonhosted.org/packages/89/22/c18474be40b9bbb52fdb7051177d4d25f1ea59fada17eb181026411e93b1/reportlab-5.1.0.tar.gz",
+          "sha256": "6878200464527e87672d19e9f7cfc6bb890e3a6931e74ac6a1a8d1754aa55671",
+          "member": "reportlab-5.1.0/src/reportlab/fonts/hb-test.ttf"
+        },
+        "linuxFontSha256": "4df8840ec8382efa2c06bda01e31e1a5a975cd46e13f7c0b0be696a8542f1ba0",
+        "evidence": "Linux font byte-equal to the already verified ReportLab subset; no Reserved Font Name in upstream OFL."
+      }
+    },
+    {
+      "file": "LICENSE.hacl.txt",
+      "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c",
+      "source": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.13.18/Modules/_hacl/Hacl_Hash_SHA2.c",
+        "sourceSha256": "30638efb75c8b185bb09c3df6977e3f3c5d21a1e696218cf7ade6bc4d5201b31",
+        "evidence": "Exact original MIT header from CPython 3.13.18 HACL SHA2 source."
+      }
+    },
+    {
+      "file": "LICENSE.unicode.txt",
+      "sha256": "9ba0dc030e14ab692310b5395ea4f3a4921bcdbc1b9dbcebb1f81d83eb08f4e6",
+      "source": {
+        "unicodeVersion": "15.1.0",
+        "upstream": {
+          "url": "https://www.unicode.org/Public/zipped/15.1.0/UCD.zip",
+          "sha256": "cb1c663d053926500cd501229736045752713a066bd75802098598b7a7056177"
+        },
+        "originalNotice": {
+          "file": "LICENSE.unicode.txt",
+          "sha256": "9ba0dc030e14ab692310b5395ea4f3a4921bcdbc1b9dbcebb1f81d83eb08f4e6",
+          "sourceUrl": "https://raw.githubusercontent.com/unicode-org/unicodetools/final-15.1-20230908/LICENSE"
+        },
+        "evidence": "Linux packaged unicodedata reports 15.1.0; same upstream UCD notice as the verified Windows collection."
+      }
+    },
+    {
+      "file": "NOTICE.unicode-ucd.txt",
+      "sha256": "0d2da782ead4e85630d510f50808355e8c3355e670841d257dd1e6fbd40db9fa",
+      "source": {
+        "unicodeVersion": "15.1.0",
+        "upstream": {
+          "url": "https://www.unicode.org/Public/zipped/15.1.0/UCD.zip",
+          "sha256": "cb1c663d053926500cd501229736045752713a066bd75802098598b7a7056177"
+        },
+        "originalNotice": {
+          "file": "NOTICE.unicode-ucd.txt",
+          "sha256": "0d2da782ead4e85630d510f50808355e8c3355e670841d257dd1e6fbd40db9fa",
+          "sourceMember": "ReadMe.txt"
+        },
+        "evidence": "Linux packaged unicodedata reports 15.1.0; same upstream UCD notice as the verified Windows collection."
+      }
+    },
+    {
+      "file": "LICENSE.appimage-runtime.txt",
+      "sha256": "aa154fc9070614bbe7921f89db11efd1dba7a1f3a41685958110e2230f9c0ca1",
+      "source": {
+        "archive": "appimage-type2-runtime-dd6cebe-source.tar.gz",
+        "member": "type2-runtime-dd6cebedcbddde9c82f89b011e8e1d40b6e43868/LICENSE",
+        "publicationCatalog": "../../sources/desktop-source-publication.json"
+      }
+    },
+    {
+      "file": "LICENSE.appimage-libfuse.txt",
+      "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+      "source": {
+        "archive": "fuse-3.15.0.tar.xz",
+        "member": "fuse-3.15.0/LGPL2.txt",
+        "publicationCatalog": "../../sources/desktop-source-publication.json"
+      }
+    },
+    {
+      "file": "LICENSE.appimage-squashfuse.txt",
+      "sha256": "9e909cc8a8ba27b1a649c964cf9eda37de911f3138c2b64e6d2f01703904ac13",
+      "source": {
+        "archive": "squashfuse-0.5.2.tar.gz",
+        "member": "squashfuse-0.5.2/LICENSE",
+        "publicationCatalog": "../../sources/desktop-source-publication.json"
+      }
+    },
+    {
+      "file": "LICENSE.appimage-musl.txt",
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "source": {
+        "url": "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5",
+        "scope": "Original license text for runtime dependency; upstream runtime recipe selects Alpine 3.21 packages, not an assertion of exact statically linked package version."
+      }
+    },
+    {
+      "file": "LICENSE.appimage-zstd.txt",
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+      "source": {
+        "url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.6/LICENSE",
+        "scope": "Original license text for runtime dependency; upstream runtime recipe selects Alpine 3.21 packages, not an assertion of exact statically linked package version."
+      }
+    },
+    {
+      "file": "LICENSE.appimage-zlib.txt",
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+      "source": {
+        "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE",
+        "scope": "Original license text for runtime dependency; upstream runtime recipe selects Alpine 3.21 packages, not an assertion of exact statically linked package version."
+      }
+    }
+  ],
+  "components": [
+    {
+      "name": "pydantic_core",
+      "wheel": {
+        "url": "https://files.pythonhosted.org/packages/2b/c0/1c8f2c8f1b03d3fe2fdd7962df8f5a744fe48c90b4c49615e4eb77d04141/pydantic_core-2.50.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+        "sha256": "fb2bb5b557080da398b866408117d98fe9731a12334afd0cdff221b458cdc5dc"
+      },
+      "nativeFiles": [
+        {
+          "file": "lib/python3.13/site-packages/pydantic_core/_pydantic_core.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "409c007b2b6931519f4147e39d5d1e0c56246f982fb940d8cf7363565c55eb21"
+        }
+      ],
+      "sboms": [
+        {
+          "file": "pydantic_core-2.50.4.dist-info/sboms/pydantic-core.cyclonedx.json",
+          "sha256": "5291cb1df02b03261e925175bad4d75bea3e6f3f899ef177a7c969e2d67c2d0a"
+        }
+      ]
+    },
+    {
+      "name": "pillow",
+      "wheel": {
+        "url": "https://files.pythonhosted.org/packages/ef/fe/f5cdaa2d1c4086e757430f368c271a58ee29cfe7378e7ae7b9d964015c25/pillow-13.0.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "sha256": "5f56499c1a74d2b862beb0c33b8016f99d095858455df9d21583bbbc1c15b582"
+      },
+      "nativeFiles": [
+        {
+          "file": "lib/python3.13/site-packages/PIL/_avif.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "f1426a708f1a8bb0d628699273aa6880f59ada4cce51c18402b172c1981b4c1c"
+        },
+        {
+          "file": "lib/python3.13/site-packages/PIL/_imaging.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "aa20bb5fab466c4db237ad073a363318709a4b6f4bde820f64504b0af6ed0f7c"
+        },
+        {
+          "file": "lib/python3.13/site-packages/PIL/_imagingcms.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "3d778f43bc8ee2b228b3873b9755a2b13a8bd0d51f43fb0d7ef8f61b6ce551bb"
+        },
+        {
+          "file": "lib/python3.13/site-packages/PIL/_imagingft.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "ce658b476c3173b41ea8953830f55de41932dc5eaa1704c14e34a4f255788626"
+        },
+        {
+          "file": "lib/python3.13/site-packages/PIL/_imagingmath.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "cf21beac4c82e19474e429889201d9febb8688bd4e88795134b3600d04dbe2e8"
+        },
+        {
+          "file": "lib/python3.13/site-packages/PIL/_imagingmorph.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "9d16da72ab9057ab22295f692d6a2c36bd67a7ab35b8225e1c9ed99bad9b9222"
+        },
+        {
+          "file": "lib/python3.13/site-packages/PIL/_imagingtk.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "e008ad389b405e5be3815a4d141c3e4bc34a442ff09d47f48c0e094a49e25ffe"
+        },
+        {
+          "file": "lib/python3.13/site-packages/PIL/_webp.cpython-313-x86_64-linux-gnu.so",
+          "sha256": "482648d1e6b1dd76dec2d605fd96b91af419a4d6d7059d96085294b2da0e9c61"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libXau-154567c4.so.6.0.0",
+          "sha256": "8b5a93469805d3550471766696d4755f05bc6ca0587f22c03037ca7d12545c8b"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libavif-c6062d5f.so.16.4.2",
+          "sha256": "d12ec0b696860b292114b130ecac6082fc75c198c1b4fa57b26089e9b0a7eb6a"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libbrotlicommon-53534446.so.1.2.0",
+          "sha256": "72c1ab487e4bd44c906336747bf1926cbf5f164f9d05e0b4fd18b7d8d113b7fe"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libbrotlidec-7e5462ba.so.1.2.0",
+          "sha256": "1b497acc3d8d8e1fc286088f0c288be7c0c54bf5a8fa94b12b23e54de205d48c"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libfreetype-57f805ba.so.6.20.6",
+          "sha256": "5be086dea47fd1c3fadd431ee79fe0b5e5a0c6c38e78f1db55cf2dad17dea430"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libharfbuzz-fb49c9fc.so.0.61450.0",
+          "sha256": "4a30b9e3a12a72691b70b14945f3e8adaa8c2bc191bd8b706aae6ed0f0fa9fc0"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libjpeg-6dc8d115.so.62.4.0",
+          "sha256": "cc04bc42fd6296e81d24d13955fb95bd829624f6c74105eaf4a7fcf2ce42e048"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/liblcms2-88eaba2f.so.2.0.19",
+          "sha256": "4cf9f69016c7804bcb4fa56f5bbc55640cb1b7196ac7b93ba29ed9df9bd9ff4d"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/liblzma-de26b416.so.5.8.4",
+          "sha256": "ab4d2f260d6777088cc4bd96ce4997a5199d20b94e146a764b02c37d42477ce9"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libopenjp2-e530e1bf.so.2.5.4",
+          "sha256": "eea7a2058e0f2084d41ba88c561bddc866bd38e74f76b5ca4fccb965e2fb1c24"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libpng16-1d1ba958.so.16.58.0",
+          "sha256": "38d5a01026f61afba1bb94698846722840067fc87b2ee9003fe8dcccf1bc155f"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libsharpyuv-0066295b.so.0.1.2",
+          "sha256": "8abd5c39ee3b26330288b2e833d4d9b5d4b5ed4c881649057354df17326b6996"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libtiff-20b7e810.so.6.3.0",
+          "sha256": "729883f61144533eb3215d405e4daad528a68f89e9a1fccf51e9862819f30020"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libwebp-51b0b3f7.so.7.2.0",
+          "sha256": "6a97159a7c36acacb112618eb74720c97bbab4ecc499a8bfeb495dd726285259"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libwebpdemux-9fe2abcc.so.2.0.17",
+          "sha256": "5d728787db553c48c74dccd93d2763ec88234850a5f2f821df11483c8d28d2a7"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libwebpmux-8fb1c9f6.so.3.1.2",
+          "sha256": "6bdb41f738f088e7420374d67a4a6523cc4786f340d355d2bf4f124dcf3d5820"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libxcb-9065bb12.so.1.1.0",
+          "sha256": "f3707868b0b2e78dbdac0994d2977b0ec4303c9c6250f03576b1bd93c42cad63"
+        },
+        {
+          "file": "lib/python3.13/site-packages/pillow.libs/libzstd-40ad5e7e.so.1.5.7",
+          "sha256": "95a5af7845018639470635243c36b428f90af32b728804af6d951e7fcb08bbea"
+        }
+      ],
+      "sboms": [
+        {
+          "file": "pillow-13.0.0.dist-info/sboms/auditwheel.cdx.json",
+          "sha256": "8267ecfe860ec140d65b7dad60c7951cc139a425de158b14f90a3adadec4eb32"
+        },
+        {
+          "file": "pillow-13.0.0.dist-info/sboms/pillow-13.0.0.cdx.json",
+          "sha256": "fe1ca6e3a4f73e7018a3805a75a19377453f342d203712f37387ad6ee853fd44"
+        }
+      ]
+    }
+  ],
+  "crateEvidence": "All 101 name/version/archive hashes in the Linux wheel SBOM equal ../pydantic-core/provenance.json. SBOM includes build/other targets; not a link map.",
+  "sourceDistributionRemaining": "FFmpeg and other source obligations must be satisfied at publication; these notices alone are not distribution clearance.",
+  "appImageRuntime": {
+    "commit": "dd6cebedcbddde9c82f89b011e8e1d40b6e43868",
+    "sha256": "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
+    "evidence": "Cached x64 runtime byte-equal to complete prefix of the built AppImage. Its --appimage-version identifies this commit. Build recipes pin libfuse 3.15.0 and squashfuse 0.5.2; Alpine 3.21 provides musl/zlib/zstd without exact package version pins.",
+    "sources": "../../sources/desktop-source-publication.json"
+  }
+}

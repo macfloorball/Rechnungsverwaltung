@@ -93,6 +93,9 @@ jobs:
           unset TTC_DESKTOP_RELEASE_TAG
           npm run desktop:installer:win
           node scripts/check_installer.cjs
+      - name: Native installer process and Shell hooks
+        shell: pwsh
+        run: ./scripts/check_native_installer_hooks.ps1
       - name: Packaged Python migrations and backend lifecycle
         shell: pwsh
         run: |
