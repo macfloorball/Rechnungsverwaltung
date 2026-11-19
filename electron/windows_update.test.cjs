@@ -247,6 +247,46 @@ try { Journal 'installed' } finally { $reader.Dispose() }
   assert.deepEqual(await fs.readdir(root), ['state.json']);
 });
 
+test('Windows helper restarts with independent standard handles', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-restart-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'Test Restart.exe');
+  const python = execFileSync('python', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).trim();
+  const helper = require('./windows_update_helper.cjs');
+  const restart = helper.slice(helper.indexOf('function RestartApplication {'), helper.indexOf('\ntry {\n  $env:PSModulePath'));
+  const context = Buffer.from(JSON.stringify({ executable, directory: root, python })).toString('base64');
+  const script = restart.replace(/^  \$restart.FileName = .*$/m, '  $$restart.FileName = $context.python') + `
+$ErrorActionPreference = 'Stop'
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Add-Type -OutputAssembly $context.executable -OutputType ConsoleApplication -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+public static class RestartProbe {
+    [DllImport("kernel32.dll")] private static extern IntPtr GetStdHandle(int handle);
+    [DllImport("kernel32.dll")] private static extern uint GetFileType(IntPtr handle);
+    public static void Main() {
+        if (GetFileType(GetStdHandle(-10)) != 2 ||
+            GetFileType(GetStdHandle(-11)) != 2 ||
+            GetFileType(GetStdHandle(-12)) != 2 || Console.Read() != -1) return;
+        Console.WriteLine("stdout");
+        Console.Error.WriteLine("stderr");
+        File.WriteAllText("restarted.txt", "ok");
+    }
+}
+'@
+RestartApplication
+$marker = [IO.Path]::Combine($context.directory, 'restarted.txt')
+for ($i = 0; $i -lt 100 -and !(Test-Path -LiteralPath $marker); $i++) { Start-Sleep -Milliseconds 50 }
+if (!(Test-Path -LiteralPath $marker)) { throw 'Restart did not receive NUL standard handles' }
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(await fs.readFile(path.join(root, 'restarted.txt'), 'utf8'), 'ok');
+});
+
 test('Windows helper releases the profile lock before showing the failure message', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
   const { spawnSync } = require('node:child_process');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-helper-failure-'));
@@ -262,9 +302,10 @@ test('Windows helper releases the profile lock before showing the failure messag
     $probe = [IO.File]::Open($context.lock,'Open','ReadWrite','None')
     $probe.Dispose()
     [Console]::Out.WriteLine('LOCK_RELEASED')`);
+  const launcher = "$script = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String([Console]::In.ReadLine())); Invoke-Expression $script";
   const result = spawnSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
-    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(helper, 'utf16le').toString('base64')],
-    { timeout: 15000, windowsHide: true, encoding: 'utf8' });
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', launcher],
+    { input: Buffer.from(helper, 'utf16le').toString('base64') + '\n', timeout: 15000, windowsHide: true, encoding: 'utf8' });
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stdout, /LOCK_RELEASED/);
   assert.equal(JSON.parse(await fs.readFile(fixture.journal, 'utf8')).phase, 'failed');

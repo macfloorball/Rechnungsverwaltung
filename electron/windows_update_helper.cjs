@@ -96,6 +96,17 @@ function Installed {
   $installed = Get-ItemProperty -LiteralPath $context.uninstallKey
   if ($installed.DisplayVersion -cne $context.version) { throw 'INCOMPLETE' }
 }
+function RestartApplication {
+  $restart = [Diagnostics.ProcessStartInfo]::new()
+  $restart.FileName = [IO.Path]::Combine($context.directory,'resources','app','runtime','python','python.exe')
+  $restart.WorkingDirectory = $context.directory
+  $restart.UseShellExecute = $false
+  # PowerShell's protocol pipe belongs to A. Give B valid independent handles.
+  $restart.Arguments = '-I -B -c "import subprocess,sys;subprocess.Popen([sys.argv[1]],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)" "' + $context.executable + '"'
+  $starter = [Diagnostics.Process]::Start($restart)
+  $starter.WaitForExit()
+  if ($starter.ExitCode -ne 0) { throw 'RESTART' }
+}
 try {
   $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
   Import-Module ([IO.Path]::Combine($env:PSModulePath, 'Microsoft.PowerShell.Security', 'Microsoft.PowerShell.Security.psd1'))
@@ -140,9 +151,7 @@ try {
   $package.Dispose(); $package = $null
   Remove-Item -LiteralPath $context.slot -Recurse -Force
   $lock.Dispose(); $lock = $null
-  $restart = [Diagnostics.ProcessStartInfo]::new()
-  $restart.FileName = $context.executable; $restart.WorkingDirectory = $context.directory; $restart.UseShellExecute = $false
-  [void][Diagnostics.Process]::Start($restart)
+  RestartApplication
 } catch {
   $failed = $true
   if ($null -ne $context -and $committed) {
