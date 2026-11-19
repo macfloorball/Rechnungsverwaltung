@@ -21,9 +21,7 @@ function appImageConfig(root, metadata, release) {
   };
 }
 
-async function buildAppImage(root = path.join(__dirname, '..')) {
-  if (process.platform !== 'linux' || process.arch !== 'x64') throw Error('AppImage-Build benötigt Linux x86_64.');
-  const release = getDesktopRelease(root);
+async function prepareLinuxApp(root, temporary, release) {
   const runtime = path.join(root, 'dist', 'python-linux');
   const manifest = JSON.parse(await fs.readFile(path.join(runtime, 'runtime-manifest.json'), 'utf8'));
   if (manifest.platform !== 'linux-x64' || !manifest.files['bin/python3.13']) throw Error('Linux-Python-Laufzeit fehlt.');
@@ -35,29 +33,36 @@ async function buildAppImage(root = path.join(__dirname, '..')) {
   if (createHash('sha256').update(await fs.readFile(path.join(root, 'requirements-linux.txt'))).digest('hex') !== manifest.requirementsSha256) {
     throw Error('Linux-Python-Pakete sind veraltet. Laufzeit neu erstellen.');
   }
+  const source = path.join(temporary, 'app');
+  const metadata = await prepareDesktopSource(root, source, release);
+  const appMetadata = JSON.parse(await fs.readFile(path.join(source, 'package.json'), 'utf8'));
+  Object.assign(appMetadata, { ttcDistribution: 'appimage', main: 'electron/bootstrap.cjs' });
+  await fs.writeFile(path.join(source, 'package.json'), JSON.stringify(appMetadata, null, 2));
+  await copyDesktopRuntime(runtime, path.join(source, 'runtime', 'python'), 'linux');
+  await copyLinuxLicenseNotices(root, path.join(source, 'runtime', 'python'));
+  await fs.writeFile(path.join(source, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python, platform: 'linux-x64', electron: metadata.devDependencies.electron, requirementsSha256: manifest.requirementsSha256 }));
+  await fs.writeFile(path.join(source, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(source, 'linux'), null, 2));
+  validateInstallation(source, true, 'linux');
+  const { packager } = await import('@electron/packager');
+  const [prepackaged] = await packager({ dir: source, out: path.join(temporary, 'unpacked'),
+    name: metadata.productName, executableName: metadata.name, platform: 'linux', arch: 'x64',
+    electronVersion: metadata.devDependencies.electron, appVersion: release.version,
+    asar: false, prune: false, overwrite: true });
+  assertPackageRelease(path.join(prepackaged, 'resources', 'app'), release);
+  // Packager normalizes package.json; hash the final files, not the input tree.
+  await fs.writeFile(path.join(prepackaged, 'resources', 'app', 'installation-manifest.json'),
+    JSON.stringify(createInstallationManifest(path.join(prepackaged, 'resources', 'app'), 'linux'), null, 2));
+  validateInstallation(path.join(prepackaged, 'resources', 'app'), true, 'linux');
+  return { prepackaged, metadata };
+}
+
+async function buildAppImage(root = path.join(__dirname, '..')) {
+  if (process.platform !== 'linux' || process.arch !== 'x64') throw Error('AppImage-Build benötigt Linux x86_64.');
+  const release = getDesktopRelease(root);
   await fs.mkdir(path.join(root, 'dist'), { recursive: true });
   const temporary = await fs.mkdtemp(path.join(root, 'dist', '.appimage-'));
   try {
-    const source = path.join(temporary, 'app');
-    const metadata = await prepareDesktopSource(root, source, release);
-    const appMetadata = JSON.parse(await fs.readFile(path.join(source, 'package.json'), 'utf8'));
-    Object.assign(appMetadata, { ttcDistribution: 'appimage', main: 'electron/bootstrap.cjs' });
-    await fs.writeFile(path.join(source, 'package.json'), JSON.stringify(appMetadata, null, 2));
-    await copyDesktopRuntime(runtime, path.join(source, 'runtime', 'python'), 'linux');
-    await copyLinuxLicenseNotices(root, path.join(source, 'runtime', 'python'));
-    await fs.writeFile(path.join(source, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python, platform: 'linux-x64' }));
-    await fs.writeFile(path.join(source, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(source, 'linux'), null, 2));
-    validateInstallation(source, true, 'linux');
-    const { packager } = await import('@electron/packager');
-    const [prepackaged] = await packager({ dir: source, out: path.join(temporary, 'unpacked'),
-      name: metadata.productName, executableName: metadata.name, platform: 'linux', arch: 'x64',
-      electronVersion: metadata.devDependencies.electron, appVersion: release.version,
-      asar: false, prune: false, overwrite: true });
-    assertPackageRelease(path.join(prepackaged, 'resources', 'app'), release);
-    // Packager normalizes package.json; hash the final files, not the input tree.
-    await fs.writeFile(path.join(prepackaged, 'resources', 'app', 'installation-manifest.json'),
-      JSON.stringify(createInstallationManifest(path.join(prepackaged, 'resources', 'app'), 'linux'), null, 2));
-    validateInstallation(path.join(prepackaged, 'resources', 'app'), true, 'linux');
+    const { prepackaged, metadata } = await prepareLinuxApp(root, temporary, release);
     // The pinned builder copies prepackaged AppRun over its generated launcher.
     // Its default launcher can silently disable the sandbox; ours never does.
     await fs.copyFile(path.join(root, 'build', 'linux', 'AppRun'), path.join(prepackaged, 'AppRun'));
@@ -96,4 +101,4 @@ if (require.main === module) buildAppImage().then((files) => files.forEach((file
   console.error(`AppImage-Build fehlgeschlagen: ${error.message}`);
   process.exitCode = 1;
 });
-module.exports = { appImageConfig, buildAppImage };
+module.exports = { appImageConfig, buildAppImage, prepareLinuxApp };

@@ -79,6 +79,21 @@ def repository_config(base_url, key):
             f'gpgcheck=1\nrepo_gpgcheck=1\ngpgkey={base_url}keys/{key}.asc\n'
             'sslverify=1\nskip_if_unavailable=0\nmetadata_expire=1h\nincludepkgs=ttc-rechnungsverwaltung\n')
 
+def site_texts(base_url, key):
+    index = (
+        '<!doctype html><html lang="de"><meta charset="utf-8"><title>TT Rechnungsverwaltung – DNF</title>'
+        '<h1>TT Rechnungsverwaltung für Fedora x86_64</h1><p>Signiertes RPM-Paketrepository.</p>'
+        '<p>Einmalig Repository hinzufügen, anschließend mit DNF installieren:</p><pre>'
+        f'sudo dnf config-manager addrepo --from-repofile={html.escape(base_url)}{NAME}.repo\n'
+        f'sudo dnf install {NAME}</pre><p>Beim Schlüsselimport diesen Fingerprint vergleichen:</p><pre>{key}</pre>'
+        f'<p>Aktualisieren: <code>sudo dnf upgrade {NAME}</code>. App vorher vollständig schließen.</p>'
+        '<p>Die Anwendung verwendet FFmpeg unter LGPL-2.1-or-later. '
+        '<a href="https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-sources-2026-11-19">'
+        'Drittanbieter-Quellen und Lizenzhinweise</a>.</p></html>'
+    )
+    return {f'{NAME}.repo': repository_config(base_url, key), 'index.html': index, '.nojekyll': ''}
+
+
 def create_repository(package, public_key, gnupg_home, destination, base_url, asset_base, previous=None):
     package, public_key, destination = Path(package), Path(public_key), Path(destination)
     if destination.exists() or not re.fullmatch(r'ttc-rechnungsverwaltung-[0-9.]+-[0-9.]+(?:dev)?\.x86_64\.rpm', package.name):
@@ -105,18 +120,8 @@ def create_repository(package, public_key, gnupg_home, destination, base_url, as
          '--armor', '--detach-sign', '--output', destination/'repodata/repomd.xml.asc', destination/'repodata/repomd.xml'])
     key_dir = destination/'keys'; key_dir.mkdir()
     shutil.copyfile(public_key, key_dir/f'{key}.asc')
-    (destination/f'{NAME}.repo').write_text(repository_config(base_url, key))
-    (destination/'index.html').write_text(
-        '<!doctype html><html lang="de"><meta charset="utf-8"><title>TT Rechnungsverwaltung – DNF</title>'
-        '<h1>TT Rechnungsverwaltung für Fedora x86_64</h1><p>Signiertes RPM-Paketrepository.</p>'
-        '<p>Einmalig Repository hinzufügen, anschließend mit DNF installieren:</p><pre>'
-        f'sudo dnf config-manager addrepo --from-repofile={html.escape(base_url)}{NAME}.repo\n'
-        f'sudo dnf install {NAME}</pre><p>Beim Schlüsselimport diesen Fingerprint vergleichen:</p><pre>{key}</pre>'
-        f'<p>Aktualisieren: <code>sudo dnf upgrade {NAME}</code>. App vorher vollständig schließen.</p>'
-        '<p>Die Anwendung verwendet FFmpeg unter LGPL-2.1-or-later. '
-        '<a href="https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-sources-2026-11-19">'
-        'Drittanbieter-Quellen und Lizenzhinweise</a>.</p></html>')
-    (destination/'.nojekyll').write_text('')
+    for name, content in site_texts(base_url, key).items():
+        (destination/name).write_text(content)
     verify_metadata(destination, public_key)
     return key
 

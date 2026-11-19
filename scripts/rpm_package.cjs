@@ -79,16 +79,16 @@ ${HOME}
 async function stageRpm(root, extracted, destination, release) {
   const metadata = readPackage(root);
   if (metadata.name !== NAME) throw Error('RPM package name changed');
-  const policy = JSON.parse(await fs.readFile(path.join(root, 'rpm-repository-policy.json')));
   const baseApp = path.join(extracted, 'resources/app');
-  // The immutable signed baseline predates RPM support; use its verified validator.
-  require(path.join(baseApp, 'electron/installation.cjs')).validateInstallation(baseApp, true, 'linux');
+  validateInstallation(baseApp, true, 'linux');
   const baseMetadata = JSON.parse(await fs.readFile(path.join(baseApp, 'package.json')));
-  if (baseMetadata.desktopRelease.tag !== policy.runtime.tag || baseMetadata.desktopRelease.commit !== policy.runtime.commit
-      || metadata.devDependencies.electron !== policy.runtime.electron) throw Error('Unapproved runtime base');
+  const runtimeInfo = JSON.parse(await fs.readFile(path.join(baseApp, 'packaged-runtime.json')));
+  if (baseMetadata.desktopRelease.channel !== 'development' || baseMetadata.version !== metadata.version
+      || runtimeInfo.electron !== metadata.devDependencies.electron
+      || runtimeInfo.requirementsSha256 !== hash(await fs.readFile(path.join(root, 'requirements-linux.txt')))) throw Error('RPM requires a current verified Linux staging build');
   const runtime = path.join(baseApp, 'runtime/python');
   const manifest = JSON.parse(await fs.readFile(path.join(runtime, 'runtime-manifest.json')));
-  if (hash(await fs.readFile(path.join(root, 'requirements-linux.txt'))) !== manifest.requirementsSha256) throw Error('RPM runtime dependencies changed; approve a new verified runtime base');
+  if (manifest.requirementsSha256 !== runtimeInfo.requirementsSha256) throw Error('RPM runtime requirements mismatch');
   const app = path.join(destination, HOME.slice(1));
   await fs.mkdir(app, { recursive: true });
   for (const entry of await fs.readdir(extracted, { withFileTypes: true })) {
@@ -104,7 +104,7 @@ async function stageRpm(root, extracted, destination, release) {
   Object.assign(own, { ttcDistribution: 'rpm', main: 'electron/bootstrap.cjs', rpmRelease: release });
   validateRpmMetadata(own);
   await fs.writeFile(path.join(source, 'package.json'), JSON.stringify(own, null, 2) + '\n');
-  await fs.writeFile(path.join(source, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python, platform: 'linux-x64', runtimeSource: policy.runtime }));
+  await fs.writeFile(path.join(source, 'packaged-runtime.json'), JSON.stringify(runtimeInfo));
   await fs.writeFile(path.join(source, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(source, 'linux'), null, 2));
   validateInstallation(source, true, 'linux');
   const files = {
@@ -120,12 +120,18 @@ async function stageRpm(root, extracted, destination, release) {
   await fs.copyFile(path.join(root, 'electron/assets/app-icon.png'), icon);
   const licenses = path.join(destination, `usr/share/licenses/${NAME}`); await fs.mkdir(licenses, { recursive: true });
   for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) await fs.copyFile(path.join(root, name), path.join(licenses, name));
-  return { source, metadata, policy };
+  return { source, metadata, runtimeInfo };
 }
 async function buildRpm(root, extracted, output, release) {
+  if (process.platform !== 'linux' || process.arch !== 'x64') throw Error('RPM build requires Linux x86_64');
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-rpm-build-'));
   try {
     const payload = path.join(temporary, 'SOURCES/payload');
+    if (!extracted) {
+      const desktop = { formatVersion: 1, version: release.version, channel: 'development', tag: null, commit: null };
+      const staging = path.join(temporary, 'linux-stage'); await fs.mkdir(staging);
+      extracted = (await require('./build_appimage.cjs').prepareLinuxApp(root, staging, desktop)).prepackaged;
+    }
     const staged = await stageRpm(root, extracted, payload, release);
     const guard = await fs.readFile(path.join(root, 'build/linux/rpm/process_guard.py'), 'utf8');
     const revision = release.channel === 'stable' ? String(release.release) : `0.${release.release}.dev`;
@@ -136,7 +142,7 @@ async function buildRpm(root, extracted, output, release) {
     const bytes = await fs.readFile(path.join(directory, packages[0]));
     await fs.mkdir(output, { recursive: true }); const target = path.join(output, packages[0]);
     await fs.writeFile(target, bytes, { flag: 'wx' });
-    await fs.writeFile(target + '.build.json', JSON.stringify({ ...release, runtimeSource: staged.policy.runtime, fileName: packages[0], sha256: hash(bytes), size: bytes.length }, null, 2) + '\n');
+    await fs.writeFile(target + '.build.json', JSON.stringify({ ...release, runtimeSource: staged.runtimeInfo, fileName: packages[0], sha256: hash(bytes), size: bytes.length }, null, 2) + '\n');
     return target;
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
@@ -144,6 +150,6 @@ module.exports = { command, rpmRelease, spec, stageRpm, buildRpm, NAME };
 if (require.main === module) {
   const root = path.join(__dirname, '..');
   const releaseNumber = Number(process.env.TTC_RPM_RELEASE_NUMBER || 1);
-  buildRpm(root, path.resolve(process.argv[2]), path.resolve(process.argv[3]), rpmRelease(root, { release: releaseNumber }))
+  buildRpm(root, null, path.resolve(process.argv[2] || path.join(root, 'dist/rpm')), rpmRelease(root, { release: releaseNumber }))
     .then(file => console.log(file)).catch(error => { console.error(error.message); process.exitCode = 1; });
 }
