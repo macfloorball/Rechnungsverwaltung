@@ -193,6 +193,35 @@ Journal 'installed'
   assert.deepEqual(await fs.readdir(root), ['state.json']);
 });
 
+test('Windows journal reports the native sharing violation and preserves the previous phase', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-journal-sharing-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const journal = path.join(root, 'state.json');
+  const helper = require('./windows_update_helper.cjs');
+  const context = Buffer.from(JSON.stringify({ journal, version: '0.1.2', currentVersion: '0.1.1', parentPid: process.pid })).toString('base64');
+  const script = helper.slice(0, helper.indexOf('function Installed {')) + `
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Journal 'handoff'
+$reader = [IO.File]::Open($context.journal,'Open','Read','Read')
+try { Journal 'installed'; throw 'Sharing violation expected' }
+catch { if ($_.Exception.GetBaseException().HResult -ne -2147024864) { throw } }
+finally { $reader.Dispose() }
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(JSON.parse(await fs.readFile(journal, 'utf8')).phase, 'handoff');
+  const traces = (await fs.readdir(root)).filter(name => name.endsWith('.error.json'));
+  assert.equal(traces.length, 1);
+  const trace = JSON.parse(await fs.readFile(path.join(root, traces[0]), 'utf8'));
+  assert.equal(trace.hresult, '0x80070020');
+  assert.equal(trace.operation, 'replace');
+  assert.equal(trace.parentPid, process.pid);
+  assert.equal(trace.journal, journal);
+  assert.equal(JSON.parse(await fs.readFile(trace.temporary, 'utf8')).phase, 'installed');
+});
+
 test('Windows helper releases the profile lock before showing the failure message', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
   const { spawnSync } = require('node:child_process');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-helper-failure-'));

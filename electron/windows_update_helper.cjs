@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 Set-StrictMode -Version Latest
-$lock = $null; $package = $null; $context = $null; $committed = $false; $failed = $false
+$lock = $null; $package = $null; $context = $null; $installer = $null; $committed = $false; $failed = $false
 function HashBytes($bytes) {
   $sha = [Security.Cryptography.SHA256]::Create()
   try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
@@ -41,9 +41,25 @@ function Signature([string]$file) {
 function Journal([string]$phase) {
   $json = @{formatVersion=1; phase=$phase; version=$context.version; previousVersion=$context.currentVersion; time=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Compress
   $temporary = $context.journal + '.tmp-' + [Guid]::NewGuid().ToString('N')
-  [IO.File]::WriteAllText($temporary,$json,[Text.UTF8Encoding]::new($false))
-  # Windows PowerShell marshals $null to an empty string for a .NET string parameter.
-  if (Test-Path -LiteralPath $context.journal) { [IO.File]::Replace($temporary,$context.journal,[NullString]::Value) } else { [IO.File]::Move($temporary,$context.journal) }
+  $operation = 'write'
+  try {
+    [IO.File]::WriteAllText($temporary,$json,[Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $context.journal) {
+      $operation = 'replace'
+      # Windows PowerShell marshals $null to an empty .NET string.
+      [IO.File]::Replace($temporary,$context.journal,[NullString]::Value)
+    } else { $operation = 'move'; [IO.File]::Move($temporary,$context.journal) }
+  } catch {
+    $cause = $_.Exception.GetBaseException()
+    try {
+      $trace = @{phase=$phase; operation=$operation; hresult=('0x{0:X8}' -f $cause.HResult); type=$cause.GetType().FullName; time=[DateTime]::UtcNow.ToString('o'); helperPid=$PID; journal=$context.journal; temporary=$temporary; lockHeld=($null -ne $lock)}
+      if ($null -ne $context.PSObject.Properties['parentPid']) { $trace.parentPid = $context.parentPid }
+      if ($null -ne $installer) { $trace.installerPid = $installer.Id; $trace.installerExit = $installer.ExitCode; $trace.installerEnded = $installer.ExitTime.ToUniversalTime().ToString('o') }
+      $output = [IO.File]::Open($temporary + '.error.json','CreateNew','Write','None')
+      try { $bytes = [Text.Encoding]::UTF8.GetBytes(($trace | ConvertTo-Json -Compress)); $output.Write($bytes,0,$bytes.Length); $output.Flush($true) } finally { $output.Dispose() }
+    } catch {}
+    throw
+  }
 }
 function Installed {
   $root = [IO.Path]::Combine($context.directory,'resources','app')
