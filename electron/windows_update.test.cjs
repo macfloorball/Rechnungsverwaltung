@@ -173,6 +173,26 @@ Start-Sleep -Milliseconds 500
   }
 });
 
+test('Windows PowerShell atomically replaces an existing install journal without a backup path', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-journal-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const journal = path.join(root, 'state.json');
+  const helper = require('./windows_update_helper.cjs');
+  const definitions = helper.slice(0, helper.indexOf('function Installed {'));
+  const context = Buffer.from(JSON.stringify({ journal, version: '0.1.2', currentVersion: '0.1.1' })).toString('base64');
+  const script = definitions + `
+$context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${context}')) | ConvertFrom-Json
+Journal 'handoff'
+Journal 'installed'
+`;
+  execFileSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(JSON.parse(await fs.readFile(journal, 'utf8')).phase, 'installed');
+  assert.deepEqual(await fs.readdir(root), ['state.json']);
+});
+
 test('Windows update registry identity remains the existing NSIS app GUID', () => {
   const { UUID } = require('builder-util-runtime');
   const { installerConfig } = require('../scripts/installer_config.cjs');

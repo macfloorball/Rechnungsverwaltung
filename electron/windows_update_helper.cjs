@@ -42,7 +42,8 @@ function Journal([string]$phase) {
   $json = @{formatVersion=1; phase=$phase; version=$context.version; previousVersion=$context.currentVersion; time=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Compress
   $temporary = $context.journal + '.tmp-' + [Guid]::NewGuid().ToString('N')
   [IO.File]::WriteAllText($temporary,$json,[Text.UTF8Encoding]::new($false))
-  if (Test-Path -LiteralPath $context.journal) { [IO.File]::Replace($temporary,$context.journal,$null) } else { [IO.File]::Move($temporary,$context.journal) }
+  # Windows PowerShell marshals $null to an empty string for a .NET string parameter.
+  if (Test-Path -LiteralPath $context.journal) { [IO.File]::Replace($temporary,$context.journal,[NullString]::Value) } else { [IO.File]::Move($temporary,$context.journal) }
 }
 function Installed {
   $root = [IO.Path]::Combine($context.directory,'resources','app')
