@@ -12,7 +12,8 @@ Die jeweiligen Originalbedingungen und Urheberhinweise bleiben erhalten.
   Cargo-Komponenten. Die Liste umfasst auch Build- und andere Zielplattformen;
   sie ist kein Nachweis, dass jede Komponente in unsere Binärdatei gelinkt ist.
 - `licenses/desktop-windows/`: Originaltexte für die geprüften Windows-Launcher,
-  CPython-Unterkomponenten und ReportLabs Noto-Sans-Khmer-Testschrift.
+  CPython-Unterkomponenten, ReportLabs Noto-Sans-Khmer-Testschrift sowie die
+  nachgewiesenen nativen Komponenten des Windows-Installers.
   Der Windows-Installer liefert dieses Verzeichnis mit.
 
 Jeder Unterordner enthält `provenance.json` mit Quellen und SHA-256-Prüfsummen.
@@ -23,8 +24,9 @@ Dateien dieser Sammlung enthalten unveränderte Textinhalte, bei Cargo mit
 Trennzeilen für die ursprünglichen Dateipfade.
 
 Die Sammlung enthält keine ausführbaren Dateien, Schlüssel oder Benutzerdaten.
-Die Verzeichnisse `python-linux` und `pydantic-core` sind noch nicht in die
-Desktop-Paketierung integriert. Die Nachweise ersetzen weder erforderliche
+Der Windows-Installer liefert auch `pydantic-core` mit. Die Sammlung
+`python-linux` ist noch nicht in die Desktop-Paketierung integriert.
+Die Nachweise ersetzen weder erforderliche
 Quellcodebeigaben noch eine abschließende Lizenzfreigabe.
 Versionen und Prüfsummen bei Änderungen der Laufzeiten erneut abgleichen.
 

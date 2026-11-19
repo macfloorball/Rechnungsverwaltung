@@ -103,6 +103,31 @@ def test_packaged_reportlab_fonts_and_notices():
         assert "runtime/python/licenses/desktop-windows/LICENSE.noto-sans-khmer.txt" in manifest
 
 
+def test_packaged_windows_native_license_evidence():
+    executable = os.environ.get("TTC_WINDOWS_PYTHON")
+    if not executable:
+        pytest.skip("Set TTC_WINDOWS_PYTHON for the Windows license checks")
+    python = Path(executable).resolve().parent
+    app = python.parents[1]
+    manifest = json.loads((app / "installation-manifest.json").read_text(encoding="utf-8"))["files"]
+    evidence = python / "licenses/desktop-windows"
+    provenance = json.loads((evidence / "provenance.json").read_text(encoding="utf-8"))
+    components = {component["name"]: component for component in provenance["components"]}
+    for name in ("Rust standard library", "Pillow native wheel", "NSIS installer and plugins"):
+        assert components[name]["notices"]
+        for notice in components[name]["notices"]:
+            file = evidence / notice["file"]
+            assert hashlib.sha256(file.read_bytes()).hexdigest() == notice["sha256"]
+            assert manifest[file.relative_to(app).as_posix()] == notice["sha256"]
+    crate_dir = python / "licenses/pydantic-core"
+    crates = json.loads((crate_dir / "provenance.json").read_text(encoding="utf-8"))
+    assert len(crates["files"]) == 101
+    for crate in crates["files"]:
+        file = crate_dir / crate["file"]
+        assert hashlib.sha256(file.read_bytes()).hexdigest() == crate["sha256"]
+        assert manifest[file.relative_to(app).as_posix()] == crate["sha256"]
+
+
 @pytest.mark.parametrize("packaged", [False, True])
 def test_migration_in_separate_interpreter(tmp_path, packaged):
     root = Path(__file__).resolve().parent.parent

@@ -42,6 +42,43 @@ der Chromium-Credits. Die CPython-Versionen sind in `provenance.json` belegt.
 Diese Zuordnungen beziehen sich auf die geprüfte Windows-Laufzeit. Bei einem
 Versionswechsel sind sie erneut abzugleichen.
 
+### Native Komponenten im Windows-Installer
+
+- **pydantic_core 2.50.4:** Unter `runtime/python/licenses/pydantic-core/`
+  (relativ zu `resources/app`) liegen die Nachweise zu den 101 Crates des
+  offiziellen Windows-Wheel-SBOMs. Das SBOM enthält auch Build- und
+  zielplattformspezifische Einträge. Der zur Binärdatei passende Rust-1.99.1-
+  Standardbibliothekshinweis und der Rust-MIT-Text liegen unter
+  `runtime/python/licenses/desktop-windows/`. Der Apache-2.0-Text steht bereits
+  in den Chromium-Credits und in den Crate-Nachweisen.
+- **Pillow 13.0.0:** Die Wheel-Lizenz enthält die Texte der nativen
+  Bibliotheken mit Versionsangaben. Für den AV1-Decoder dav1d 1.5.3 liefert
+  der Windows-Installer zusätzlich dessen Originaltext. Für AOM 3.14.1
+  stehen Lizenz und Patenttext bereits vollständig in `LICENSES.chromium.html`.
+  Diese Software basiert teilweise auf der Arbeit des
+  [FreeType-Teams](https://freetype.org/).
+  This software is based in part on the work of the Independent JPEG Group.
+- **FFmpeg in Electron 45.3.1:** Die DLL stammt aus dem offiziellen
+  Windows-x64-Archiv. Der Chromium-FFmpeg-Stand und die Electron-Patches
+  sind in der Windows-Provenienz festgehalten. Der Build verwendet eine
+  separate DLL mit Chrome-Branding und proprietären Codecs. Die geprüfte
+  Windows-x64-Konfiguration hat GPL-, Nonfree- und Version-3-Optionen
+  deaktiviert. Der LGPL-2.1-Text und die FFmpeg-Hinweise stehen bereits in
+  `LICENSES.chromium.html`. Die zugängliche Bereitstellung des entsprechend
+  gepatchten Quellcodes samt Buildinformationen ist Teil der
+  Binärveröffentlichung.
+- **Microsoft-Dateien:** Der CPython-Text enthält den Hinweis zu Microsoft
+  Distributable Code. Die Herkunft und Microsoft-Signatur von
+  `vcruntime140.dll`, `vcruntime140_1.dll` und `d3dcompiler_47.dll` sind
+  verifiziert. Die jeweils anwendbare Weitergabeberechtigung bleibt für die
+  konkrete Verteilung zu belegen.
+- **NSIS:** Das Paket führt die Originalhinweise aus der 3.0.4.1-Toolchain
+  sowie aus den bytegleich zugeordneten UAC-, StdUtils-, Nsis7z- und
+  nsProcess-Archiven mit. Für StdUtils enthält es den LGPL-Zusatz des
+  Autors. Erforderliche Quellbereitstellung bleibt Teil der Veröffentlichung.
+  Für die zugeordneten Fassungen von WinShell und nsProcess ist ein
+  belastbarer Nachweis des Weitergaberechts noch offen.
+
 ### Weitere Schriften in ReportLab 5.1.0
 
 - **DarkGarden 1.1** wird als Type-1-Schriftprogramm und AFM-Metrik mit
