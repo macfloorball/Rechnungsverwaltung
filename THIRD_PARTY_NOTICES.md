@@ -48,6 +48,15 @@ bevor sie in das AppDir und dessen Installationsmanifest aufgenommen werden.
   Vera, CALLIG15 und DarkGarden samt Lizenz- und Quelldateien bleiben erhalten;
   die unten ausdrücklich aufgeführten 32 AFM-/PFB-Dateien werden ausgelassen.
 
+- **Electron/FFmpeg auf Linux:** `libffmpeg.so`, Electron-Lizenz und Chromium-
+  Credits wurden bytegenau gegen das offizielle Linux-x64-Releasearchiv
+  abgeglichen. Archiv- und Datei-SHA-256 stehen unter
+  `third_party/sources/electron-ffmpeg-linux.json`. Der Generator
+  `scripts/prepare_ffmpeg_sources.py` bereitet die zum festgelegten Stand
+  gehörenden FFmpeg-Quellen mit Electron-Patches und beiden Plattform-
+  konfigurationen vor. Vor Veröffentlichung fehlen noch ein dauerhafter
+  Quellenbezugsort und die Klärung der gemeinsamen Codec-Weitergabefragen.
+
 Konkrete Archiv-/Wheelquellen, Binär- und Nachweishashes stehen unter
 `third_party/licenses/desktop-linux/provenance.json`. Diese technische
 Zuordnung ersetzt nicht die Quellenbereitstellung bei Veröffentlichung oder

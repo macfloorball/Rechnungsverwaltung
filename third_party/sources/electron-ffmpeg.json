@@ -1,0 +1,10 @@
+{
+  "url": "https://chromium.googlesource.com/chromium/third_party/ffmpeg/+archive/9db86ce5b5b454dfc96c435f9f0723012980c37f.tar.gz",
+  "sha256": "d6f445d2f8799987a2342baf6259b619d592978f84b1b16ebfeb3c0574f6f981",
+  "revision": "9db86ce5b5b454dfc96c435f9f0723012980c37f",
+  "gitTree": "92494155280ad804b8f3da29425fb0b32b6c27e4",
+  "verification": "All 11114 files/symlinks, executable modes and Git blob hashes match the pinned commit fetched independently. Previous Windows archive SHA-256 was not reproduced; no claim about its bytes.",
+  "previousUnreproducedArchiveSha256": "b844e02c546509e6b42e1c4cb8597e7a39dca1fddf60f92076a55781cc5448df",
+  "contentSha256": "dbca06160c01bb229b78991f2b1598fa313f8ef2dedf5504d4f6f5a926dd8069",
+  "archiveHashScope": "Observed archive bytes only. Build pins all file/link contents, paths and executable modes with contentSha256; tar metadata/compression may vary."
+}

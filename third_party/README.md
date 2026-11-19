@@ -34,3 +34,27 @@ Versionen und Prüfsummen bei Änderungen der Laufzeiten erneut abgleichen.
 
 Prüfstand und verbleibende Aufgaben:
 [`Planung/Desktop_Lizenzpruefung.md`](../Planung/Desktop_Lizenzpruefung.md).
+
+
+## FFmpeg-Quellpaket vorbereiten
+
+```sh
+python scripts/prepare_ffmpeg_sources.py dist/license-sources/ffmpeg-electron-45.3.1-source.tar.gz
+```
+
+Benötigt Netzwerkzugriff auf die offiziellen Quellen und das übliche `patch`.
+Das Ziel muss neu sein. Der Generator übernimmt alle vier Electron-Patches
+in ihrer Reihenfolge und prüft die Windows-/Linux-x64-Konfigurationen. Er legt
+Originalarchiv, gepatchten Quellbaum, Originalpatches, Buildinformationen und
+Provenienz gemeinsam ab. Er veröffentlicht nichts. Der Inhalt des Gitiles-
+Archivs ist über alle Dateinamen, Dateiinhalte und Ausführrechte per SHA-256
+gebunden; sein Tar-/Kompressionswrapper kann abweichen. Der initiale Inhalt
+wurde zusätzlich gegen sämtliche Git-Blobs des festgelegten Commits geprüft.
+
+Vor Binärverteilung muss das erzeugte Quellpaket unter einer dauerhaften,
+zugänglichen URL bereitgestellt und diese mit Prüfsumme dokumentiert werden.
+Es darf nicht als siebtes Asset an einen Desktop-Release gehängt werden, dessen
+Updater exakt sechs Assets verlangt. Ein separater Quellen-Verteilort benötigt
+seine eigene Freigabe. Das Paket behauptet weder bitgenaue Rekonstruktion der
+Binärdatei noch eine Patent-/Codec-Freigabe. Weitere Quellenpflichten, etwa aus
+der Python-Laufzeit oder den Windows-Installer-Plug-ins, bleiben gesondert.
