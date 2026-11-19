@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "enabled": false,
+  "enabled": true,
   "repository": "macfloorball/Rechnungsverwaltung",
   "repositoryId": 1447003404,
   "visibility": "public",

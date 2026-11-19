@@ -6,7 +6,10 @@ Stand: 19.11.2026. Das produktive Ed25519-Vertrauen ist eingerichtet.
 Der private PKCS8-Schlüssel liegt ausschließlich als geschütztes Environment-Secret
 `desktop-release/DESKTOP_UPDATE_PRIVATE_KEY` und in einer zugriffsbeschränkten
 lokalen Sicherung außerhalb des Repositorys. Eine Signaturprobe war erfolgreich.
-`enabled: false` sperrt Releases bis zum Abschluss der übrigen Freigabevoraussetzungen.
+`enabled: true` erlaubt den geschützten Releaseprozess mit diesem Vertrauen.
+Dies ersetzt weder die exakte Merge-CI noch Tagprüfung und Required-reviewer-
+Freigaben. Der erste Live-A/B-Lauf auf Windows und Linux bleibt vor Abschluss
+der Produktionsabnahme erforderlich.
 
 ## Quelle und aktueller Windows-Modus
 
