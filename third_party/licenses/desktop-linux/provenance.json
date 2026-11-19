@@ -48,6 +48,49 @@
         "linuxFontSha256": "4df8840ec8382efa2c06bda01e31e1a5a975cd46e13f7c0b0be696a8542f1ba0",
         "evidence": "Linux font byte-equal to the already verified ReportLab subset; no Reserved Font Name in upstream OFL."
       }
+    },
+    {
+      "file": "LICENSE.hacl.txt",
+      "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c",
+      "source": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.13.18/Modules/_hacl/Hacl_Hash_SHA2.c",
+        "sourceSha256": "30638efb75c8b185bb09c3df6977e3f3c5d21a1e696218cf7ade6bc4d5201b31",
+        "evidence": "Exact original MIT header from CPython 3.13.18 HACL SHA2 source."
+      }
+    },
+    {
+      "file": "LICENSE.unicode.txt",
+      "sha256": "9ba0dc030e14ab692310b5395ea4f3a4921bcdbc1b9dbcebb1f81d83eb08f4e6",
+      "source": {
+        "unicodeVersion": "15.1.0",
+        "upstream": {
+          "url": "https://www.unicode.org/Public/zipped/15.1.0/UCD.zip",
+          "sha256": "cb1c663d053926500cd501229736045752713a066bd75802098598b7a7056177"
+        },
+        "originalNotice": {
+          "file": "LICENSE.unicode.txt",
+          "sha256": "9ba0dc030e14ab692310b5395ea4f3a4921bcdbc1b9dbcebb1f81d83eb08f4e6",
+          "sourceUrl": "https://raw.githubusercontent.com/unicode-org/unicodetools/final-15.1-20230908/LICENSE"
+        },
+        "evidence": "Linux packaged unicodedata reports 15.1.0; same upstream UCD notice as the verified Windows collection."
+      }
+    },
+    {
+      "file": "NOTICE.unicode-ucd.txt",
+      "sha256": "0d2da782ead4e85630d510f50808355e8c3355e670841d257dd1e6fbd40db9fa",
+      "source": {
+        "unicodeVersion": "15.1.0",
+        "upstream": {
+          "url": "https://www.unicode.org/Public/zipped/15.1.0/UCD.zip",
+          "sha256": "cb1c663d053926500cd501229736045752713a066bd75802098598b7a7056177"
+        },
+        "originalNotice": {
+          "file": "NOTICE.unicode-ucd.txt",
+          "sha256": "0d2da782ead4e85630d510f50808355e8c3355e670841d257dd1e6fbd40db9fa",
+          "sourceMember": "ReadMe.txt"
+        },
+        "evidence": "Linux packaged unicodedata reports 15.1.0; same upstream UCD notice as the verified Windows collection."
+      }
     }
   ],
   "components": [

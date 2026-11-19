@@ -31,6 +31,9 @@ bevor sie in das AppDir und dessen Installationsmanifest aufgenommen werden.
   und zugehörige Lizenzen; das schlanke Laufzeitarchiv enthält diese Nachweise
   nicht vollständig. Dazu gehört `_dbm` mit statisch eingebundenem Berkeley DB
   (Sleepycat); erforderliche Quellenbereitstellung bleibt eine Releaseaufgabe.
+  Zusätzlich liegen der bytegenau aus CPython 3.13.18 abgeglichene HACL*-MIT-
+  Hinweis sowie die Originaltexte für die von der eingebetteten Laufzeit
+  gemeldeten Unicode-Daten 15.1.0 unter `desktop-linux/`.
 - **pydantic_core 2.50.4:** Alle 101 Crate-Namen, Versionen und Archivhashes
   des tatsächlichen Linux-Wheel-SBOMs stimmen mit der vorhandenen Sammlung
   überein. Diese enthält auch Build- und fremde Zielplattformen, keine reine
