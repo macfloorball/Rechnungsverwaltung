@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import time
@@ -85,6 +86,63 @@ def wait_for_exit(process, timeout, log_path):
         return process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         raise AssertionError(server_diagnostics.read(log_path)) from None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows Proactor transport cleanup after TCP reset")
+def test_shutdown_after_client_resets_keep_alive_socket(tmp_path):
+    server_diagnostics.configure(tmp_path, tmp_path)
+    # Windows can consume the reset before shutdown() sees it. Inject the
+    # observed error at that call so the transport-cleanup race is repeatable.
+    with (tmp_path / "sitecustomize.py").open("a") as diagnostics:
+        diagnostics.write(
+            'import socket\n'
+            'shutdown_socket = socket.socket.shutdown\n'
+            'def shutdown_after_reset(sock, how):\n'
+            '    if sock.family == socket.AF_INET:\n'
+            '        raise ConnectionResetError(10054, "Peer reset during transport cleanup")\n'
+            '    return shutdown_socket(sock, how)\n'
+            'socket.socket.shutdown = shutdown_after_reset\n'
+        )
+    (tmp_path / "sample_app.py").write_text(
+        'from fastapi import FastAPI\napp = FastAPI()\n'
+        '@app.get("/health")\ndef health(): return {"ok": True}\n'
+    )
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    root = Path(__file__).resolve().parent.parent
+    env = os.environ | {"PYTHONPATH": os.pathsep.join([str(tmp_path), str(root)])}
+    log_path = tmp_path / "server.log"
+    args = [sys.executable, "-m", "scripts.managed_server", "sample_app:app",
+            "--host", "127.0.0.1", "--port", str(port)]
+    with log_path.open("w") as log, subprocess.Popen(
+        args, cwd=tmp_path, env=env, stdin=subprocess.PIPE, stdout=log, stderr=log,
+    ) as process:
+        try:
+            deadline = time.monotonic() + 10
+            while True:
+                try:
+                    client = socket.create_connection(("127.0.0.1", port), timeout=1)
+                    break
+                except OSError:
+                    assert process.poll() is None and time.monotonic() < deadline, server_diagnostics.read(log_path)
+                    time.sleep(0.05)
+            with client:
+                client.sendall(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                with client.makefile("rb") as response:
+                    assert response.readline().startswith(b"HTTP/1.1 200 ")
+                # Windows uses two unsigned shorts for SO_LINGER. Zero linger
+                # sends RST when the live HTTP/1.1 connection is closed.
+                client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("HH", 1, 0))
+            process.stdin.write(b"shutdown\n")
+            process.stdin.close()
+            assert wait_for_exit(process, 10, log_path) == 0
+            diagnostics = server_diagnostics.read(log_path)
+            assert "_ProactorBasePipeTransport._call_connection_lost" not in diagnostics, diagnostics
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
 
 
 @pytest.mark.parametrize("reload", [False, True])
