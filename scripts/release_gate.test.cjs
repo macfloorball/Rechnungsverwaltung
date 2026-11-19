@@ -10,7 +10,7 @@ function fixture(patch = {}) {
   const data = {
     repository: { id: policy.repositoryId, full_name: policy.repository, private: true, archived: false },
     branch: { protected: true }, comparison: { status: 'ahead' }, ref: { object: { type: 'commit', sha: release.commit } },
-    environment: { protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User', reviewer: { id: 1 } }] }], deployment_branch_policy: { custom_branch_policies: true } },
+    environment: { can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User', reviewer: { id: 1 } }] }], deployment_branch_policy: { custom_branch_policies: true } },
     deploymentRules: [{ name: 'desktop-v*', type: 'tag' }],
     rulesets: [{ id: 1, target: 'tag', enforcement: 'active' }],
     ruleset: { conditions: { ref_name: { include: ['refs/tags/desktop-v*'], exclude: [] } }, rules: ['creation', 'update', 'deletion'].map((type) => ({ type })) },
@@ -63,4 +63,15 @@ test('unreadable GitHub protection settings fail closed', async () => {
   const f = fixture();
   f.api.request = async () => { throw Error('HTTP 403'); };
   await assert.rejects(checkGate(f.api, f.policy, f.release), /403/);
+});
+
+
+test('release environment rejects enabled, missing and malformed administrator bypass evidence', async () => {
+  const environment = fixture().data.environment;
+  for (const value of [true, undefined, null, 'false', 0]) {
+    const f = fixture({ environment: { ...environment, can_admins_bypass: value } });
+    await assert.rejects(checkGate(f.api, f.policy, f.release), /Administrator-Bypass/);
+  }
+  const f = fixture({ environment: { ...environment, can_admins_bypass: false } });
+  assert.equal(await checkGate(f.api, f.policy, f.release), f.release);
 });
