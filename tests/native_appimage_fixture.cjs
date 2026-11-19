@@ -12,6 +12,8 @@ const metadata = require('../package.json');
 assert.equal(metadata.desktopNativeAcceptance, true);
 const file = process.env.TTC_NATIVE_UPDATE_FIXTURE;
 const fixture = JSON.parse(fs.readFileSync(file));
+const scenario = fixture.scenario || 'success';
+let faultActive = true, transfers = 0;
 const root = path.dirname(file), output = path.join(root, 'native-result.json');
 const digest = b => createHash('sha256').update(b).digest('hex');
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -26,16 +28,29 @@ backendModule.createBackend = options => {
 };
 const transport = require('./update_transport.cjs');
 transport.createUpdateTransport = () => ({
-  releases: async () => [fixture.release], release: async () => fixture.release,
-  asset: async id => Buffer.from(id === 30 ? fixture.manifest : fixture.signature, 'base64'),
+  releases: async () => {
+    if (faultActive && scenario === 'offline') throw Error('isolated offline test');
+    return [fixture.release];
+  }, release: async () => fixture.release,
+  asset: async id => {
+    const bytes = Buffer.from(id === 30 ? fixture.manifest : fixture.signature, 'base64');
+    if (faultActive && scenario === 'signature' && id === 40) bytes[0] ^= 1;
+    return bytes;
+  },
   async streamAsset(id, size, consume) {
-    assert.equal(id, 20);
+    assert.equal(id, 20); transfers++;
     const stat = await fsp.stat(fixture.imageB); assert.equal(stat.size, size);
-    for await (const chunk of fs.createReadStream(fixture.imageB)) await consume(chunk);
+    let first = true;
+    for await (const chunk of fs.createReadStream(fixture.imageB)) {
+      if (faultActive && scenario === 'hash' && first) chunk[0] ^= 1;
+      await consume(chunk);
+      if (faultActive && scenario === 'interrupted') throw Error('isolated interrupted transport');
+      first = false;
+    }
   },
 });
 const linux = require('./linux_update.cjs'), originalInstaller = linux.createLinuxInstaller;
-linux.createLinuxInstaller = options => originalInstaller({ ...options, dialog: { showMessageBox: async () => ({ response: 1 }) } });
+linux.createLinuxInstaller = options => originalInstaller({ ...options, dialog: { showMessageBox: async () => ({ response: faultActive && scenario === 'cancel-install' ? 0 : 1 }) } });
 const updateModule = require('./updates.cjs'), originalUpdates = updateModule.createDesktopUpdates;
 updateModule.createDesktopUpdates = options => { updates = originalUpdates(options); return updates; };
 async function request(method, endpoint, body) {
@@ -59,11 +74,52 @@ async function run() {
     const pdf = await request('GET', `/api/invoices/${invoice.id}/pdf`);
     assert.ok(pdf.subarray(0, 5).equals(Buffer.from('%PDF-')));
     fs.writeFileSync(path.join(root, 'expected.json'), JSON.stringify({ invoice, pdfSha256: digest(pdf), mountA: mount }));
-    const status = await updates.controller.check(); assert.equal(status.state, 'available');
-    updates.controller.acknowledge('0.1.1'); updates.controller.request('0.1.1');
-    while (updates.downloader.isBusy()) { assert.ok(Date.now() < deadline, 'download timeout'); await wait(100); }
-    assert.equal(updates.downloader.getStatus().state, 'downloaded');
-    assert.equal(updates.installer.canInstall('0.1.1'), true);
+    async function download() {
+      updates.controller.request('0.1.1');
+      while (updates.downloader.isBusy()) { assert.ok(Date.now() < deadline, 'download timeout'); await wait(100); }
+    }
+    let status = await updates.controller.check();
+    if (['offline', 'signature'].includes(scenario)) {
+      assert.equal(status.state, 'error');
+      assert.equal(status.error.code, scenario === 'offline' ? 'NETWORK' : 'INVALID_SIGNATURE');
+      assert.equal(transfers, 0);
+    } else {
+      assert.equal(status.state, 'available');
+      updates.controller.acknowledge('0.1.1');
+      if (scenario === 'defer') {
+        updates.controller.defer('0.1.1');
+        assert.equal(updates.controller.getStatus().deferred, true);
+        assert.equal(transfers, 0);
+        assert.equal(updates.downloader.getStatus(), null);
+      } else {
+        await download();
+        if (['hash', 'interrupted'].includes(scenario)) {
+          assert.equal(updates.downloader.getStatus().state, 'error');
+          assert.equal(updates.downloader.getStatus().error.code, scenario === 'hash' ? 'DOWNLOAD_HASH' : 'NETWORK');
+          assert.equal(updates.installer.canInstall('0.1.1'), false);
+          assert.deepEqual(await fsp.readdir(path.join(root, 'profile/updates/downloads')), []);
+        } else {
+          assert.equal(updates.downloader.getStatus().state, 'downloaded');
+          assert.equal(updates.installer.canInstall('0.1.1'), true);
+          if (scenario === 'cancel-install') {
+            await updates.controller.install('0.1.1');
+            assert.notEqual(updates.installer.getStatus()?.state, 'install_handoff');
+            assert.equal(updates.installer.canInstall('0.1.1'), true);
+          }
+        }
+      }
+    }
+    if (scenario !== 'success') {
+      assert.equal(digest(fs.readFileSync(process.env.APPIMAGE)), fixture.imageASha256);
+      assert.equal(digest(await request('GET', `/api/invoices/${invoice.id}/pdf`)), digest(pdf));
+      assert.equal((await request('GET', '/api/organization/settings')).next_invoice_number, 2);
+      // Explicit manual retry, without weakening trust or waiting for the periodic timer.
+      faultActive = false;
+      await updates.service.invalidate();
+      status = await updates.controller.check(); assert.equal(status.state, 'available');
+      await download();
+      assert.equal(updates.downloader.getStatus().state, 'downloaded');
+    }
     await updates.controller.install('0.1.1');
     assert.equal(updates.installer.getStatus().state, 'install_handoff');
   } else {
@@ -76,7 +132,7 @@ async function run() {
     assert.equal(digest(fs.readFileSync(path.join(root, 'documents', expected.invoice.pdf_path))), expected.pdfSha256);
     assert.equal((fs.statSync(process.env.APPIMAGE).mode & 0o700), 0o700);
     assert.equal(digest(fs.readFileSync(process.env.APPIMAGE)), fixture.imageBSha256);
-    app.once('will-quit', () => fs.writeFileSync(output, JSON.stringify({ passed: true, version: app.getVersion(), mountB: mount,
+    app.once('will-quit', () => fs.writeFileSync(output, JSON.stringify({ passed: true, scenario, version: app.getVersion(), mountB: mount,
       expected, pid: process.pid, realFuse: true, realHelper: true, feedAndConfirmation: 'test adapters' }, null, 2)));
     app.quit();
   }

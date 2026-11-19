@@ -17,6 +17,9 @@ const digest = b => createHash('sha256').update(b).digest('hex');
 async function main() {
   assert.equal(process.platform, 'linux'); assert.notEqual(process.getuid(), 0);
   assert.ok((await fs.stat('/dev/fuse')).isCharacterDevice());
+  const scenarios = ['success', 'offline', 'signature', 'hash', 'interrupted', 'defer', 'cancel-install'];
+  const selection = process.argv[3] || 'success';
+  assert.ok(selection === '--all' || scenarios.includes(selection), 'unknown native scenario');
   const source = path.resolve(process.argv[2]);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-native-update-'));
   await fs.chmod(root, 0o700);
@@ -59,35 +62,42 @@ async function main() {
     assets: packages.map(p => ({ id: p.assetId, name: p.fileName, size: p.size, state: 'uploaded' })).concat([
       { id: 30, name: 'desktop-update.json', size: signed.bytes.length, state: 'uploaded' }, { id: 40, name: 'desktop-update.json.sig', size: 64, state: 'uploaded' },
       { id: 50, name: 'RELEASE_NOTES.md', size: 1, state: 'uploaded' }, { id: 60, name: 'SHA256SUMS', size: 1, state: 'uploaded' }]) };
-  const fixture = path.join(root, 'fixture.json');
-  await fs.writeFile(fixture, JSON.stringify({ release, manifest: signed.bytes.toString('base64'), signature: signed.signature.toString('base64'), imageB, imageBSha256: hashB }), { mode: 0o600 });
-  const image = path.join(root, 'TTC.AppImage'); await fs.copyFile(images[0], image); await fs.chmod(image, 0o700);
-  await fs.mkdir(path.join(root, 'profile'), { mode: 0o700 });
-  const listener = net.createServer(); await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
-  const port = listener.address().port; await new Promise(resolve => listener.close(resolve));
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('TTC_') && !key.startsWith('APPIMAGE') && !key.startsWith('PYTHON')
-    && !['APPDIR', 'ARGV0', 'OWD', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'ELECTRON_RUN_AS_NODE'].includes(key)));
-  Object.assign(env, { XDG_CONFIG_HOME: path.join(root, 'config'), XDG_CACHE_HOME: path.join(root, 'cache'), TTC_NATIVE_UPDATE_FIXTURE: fixture,
-    TTC_DATA_DIRECTORY: path.join(root, 'data'), TTC_DOCUMENT_DIRECTORY: path.join(root, 'documents'), TTC_LEGACY_DATABASE: path.join(root, 'no-legacy.db'),
-    TTC_DESKTOP_PRODUCTION_URL: `http://127.0.0.1:${port}` });
-  const log = await fs.open(path.join(root, 'native.log'), 'wx');
-  const child = spawn(image, [], { env, cwd: root, stdio: ['ignore', log.fd, log.fd] });
-  const exited = new Promise((resolve, reject) => { child.once('exit', (code, signal) => resolve({ code, signal })); child.once('error', reject); });
-  try {
-    const deadline = Date.now() + 120000;
-    let result;
-    while (Date.now() < deadline) {
-      try { result = JSON.parse(await fs.readFile(path.join(root, 'native-result.json'))); break; } catch (error) { if (error.code !== 'ENOENT') throw error; }
-      await new Promise(resolve => setTimeout(resolve, 200));
+  const imageASha256 = digest(await fs.readFile(images[0]));
+  const buildRoot = root;
+  for (const scenario of selection === '--all' ? scenarios : [selection]) {
+    const root = path.join(buildRoot, scenario);
+    await fs.mkdir(root, { mode: 0o700 });
+    const fixture = path.join(root, 'fixture.json');
+    await fs.writeFile(fixture, JSON.stringify({ scenario, imageASha256, release, manifest: signed.bytes.toString('base64'), signature: signed.signature.toString('base64'), imageB, imageBSha256: hashB }), { mode: 0o600 });
+    const image = path.join(root, 'TTC.AppImage'); await fs.copyFile(images[0], image); await fs.chmod(image, 0o700);
+    await fs.mkdir(path.join(root, 'profile'), { mode: 0o700 });
+    const listener = net.createServer(); await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
+    const port = listener.address().port; await new Promise(resolve => listener.close(resolve));
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('TTC_') && !key.startsWith('APPIMAGE') && !key.startsWith('PYTHON')
+      && !['APPDIR', 'ARGV0', 'OWD', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'ELECTRON_RUN_AS_NODE'].includes(key)));
+    Object.assign(env, { XDG_CONFIG_HOME: path.join(root, 'config'), XDG_CACHE_HOME: path.join(root, 'cache'), TTC_NATIVE_UPDATE_FIXTURE: fixture,
+      TTC_DATA_DIRECTORY: path.join(root, 'data'), TTC_DOCUMENT_DIRECTORY: path.join(root, 'documents'), TTC_LEGACY_DATABASE: path.join(root, 'no-legacy.db'),
+      TTC_DESKTOP_PRODUCTION_URL: `http://127.0.0.1:${port}` });
+    const log = await fs.open(path.join(root, 'native.log'), 'wx');
+    const child = spawn(image, [], { env, cwd: root, stdio: ['ignore', log.fd, log.fd] });
+    const exited = new Promise((resolve, reject) => { child.once('exit', (code, signal) => resolve({ code, signal })); child.once('error', reject); });
+    try {
+      const deadline = Date.now() + 120000;
+      let result;
+      while (Date.now() < deadline) {
+        try { result = JSON.parse(await fs.readFile(path.join(root, 'native-result.json'))); break; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      assert.ok(result, `Native update timeout; inspect ${root}`);
+      assert.equal(result.passed, true, result.error);
+      assert.equal(result.scenario, scenario);
+      assert.equal((await exited).code, 0);
+      assert.equal(digest(await fs.readFile(image)), hashB);
+      console.log(`NATIVE_APPIMAGE_UPDATE ${scenario} passed: 0.1.0 -> 0.1.1, real FUSE/helper/replacement/restart/data/PDF; fixture feed and confirmation; evidence: ${root}`);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) { const forced = setTimeout(() => child.kill('SIGKILL'), 5000); child.kill('SIGTERM'); await exited; clearTimeout(forced); }
+      await log.close();
     }
-    assert.ok(result, `Native update timeout; inspect ${root}`);
-    assert.equal(result.passed, true, result.error);
-    assert.equal((await exited).code, 0);
-    assert.equal(digest(await fs.readFile(image)), hashB);
-    console.log(`NATIVE_APPIMAGE_UPDATE passed: 0.1.0 -> 0.1.1, real FUSE/helper/replacement/restart/data/PDF; fixture feed and confirmation; evidence: ${root}`);
-  } finally {
-    if (child.exitCode === null && child.signalCode === null) { const forced = setTimeout(() => child.kill('SIGKILL'), 5000); child.kill('SIGTERM'); await exited; clearTimeout(forced); }
-    await log.close();
   }
 }
 main().catch(error => { console.error(error.stack); process.exitCode = 1; });
