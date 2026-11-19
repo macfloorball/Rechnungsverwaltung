@@ -51,11 +51,26 @@ Versionswechsel sind sie erneut abzugleichen.
   [Quellarchiv des Autors](https://downloads.sourceforge.net/darkgarden/darkgarden-1.1.src.zip).
   Die Zuordnung mit Prüfsummen steht in `provenance.json`. Der Export des
   konkreten Type-1-Schriftprogramms wurde nicht bytegenau reproduziert.
-- **Adobe-/Monotype-Dateien**: Für die mitgelieferten AFM-Metriken und
-  PFB-Schriftprogramme von Arial, Times New Roman, Courier, Symbol,
-  Zapf Dingbats, AdobeSansMM und AdobeSerifMM bleibt der Nachweis der
-  Weitergaberechte offen. Adobes Core-14-AFM-Archiv enthält andere Metrikdateien
-  und sein Hinweis bezieht sich auf die darin enthaltenen AFMs.
+- **Adobe-/Monotype-Dateien**: Die Desktoppakete für Windows und Linux lassen
+  die folgenden AFM-Metriken und PFB-Schriftprogramme aus, da der Nachweis
+  der Weitergaberechte offen ist. Adobes Core-14-AFM-Hinweis bezieht sich auf
+  die Metriken in jenem Archiv.
+
+  | Schriftgruppe | Ausgelassene Dateien in `reportlab/fonts/` |
+  | --- | --- |
+  | Arial | `_a______.afm`, `_a______.pfb`, `_ab_____.afm`, `_ab_____.pfb`, `_abi____.afm`, `_abi____.pfb`, `_ai_____.afm`, `_ai_____.pfb` |
+  | Times New Roman | `_eb_____.afm`, `_eb_____.pfb`, `_ebi____.afm`, `_ebi____.pfb`, `_ei_____.afm`, `_ei_____.pfb`, `_er_____.afm`, `_er_____.pfb` |
+  | Courier | `cob_____.afm`, `cob_____.pfb`, `cobo____.afm`, `cobo____.pfb`, `com_____.afm`, `com_____.pfb`, `coo_____.afm`, `coo_____.pfb` |
+  | Symbol | `sy______.afm`, `sy______.pfb` |
+  | Zapf Dingbats | `zd______.afm`, `zd______.pfb` |
+  | AdobeSansMM | `zx______.afm`, `zx______.pfb` |
+  | AdobeSerifMM | `zy______.afm`, `zy______.pfb` |
+
+  Die Anwendung verwendet Helvetica und Helvetica-Bold als PDF-Standardfonts.
+  Symbol und ZapfDingbats stehen weiterhin als Standardfont-Fallbacks zur
+  Verfügung. ReportLabs optionale Einbettung über `std14Embed` und direkte
+  Registrierungen aus den ausgelassenen Dateien stehen in den Paketen nicht
+  zur Verfügung. Die Anwendung bietet dafür keine Einstellung.
 
 ## Direkte Python-Abhängigkeiten
 

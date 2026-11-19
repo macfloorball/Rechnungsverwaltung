@@ -1,4 +1,5 @@
 import base64
+import re
 from io import BytesIO
 from datetime import date
 from decimal import Decimal
@@ -66,6 +67,26 @@ def test_render_invoice_pdf_creates_complete_pdf_document() -> None:
 
     assert pdf.startswith(b"%PDF-")
     assert pdf.endswith(b"%%EOF\n")
+
+
+def test_invoice_pdf_uses_standard_fonts_and_symbol_fallbacks() -> None:
+    pdf = render_invoice_pdf(
+        2026,
+        11,
+        date(2026, 12, 1),
+        [InvoiceLine(
+            description="Übung für ÄÖÜ, äöü, ß · 30 € · Ω ✓",
+            training_date=date(2026, 11, 5),
+            hours=Decimal("2"),
+            amount_cents=3000,
+            unit_rate_cents=1500,
+        )],
+        3000,
+    )
+    assert set(re.findall(rb"/BaseFont /([^\s/>]+)", pdf)) == {
+        b"Helvetica", b"Helvetica-Bold", b"Symbol", b"ZapfDingbats",
+    }
+    assert b"/FontFile" not in pdf
 
 
 class RecordingCanvas:

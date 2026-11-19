@@ -3,6 +3,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { packageWindows } = require('./package_windows.cjs');
+const { copyDesktopRuntime } = require('./package_desktop_runtime.cjs');
 const { installerConfig } = require('./installer_config.cjs');
 const { createInstallationManifest, validateInstallation } = require('../electron/installation.cjs');
 const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
@@ -32,7 +33,7 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     if (policy) authenticode(path.join(destination, `${metadata.productName}.exe`), policy, true, release.version);
     const appRoot = path.join(destination, 'resources', 'app');
     const packagedPython = path.join(appRoot, 'runtime', 'python');
-    await fs.cp(runtime, packagedPython, { recursive: true });
+    await copyDesktopRuntime(runtime, packagedPython, 'win32');
     await fs.cp(path.join(root, 'third_party', 'licenses', 'desktop-windows'),
       path.join(packagedPython, 'licenses', 'desktop-windows'), { recursive: true });
     await fs.writeFile(path.join(appRoot, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
