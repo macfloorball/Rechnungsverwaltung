@@ -18,6 +18,28 @@ ersetzt keine mitgelieferten vollständigen Lizenztexte.
 - Das mit Linux-Python ausgelieferte pip enthält weitere Komponenten samt
   Lizenzdateien unter `pip/_vendor/` und `pip-*.dist-info/licenses/`.
 
+### Ergänzende Nachweise im Windows-Installer
+
+Unter `resources/app/runtime/python/licenses/desktop-windows/` liegen die
+Originaltexte mit Quellen und SHA-256-Prüfsummen in `provenance.json`:
+
+- distlib 0.4.0 (PSF-2.0) für die eingebetteten Launcher in
+  `fastapi.exe`, `idna.exe`, `normalizer.exe` und `uvicorn.exe`.
+- libmpdec 4.0.0 (BSD), Unicode Character Database 15.1.0 (Unicode License V3
+  und Release-Copyright-Hinweis) sowie die MIT-Copyright- und Lizenzangaben
+  aus dem von CPython 3.13.17 eingebundenen HACL*-Quellcode.
+- Noto Sans Khmer 2.004 (SIL OFL 1.1) für die bearbeitete Testschrift
+  `reportlab/fonts/hb-test.ttf` aus ReportLab 5.1.0.
+
+Der vollständige Expat-Text für CPythons Expat 2.8.5 steht bereits unter
+„Expat XML Parser“ in `LICENSES.chromium.html`. Derselbe Lizenztext und
+Copyright-Hinweis wie für CPythons zlib 1.3.1 steht dort im Abschnitt „zlib“
+mit der Versionsüberschrift 1.2.12. Die Überschrift bezeichnet den Eintrag
+der Chromium-Credits. Die CPython-Versionen sind in `provenance.json` belegt.
+
+Diese Zuordnungen beziehen sich auf die geprüfte Windows-Laufzeit. Bei einem
+Versionswechsel sind sie erneut abzugleichen.
+
 ## Direkte Python-Abhängigkeiten
 
 Stand der lokal geprüften Windows- und Linux-Laufzeiten: 16.11.2026.

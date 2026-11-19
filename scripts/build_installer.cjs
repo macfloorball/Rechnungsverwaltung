@@ -30,9 +30,12 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
   for (const destination of output) {
     // electron-builder skips app executable signing for prepackaged inputs.
     if (policy) authenticode(path.join(destination, `${metadata.productName}.exe`), policy, true, release.version);
-    await fs.cp(runtime, path.join(destination, 'resources', 'app', 'runtime', 'python'), { recursive: true });
-    await fs.writeFile(path.join(destination, 'resources', 'app', 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
     const appRoot = path.join(destination, 'resources', 'app');
+    const packagedPython = path.join(appRoot, 'runtime', 'python');
+    await fs.cp(runtime, packagedPython, { recursive: true });
+    await fs.cp(path.join(root, 'third_party', 'licenses', 'desktop-windows'),
+      path.join(packagedPython, 'licenses', 'desktop-windows'), { recursive: true });
+    await fs.writeFile(path.join(appRoot, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
     assertPackageRelease(appRoot, release);
     const appMetadata = JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8'));
     appMetadata.ttcDistribution = 'installer';
