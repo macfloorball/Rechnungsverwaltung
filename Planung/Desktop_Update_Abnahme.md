@@ -240,7 +240,7 @@ verschiedenen lokalen Dateisystemen testen.
 | Platz/Absturz/Parallelstart | Begrenztes Testvolume statt Hostdateisystem füllen; vor und nach atomarem Replace hart stoppen. Keine halbe ausführbare Datei, keine Datenlöschung. Journal meldet unbestätigten Abschluss; Sperre verhindert Parallelstart während der Übergabe. Nach Ersetzen kein automatischer Rücktausch. |
 | Offline/Wiederholung | A und B ohne Internet starten; Rechnungen/PDF/Sicherung vollständig lokal bedienen. Updatefehler beheben und manuell erneut prüfen. Downgrade bleibt gesperrt. |
 
-Die vorhandene lokale FUSE-Teststrecke kann alle sieben isolierten Szenarien
+Die vorhandene lokale FUSE-Teststrecke kann alle zehn isolierten Szenarien
 mit einem einzigen Paar temporärer Testimages ausführen:
 
 ```sh
@@ -248,7 +248,8 @@ node scripts/check_native_appimage_update.cjs /absoluter/Pfad/squashfs-root --al
 ```
 
 Alternativ das letzte Argument durch `success`, `offline`, `signature`, `hash`,
-`interrupted`, `defer` oder `cancel-install` ersetzen. Ohne letztes Argument wird
+`interrupted`, `defer`, `cancel-install`, `read-only`, `writable-directory` oder
+`hardlink` ersetzen. `--locations` führt nur die letzten drei Ortsprüfungen aus. Ohne letztes Argument wird
 nur `success` ausgeführt. Jeder Fall erhält eigene Profile und Dokumente. Vor
 der expliziten Wiederholung prüfen Fehlerfälle das unveränderte A-Image sowie
 Rechnung, PDF und Nummernkreis; danach folgt der echte FUSE-Wechsel zu B.
@@ -260,8 +261,10 @@ verwenden. Der Prüfer baut getrennte A/B-Testimages mit flüchtigem Testschlüs
 und künstlichen Commitdaten. Feed, Netzwerkfehler und Zustimmungen sind
 Testadapter; Windows-Metadaten sind ein Platzhalter. Die Strecke ist kein
 GitHub-Liverelease, keine Windows-Abnahme und kein vollständiger OS-Netzausfall.
-Systemabsturz, Ubuntu-Zielmatrix, ungeeignete Installationsorte und parallele
-Starts bleiben zusätzlich nach obigem Katalog zu prüfen. Testschlüssel dürfen
+Die Ortsprüfungen ändern ausschließlich temporäre Testverzeichnisse bzw.
+erzeugen einen eigenen Hardlink; anschließend werden sichere Bedingungen
+wiederhergestellt und das Update erneut angeboten. Systemabsturz, Ubuntu-
+Zielmatrix, systemweite/verlinkte Installationsorte und parallele Starts bleiben zusätzlich nach obigem Katalog zu prüfen. Testschlüssel dürfen
 nicht als Produktionsvertrauen ausgeliefert werden.
 
 DEB, RPM und Paketmanagerintegration sind nicht Teil dieser Abnahme. Details und

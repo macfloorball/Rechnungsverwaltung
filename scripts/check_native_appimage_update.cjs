@@ -17,9 +17,9 @@ const digest = b => createHash('sha256').update(b).digest('hex');
 async function main() {
   assert.equal(process.platform, 'linux'); assert.notEqual(process.getuid(), 0);
   assert.ok((await fs.stat('/dev/fuse')).isCharacterDevice());
-  const scenarios = ['success', 'offline', 'signature', 'hash', 'interrupted', 'defer', 'cancel-install'];
+  const scenarios = ['success', 'offline', 'signature', 'hash', 'interrupted', 'defer', 'cancel-install', 'read-only', 'writable-directory', 'hardlink'];
   const selection = process.argv[3] || 'success';
-  assert.ok(selection === '--all' || scenarios.includes(selection), 'unknown native scenario');
+  assert.ok(['--all', '--locations'].includes(selection) || scenarios.includes(selection), 'unknown native scenario');
   const source = path.resolve(process.argv[2]);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-native-update-'));
   await fs.chmod(root, 0o700);
@@ -64,7 +64,7 @@ async function main() {
       { id: 50, name: 'RELEASE_NOTES.md', size: 1, state: 'uploaded' }, { id: 60, name: 'SHA256SUMS', size: 1, state: 'uploaded' }]) };
   const imageASha256 = digest(await fs.readFile(images[0]));
   const buildRoot = root;
-  for (const scenario of selection === '--all' ? scenarios : [selection]) {
+  for (const scenario of selection === '--all' ? scenarios : selection === '--locations' ? scenarios.slice(-3) : [selection]) {
     const root = path.join(buildRoot, scenario);
     await fs.mkdir(root, { mode: 0o700 });
     const fixture = path.join(root, 'fixture.json');

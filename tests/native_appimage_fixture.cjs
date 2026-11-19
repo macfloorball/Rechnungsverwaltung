@@ -106,6 +106,18 @@ async function run() {
             assert.notEqual(updates.installer.getStatus()?.state, 'install_handoff');
             assert.equal(updates.installer.canInstall('0.1.1'), true);
           }
+          if (['read-only', 'writable-directory', 'hardlink'].includes(scenario)) {
+            const link = path.join(root, 'linked.AppImage');
+            try {
+              if (scenario === 'hardlink') await fsp.link(process.env.APPIMAGE, link);
+              else await fsp.chmod(root, scenario === 'read-only' ? 0o500 : 0o777);
+              await updates.controller.install('0.1.1');
+              assert.equal(updates.installer.getStatus().error.code, 'INSTALL_UNAVAILABLE');
+            } finally {
+              await fsp.chmod(root, 0o700);
+              if (scenario === 'hardlink') await fsp.unlink(link);
+            }
+          }
         }
       }
     }
