@@ -1,6 +1,6 @@
 ; Keep installation scope stable even if the installer is launched by an admin.
 !include WordFunc.nsh
-!include "${__FILEDIR__}/native_helpers.nsh"
+!include "${__FILEDIR__}\native_helpers.nsh"
 
 !macro customInit
   ; A command-line /D override could put program files in a data directory.

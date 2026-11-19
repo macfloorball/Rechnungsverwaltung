@@ -1,11 +1,11 @@
 $ErrorActionPreference = 'Stop'
 $cache = Join-Path $env:LOCALAPPDATA 'electron-builder/Cache'
-$compiler = @(Get-ChildItem $cache -Recurse -Filter makensis.exe | Where-Object FullName -Match 'nsis-3\.0\.4\.1[\\/]')
-$plugins = @(Get-ChildItem $cache -Recurse -Filter StdUtils.dll | Where-Object FullName -Match 'nsis-resources-3\.4\.1[\\/].*x86-unicode')
+$compiler = @(Get-ChildItem $cache -Recurse -Filter makensis.exe | Where-Object FullName -Match 'nsis-3\.0\.4\.1(?:[\\/]|-)')
+$plugins = @(Get-ChildItem $cache -Recurse -Filter StdUtils.dll | Where-Object FullName -Match 'nsis-resources-3\.4\.1(?:[\\/]|-).*x86-unicode')
 if ($compiler.Count -ne 1 -or $plugins.Count -ne 1) { throw 'Eindeutige festgelegte NSIS-Toolchain nicht gefunden.' }
 $env:TTC_MAKENSIS = $compiler[0].FullName
 $env:TTC_NSIS_PLUGINS = $plugins[0].DirectoryName
-$env:NSISDIR = $compiler[0].DirectoryName
+$env:NSISDIR = $compiler[0].Directory.Parent.FullName
 node --test scripts/installer_hooks.test.cjs
 if ($LASTEXITCODE) { throw 'Native Installer-Hook-Prüfung fehlgeschlagen.' }
 
