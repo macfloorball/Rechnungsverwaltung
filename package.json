@@ -1,9 +1,9 @@
 {
   "name": "ttc-rechnungsverwaltung",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "license": "MIT",
-  "description": "Lokale TT Rechnungsverwaltung f\u00fcr Windows und Linux",
+  "description": "Lokale TT Rechnungsverwaltung für Windows und Linux",
   "main": "electron/main.cjs",
   "scripts": {
     "desktop:version": "node scripts/desktop_release.cjs",

@@ -1178,7 +1178,7 @@ Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
 Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
 Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
 Ergebnis ohne Release-Tag:
-`dist/installer/TT Rechnungsverwaltung-0.1.0-windows-x64-development-setup.exe`.
+`dist/installer/TT Rechnungsverwaltung-0.1.1-windows-x64-development-setup.exe`.
 Produktionsbuilds behalten den Dateinamen ohne `-development`; Einzelheiten zur
 Versionsprüfung stehen unter [Desktop-Release-Versionierung](#desktop-release-versionierung).
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
@@ -1188,7 +1188,7 @@ Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
 ### Produktidentität
 
 App-Name: **TT Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
-Paketversion: **0.1.0** aus `package.json`. Das vorhandene TTC-Symbol wird
+Paketversion: **0.1.1** aus `package.json`. Das vorhandene TTC-Symbol wird
 für App, EXE und Installer verwendet. Der technische Profilname bleibt
 `ttc-rechnungsverwaltung`; eine Änderung der Herausgeberangabe verschiebt
 damit keine Bestandsdaten. AppUserModelID: `de.mac-floorball.ttc-rechnungsverwaltung`.
@@ -1205,7 +1205,7 @@ Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
 
 `package.json` bleibt die einzige Versionsquelle für die Desktop-App; die
 beiden Wurzelversionen in `package-lock.json` müssen übereinstimmen. Die aktuelle
-Version bleibt **0.1.0**. Die Backend-/Web-Versionierung wird nicht geändert.
+Version ist **0.1.1**. Die Backend-/Web-Versionierung wird nicht geändert.
 Versionsänderungen immer gemeinsam in Paket und Lockfile pflegen.
 
 ```sh
