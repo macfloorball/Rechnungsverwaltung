@@ -1,0 +1,193 @@
+{
+  "platform": "win32-x64",
+  "python": "3.13.17",
+  "pythonBinarySource": {
+    "url": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip",
+    "sha256": "9e35319bffedab8b36ad44d8f377cb4f1733bcec257a0b6d04d94f01486ddb38"
+  },
+  "components": [
+    {
+      "name": "distlib",
+      "version": "0.4.0",
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl",
+        "sha256": "9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16"
+      },
+      "evidence": "Each launcher starts with the exact distlib/t64.exe bytes from the wheel.",
+      "launcherPrefixSha256": "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7",
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/bin/fastapi.exe",
+          "sha256": "786c852bb6698759178bc934440a5dc325e82febd0e7b013d162efd2f8c1fd8e"
+        },
+        {
+          "path": "Lib/site-packages/bin/idna.exe",
+          "sha256": "4332d2fae6082e1c37af5f6ea7eaa55003249265cdba4825d244e02be03a6297"
+        },
+        {
+          "path": "Lib/site-packages/bin/normalizer.exe",
+          "sha256": "f9e53e2c993f580bce8e7848704c39b8094ebf127b4e8a4dcc3387d6b06bcdb0"
+        },
+        {
+          "path": "Lib/site-packages/bin/uvicorn.exe",
+          "sha256": "94e52c4b71259aca705009ae6b726091def099ca491edde75811eaffb418217e"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.distlib.txt",
+          "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d",
+          "sourceMember": "distlib-0.4.0.dist-info/LICENSE.txt"
+        }
+      ]
+    },
+    {
+      "name": "libmpdec",
+      "version": "4.0.0",
+      "source": {
+        "url": "https://www.bytereef.org/software/mpdecimal/releases/mpdecimal-4.0.0.tar.gz",
+        "sha256": "942445c3245b22730fd41a67a7c5c231d11cb1b9936b9c0f76334fb7d0b4468c"
+      },
+      "evidence": "_decimal.__libmpdec_version__ and CPython 3.13.17 PCbuild/get_externals.bat.",
+      "packageFiles": [
+        {
+          "path": "_decimal.pyd",
+          "sha256": "7e8e5d026e22be2669b2ac6175fece6b7fbe2faf1e456fa4785130832d244955"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.mpdecimal.txt",
+          "sha256": "2713324211652ce4a60e6e21e54f9dc3004299e591b0933a352f1a89c5fb53c2",
+          "sourceMember": "mpdecimal-4.0.0/COPYRIGHT.txt"
+        }
+      ]
+    },
+    {
+      "name": "Unicode Character Database",
+      "version": "15.1.0",
+      "source": {
+        "url": "https://www.unicode.org/Public/zipped/15.1.0/UCD.zip",
+        "sha256": "cb1c663d053926500cd501229736045752713a066bd75802098598b7a7056177"
+      },
+      "evidence": "unicodedata.unidata_version and the UCD ReadMe.txt for the release.",
+      "packageFiles": [
+        {
+          "path": "unicodedata.pyd",
+          "sha256": "541f46cf1ab49239b008a563eee6762086c7288f64631cb5cf59451cf22fc70c"
+        },
+        {
+          "path": "python313.dll",
+          "sha256": "26026530507a7389e7892ce130e7c1753b32a2df03ec3721d45ad8c1705d40eb"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.unicode.txt",
+          "sha256": "9ba0dc030e14ab692310b5395ea4f3a4921bcdbc1b9dbcebb1f81d83eb08f4e6",
+          "sourceUrl": "https://raw.githubusercontent.com/unicode-org/unicodetools/final-15.1-20230908/LICENSE"
+        },
+        {
+          "file": "NOTICE.unicode-ucd.txt",
+          "sha256": "0d2da782ead4e85630d510f50808355e8c3355e670841d257dd1e6fbd40db9fa",
+          "sourceMember": "ReadMe.txt"
+        }
+      ]
+    },
+    {
+      "name": "HACL*",
+      "version": "bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0",
+      "source": {
+        "url": "https://www.python.org/ftp/python/3.13.17/Python-3.13.17.tgz",
+        "sha256": "9cb057caa588f122577a5054a22531cd9c23ab6706f1a19bc95a55380a895177"
+      },
+      "evidence": "Modules/_hacl/refresh.sh pins the revision. PCbuild/pythoncore.vcxproj compiles all four vendored hash implementations, whose MIT headers are identical.",
+      "packageFiles": [
+        {
+          "path": "python313.dll",
+          "sha256": "26026530507a7389e7892ce130e7c1753b32a2df03ec3721d45ad8c1705d40eb"
+        }
+      ],
+      "copyrightHeaders": [
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_MD5.c",
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA1.c",
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA2.c",
+        "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA3.c"
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.hacl.txt",
+          "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c",
+          "sourceMember": "Python-3.13.17/Modules/_hacl/Hacl_Hash_SHA2.c"
+        }
+      ]
+    },
+    {
+      "name": "Noto Sans Khmer",
+      "version": "2.004",
+      "source": {
+        "url": "https://github.com/notofonts/khmer/releases/download/NotoSansKhmer-v2.004/NotoSansKhmer-v2.004.zip",
+        "sha256": "19382ca97d62febea1c735ebee35a5aa4f03beca9b6ea6f6d86b7a7a0025a688"
+      },
+      "reportlabSource": {
+        "url": "https://files.pythonhosted.org/packages/89/22/c18474be40b9bbb52fdb7051177d4d25f1ea59fada17eb181026411e93b1/reportlab-5.1.0.tar.gz",
+        "sha256": "6878200464527e87672d19e9f7cfc6bb890e3a6931e74ac6a1a8d1754aa55671",
+        "member": "reportlab-5.1.0/src/reportlab/fonts/hb-test.ttf"
+      },
+      "evidence": "ReportLab 5.1.0 ships a modified test subset. Identical to the sdist font, with the upstream Regular font copyright, unique name ID, PostScript name and matching outlines for several glyphs. The exact subsetting procedure is unknown.",
+      "packageFiles": [
+        {
+          "path": "Lib/site-packages/reportlab/fonts/hb-test.ttf",
+          "sha256": "4df8840ec8382efa2c06bda01e31e1a5a975cd46e13f7c0b0be696a8542f1ba0"
+        }
+      ],
+      "notices": [
+        {
+          "file": "LICENSE.noto-sans-khmer.txt",
+          "sha256": "be0407f060aea48787ff9e75d8d3aedef70aef113b3ce9aca26fdaacd10b1870",
+          "sourceMember": "OFL.txt"
+        }
+      ]
+    },
+    {
+      "name": "Expat",
+      "version": "2.8.5",
+      "source": {
+        "url": "https://www.python.org/ftp/python/3.13.17/Python-3.13.17.tgz",
+        "sha256": "9cb057caa588f122577a5054a22531cd9c23ab6706f1a19bc95a55380a895177"
+      },
+      "evidence": "pyexpat.EXPAT_VERSION. The full vendored COPYING text matches the Expat XML Parser section after decoding HTML entities and normalizing whitespace.",
+      "packageFiles": [
+        {
+          "path": "pyexpat.pyd",
+          "sha256": "4095f444c5d0fe9d24c1a46a8630459f8488c5392dc82be9af67f4045ea9c368"
+        }
+      ],
+      "existingNotice": {
+        "path": "LICENSES.chromium.html",
+        "section": "Expat XML Parser",
+        "sourceMember": "Python-3.13.17/Modules/expat/COPYING",
+        "sourceTextSha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
+      }
+    },
+    {
+      "name": "zlib",
+      "version": "1.3.1",
+      "source": {
+        "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE",
+        "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+      },
+      "evidence": "zlib.ZLIB_RUNTIME_VERSION and CPython 3.13.17 PCbuild/get_externals.bat. The credits section headed 1.2.12 contains the same copyright holders, years and license terms as the 1.3.1 LICENSE.",
+      "packageFiles": [
+        {
+          "path": "python313.dll",
+          "sha256": "26026530507a7389e7892ce130e7c1753b32a2df03ec3721d45ad8c1705d40eb"
+        }
+      ],
+      "existingNotice": {
+        "path": "LICENSES.chromium.html",
+        "section": "zlib (heading: version 1.2.12)"
+      }
+    }
+  ]
+}
