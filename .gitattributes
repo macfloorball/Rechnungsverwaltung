@@ -1,1 +1,2 @@
 third_party/licenses/desktop-windows/*.txt -text
+third_party/licenses/pydantic-core/*.txt text eol=lf

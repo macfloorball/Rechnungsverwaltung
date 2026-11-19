@@ -1522,5 +1522,14 @@
       "file": "zmij-1.0.6.txt",
       "sha256": "199ab054effaa00ce820dfab70194cc7309f2bfd6fbdfb21fa9f04af2d6e0f65"
     }
-  ]
+  ],
+  "windowsWheel": {
+    "url": "https://files.pythonhosted.org/packages/e7/e0/95b651213e79ffe0cbee855590bf5cfdf8e3a0d90a7fc73a080e63f7cc38/pydantic_core-2.50.4-cp313-cp313-win_amd64.whl",
+    "sha256": "4c29b8f2d6417069bb1f257e6b9113f5d64dc2f554cc200ea90b4fe2c5cdb733",
+    "nativeMember": "pydantic_core/_pydantic_core.cp313-win_amd64.pyd",
+    "nativeSha256": "c9f3e057f95bf8796675cdd7fc7483ea0df577186f44683d11cb312cce65baf4",
+    "sbomMember": "pydantic_core-2.50.4.dist-info/sboms/pydantic-core.cyclonedx.json",
+    "sbomSha256": "01609396af3687beeaf139336a36295a1a44532df30cea0e96929dc78ace806d",
+    "evidence": "Wheel extension byte-equal to packaged .pyd. Every SBOM crate name, version and archive SHA-256 equals the collection. The SBOM includes build and target-specific crates; it is not a link map."
+  }
 }

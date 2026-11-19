@@ -36,6 +36,8 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     await copyDesktopRuntime(runtime, packagedPython, 'win32');
     await fs.cp(path.join(root, 'third_party', 'licenses', 'desktop-windows'),
       path.join(packagedPython, 'licenses', 'desktop-windows'), { recursive: true });
+    await fs.cp(path.join(root, 'third_party', 'licenses', 'pydantic-core'),
+      path.join(packagedPython, 'licenses', 'pydantic-core'), { recursive: true });
     await fs.writeFile(path.join(appRoot, 'packaged-runtime.json'), JSON.stringify({ python: manifest.python }));
     assertPackageRelease(appRoot, release);
     const appMetadata = JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8'));
