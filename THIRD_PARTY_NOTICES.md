@@ -123,8 +123,10 @@ Versionswechsel sind sie erneut abzugleichen.
   sowie aus den bytegleich zugeordneten UAC-, StdUtils-, Nsis7z- und
   nsProcess-Archiven mit. Für StdUtils enthält es den LGPL-Zusatz des
   Autors. Erforderliche Quellbereitstellung bleibt Teil der Veröffentlichung.
-  Für die zugeordneten Fassungen von WinShell und nsProcess ist ein
-  belastbarer Nachweis des Weitergaberechts noch offen.
+  WinShell und nsProcess werden deshalb nicht mehr eingebettet. Prozessprüfung,
+  AppUserModel-ID und Shell-Bereinigung verwenden dokumentierte Windows-APIs
+  über das mit NSIS lizenzierte System-Plugin. Die Zuordnung der früheren
+  Plugin-Dateien bleibt zur Nachvollziehbarkeit in der Provenienz erhalten.
 
 ### Weitere Schriften in ReportLab 5.1.0
 

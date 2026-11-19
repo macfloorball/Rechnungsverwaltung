@@ -602,7 +602,8 @@
             "sha256": "fc19fc66a5219a233570fafd5daeb0c9b85387b379f6df5ac8898159a57c5944"
           },
           "vendorMember": "Plugin/nsProcessW.dll",
-          "open": "Byte match establishes origin. The applicable redistribution permission has not been verified."
+          "open": "Byte match establishes origin. The applicable redistribution permission has not been verified.",
+          "distribution": "Excluded from newly built installers; replaced by Windows APIs via the NSIS System plugin."
         },
         {
           "name": "WinShell.dll",
@@ -613,7 +614,8 @@
             "sha256": "34e111f8aacf64c540d848fd06b9d6f3e2c10cb825ec9329a01d1141973e749b"
           },
           "vendorMember": "Plugins/x86-unicode/WinShell.dll",
-          "open": "Byte match establishes origin. The applicable redistribution permission has not been verified."
+          "open": "Byte match establishes origin. The applicable redistribution permission has not been verified.",
+          "distribution": "Excluded from newly built installers; replaced by Windows APIs via the NSIS System plugin."
         }
       ]
     }

@@ -115,6 +115,9 @@ jobs:
       - run: python scripts/prepare_windows_runtime.py dist/python-windows
       - run: npm run desktop:installer:win
       - run: node scripts/check_installer.cjs
+      - name: Native installer process and Shell hooks
+        shell: pwsh
+        run: ./scripts/check_native_installer_hooks.ps1
       - name: Verify packaged runtime
         shell: pwsh
         run: |

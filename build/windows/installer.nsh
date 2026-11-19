@@ -1,5 +1,6 @@
 ; Keep installation scope stable even if the installer is launched by an admin.
 !include WordFunc.nsh
+!include "${__FILEDIR__}/native_helpers.nsh"
 
 !macro customInit
   ; A command-line /D override could put program files in a data directory.
@@ -49,10 +50,8 @@
 
 ; Never kill a live app/backend during installation or uninstallation.
 !macro customCheckAppRunning
-  nsProcess::_FindProcess "${APP_EXECUTABLE_FILENAME}"
-  Pop $R0
-  ; nsProcess: only 603 positively confirms that no matching process exists.
-  ${If} $R0 != 603
+  !insertmacro TTC_CheckProcess "${APP_EXECUTABLE_FILENAME}"
+  ${If} $TTCNativeStatus != 0
     ${IfNot} ${Silent}
       MessageBox MB_OK|MB_ICONSTOP "Die App läuft noch oder ihr Prozessstatus ist nicht sicher prüfbar. Bitte Vorgänge abschließen und die App vollständig beenden. Es werden keine Prozesse erzwungen beendet."
     ${EndIf}

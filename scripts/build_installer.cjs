@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { packageWindows } = require('./package_windows.cjs');
 const { copyDesktopRuntime } = require('./package_desktop_runtime.cjs');
 const { installerConfig } = require('./installer_config.cjs');
+const { withNsisTemplates } = require('./nsis_templates.cjs');
 const { createInstallationManifest, validateInstallation } = require('../electron/installation.cjs');
 const { getDesktopRelease, assertPackageRelease } = require('./desktop_release.cjs');
 const { loadPolicy } = require('./release_policy.cjs');
@@ -54,8 +55,9 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     // A failed compiler/Wine run must not replace a usable installer with its
     // small intermediate uninstaller generator.
     config.directories.output = staging;
-    const artifacts = await build({ projectDir: root, prepackaged: output[0],
-      targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), config, publish: 'never' });
+    const artifacts = await withNsisTemplates(path.join(staging, 'templates'), () =>
+      build({ projectDir: root, prepackaged: output[0],
+        targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), config, publish: 'never' }));
     const installers = artifacts.filter((name) => name.endsWith('.exe'));
     if (!installers.length) throw Error('Installer wurde nicht erzeugt.');
     const checksums = [];
