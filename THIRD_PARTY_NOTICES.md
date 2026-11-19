@@ -63,6 +63,14 @@ Der Programmordner enthält `resources/app` und die Electron-Dateien (bei Linux
 `squashfs-root`, bei Windows das entpackte Programmverzeichnis). Der Bericht
 enthält relative Pfade und SHA-256 der vorhandenen Lizenznachweise, Python-
 Paketmetadaten sowie native Laufzeitdateien und Schriften zur weiteren Prüfung.
+Für native Laufzeitdateien und Schriften nennt `distributionOwners` die
+liefernde Python-Distribution anhand ihrer `RECORD`-Datei. Leere Zuordnungen
+bleiben ausdrücklich offen, insbesondere Dateien der eingebetteten Python-
+Laufzeit. Eine solche Dateizuordnung bestätigt keine Lizenz der enthaltenen
+Unterkomponenten. Beispielsweise bleiben Pillow-Bibliotheken und die einzelnen
+ReportLab-Schriften trotz zugeordneter Distribution separat zu prüfen.
+Zusätzliche Lizenzdateien mit Namen wie `bitstream-vera-license.txt` oder
+`DarkGarden-copying-gpl.txt` werden mit Pfad und Hash erfasst.
 Die Ausgabedatei muss neu sein. Fehlende bekannte Hauptnachweise führen zu
 Exitcode 1. Ein fehlerfreies Inventar bestätigt vorhandene Dateien; die
 vollständige Zuordnung nativer Unterkomponenten, erforderliche Quellangebote
