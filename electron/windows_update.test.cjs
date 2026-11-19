@@ -193,6 +193,29 @@ Journal 'installed'
   assert.deepEqual(await fs.readdir(root), ['state.json']);
 });
 
+test('Windows helper releases the profile lock before showing the failure message', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { spawnSync } = require('node:child_process');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-helper-failure-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const fixture = { lock: path.join(root, 'update.lock'), journal: path.join(root, 'state.json'), version: '0.1.2', currentVersion: '0.1.1' };
+  const encoded = Buffer.from(JSON.stringify(fixture)).toString('base64');
+  const helper = require('./windows_update_helper.cjs').replace('  $env:PSModulePath =', `
+  $context = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')) | ConvertFrom-Json
+  $lock = [IO.File]::Open($context.lock,'Create','ReadWrite','None')
+  $committed = $true
+  throw 'DISPOSABLE_TEST_FAILURE'
+  $env:PSModulePath =`).replace(/^    try \{ Add-Type.*MessageBox.*$/m, `
+    $probe = [IO.File]::Open($context.lock,'Open','ReadWrite','None')
+    $probe.Dispose()
+    [Console]::Out.WriteLine('LOCK_RELEASED')`);
+  const result = spawnSync(path.win32.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(helper, 'utf16le').toString('base64')],
+    { timeout: 15000, windowsHide: true, encoding: 'utf8' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /LOCK_RELEASED/);
+  assert.equal(JSON.parse(await fs.readFile(fixture.journal, 'utf8')).phase, 'failed');
+});
+
 test('Windows update registry identity remains the existing NSIS app GUID', () => {
   const { UUID } = require('builder-util-runtime');
   const { installerConfig } = require('../scripts/installer_config.cjs');

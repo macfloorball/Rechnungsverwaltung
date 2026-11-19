@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 Set-StrictMode -Version Latest
-$lock = $null; $package = $null; $context = $null; $committed = $false
+$lock = $null; $package = $null; $context = $null; $committed = $false; $failed = $false
 function HashBytes($bytes) {
   $sha = [Security.Cryptography.SHA256]::Create()
   try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
@@ -120,13 +120,19 @@ try {
   $restart.FileName = $context.executable; $restart.WorkingDirectory = $context.directory; $restart.UseShellExecute = $false
   [void][Diagnostics.Process]::Start($restart)
 } catch {
+  $failed = $true
   if ($null -ne $context -and $committed) {
     try { Journal 'failed' } catch {}
-    try { Add-Type -AssemblyName System.Windows.Forms; [void][Windows.Forms.MessageBox]::Show('Das Update wurde abgebrochen oder konnte nicht vollständig geprüft werden. Persönliche Daten bleiben erhalten. Bitte die App manuell starten oder den vollständigen geprüften Installer verwenden.','TT Rechnungsverwaltung - Update') } catch {}
   } else { try { [Console]::Out.WriteLine('TTC_UPDATE_REJECTED'); [Console]::Out.Flush() } catch {} }
-  exit 1
 } finally {
   if ($null -ne $package) { $package.Dispose() }
   if ($null -ne $lock) { $lock.Dispose() }
+}
+if ($failed) {
+  if ($committed) {
+    # Release the installer and profile lock before waiting for dismissal.
+    try { Add-Type -AssemblyName System.Windows.Forms; [void][Windows.Forms.MessageBox]::Show('Das Update wurde abgebrochen oder konnte nicht vollständig geprüft werden. Persönliche Daten bleiben erhalten. Bitte die App manuell starten oder den vollständigen geprüften Installer verwenden.','TT Rechnungsverwaltung - Update') } catch {}
+  }
+  exit 1
 }
 `;
