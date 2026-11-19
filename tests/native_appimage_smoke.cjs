@@ -32,12 +32,13 @@ async function evaluate(url, expression) {
 }
 async function main() {
   assert.equal(process.platform, 'linux'); assert.notEqual(process.getuid(), 0);
-  const source = path.resolve(process.argv[2]);
-  assert.ok((await fs.stat('/dev/fuse')).isCharacterDevice(), '/dev/fuse required');
+  const rpm = process.argv[2] === '--rpm';
+  const source = path.resolve(process.argv[rpm ? 3 : 2]);
+  if (!rpm) assert.ok((await fs.stat('/dev/fuse')).isCharacterDevice(), '/dev/fuse required');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ttc-native-appimage-'));
   await fs.chmod(root, 0o700);
-  const image = path.join(root, 'TTC.AppImage');
-  await fs.copyFile(source, image); await fs.chmod(image, 0o700);
+  const image = rpm ? source : path.join(root, 'TTC.AppImage');
+  if (!rpm) { await fs.copyFile(source, image); await fs.chmod(image, 0o700); }
   const data = path.join(root, 'data'), documents = path.join(root, 'documents');
   const state = { sourceSha256: hash(await fs.readFile(source)), cycles: [] };
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('TTC_') && !key.startsWith('APPIMAGE')
@@ -77,9 +78,14 @@ async function main() {
       assert.equal(metadata.desktopUpdateTrust.enabled, false, 'native smoke only accepts development trust');
       const mountInfo = await fs.readFile(`/proc/${child.pid}/mountinfo`, 'utf8');
       await fs.writeFile(path.join(root, `mount-${cycle}.txt`), mountInfo.split('\n').filter(line => line.includes(mount)).join('\n'));
+      if (!rpm) {
       const capability = await probeAppImage({ mountInfo: async () => mountInfo, app: { isPackaged: true, getAppPath: () => path.join(mount, 'resources/app'), getPath: () => executable },
         env: { APPIMAGE: image, APPDIR: mount } });
       assert.equal(capability.target, image);
+      } else {
+        assert.equal(metadata.ttcDistribution, 'rpm');
+        require('../electron/installation.cjs').validateInstallation(path.join(mount, 'resources/app'), true, 'linux');
+      }
       const pageDeadline = Date.now() + 10000;
       while (!await evaluate(target.webSocketDebuggerUrl, "typeof window.ttcDesktop?.getVersion === 'function' && document.readyState === 'complete'")) {
         assert.ok(Date.now() < pageDeadline, 'packaged preload must become ready');
@@ -87,6 +93,12 @@ async function main() {
       }
       const version = await evaluate(target.webSocketDebuggerUrl, 'window.ttcDesktop.getVersion()');
       assert.equal(version.ok, true);
+      if (rpm) {
+        const updates = await evaluate(target.webSocketDebuggerUrl, 'window.ttcDesktop.getUpdateStatus()');
+        assert.equal(updates.ok, true);
+        assert.equal(updates.value.state, 'disabled');
+        assert.equal(updates.value.reason, 'package_manager');
+      }
       if (cycle === 0) {
         await request('PUT', '/api/organization/settings', { recipient_name: 'Native FUSE Test', invoice_number_prefix: 'FUSE' });
         const activity = (await request('PUT', '/api/settings', { activities: [{ name: 'Test Training', hourly_rate_cents: 1500 }] })).activities[0];
@@ -102,7 +114,7 @@ async function main() {
         assert.equal(hash(await request('GET', `/api/invoices/${expected.invoiceId}/pdf`)), expected.pdfSha256);
         assert.equal(hash(await fs.readFile(path.join(documents, expected.pdfPath))), expected.pdfSha256);
       }
-      state.cycles.push({ version, mount, realFuseCapability: true, invoice: expected });
+      state.cycles.push({ version, mount, realFuseCapability: !rpm, packageManager: rpm ? 'dnf' : null, invoice: expected });
       await evaluate(target.webSocketDebuggerUrl, 'setTimeout(() => window.close(), 50); true');
       const timeout = setTimeout(() => child.kill('SIGTERM'), 20000);
       const result = await exited; clearTimeout(timeout);
@@ -114,6 +126,6 @@ async function main() {
     }
   }
   await fs.writeFile(path.join(root, 'result.json'), JSON.stringify(state, null, 2), { mode: 0o600 });
-  console.log(`NATIVE_APPIMAGE_SMOKE passed: FUSE, sandbox, PDF persistence, clean shutdown/restart; evidence: ${root}`);
+  console.log(`${rpm ? 'NATIVE_RPM_SMOKE passed: DNF update mode' : 'NATIVE_APPIMAGE_SMOKE passed: FUSE'}, sandbox, PDF persistence, clean shutdown/restart; evidence: ${root}`);
 }
 main().catch(error => { console.error(error.stack || JSON.stringify(error)); process.exitCode = 1; });
