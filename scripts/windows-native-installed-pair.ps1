@@ -49,8 +49,9 @@ switch ($Step) {
         $env = @{ TTC_WINDOWS_NATIVE_FIXTURE=$fixture; TTC_DATA_DIRECTORY=(Join-Path $fixture 'data');
             TTC_DOCUMENT_DIRECTORY=(Join-Path $fixture 'Eigene Belege'); TTC_LEGACY_DATABASE=(Join-Path $fixture 'no-legacy.db');
             TTC_DESKTOP_PRODUCTION_URL=$origin }
-        $proc = Start-Process -FilePath $current.Exe -Environment $env -WorkingDirectory $fixture -PassThru `
-            -RedirectStandardOutput (Join-Path $fixture "$Step.stdout.log") -RedirectStandardError (Join-Path $fixture "$Step.stderr.log")
+        # Match a normal GUI launch. Redirecting stdout masks invalid inherited
+        # handles in the bundled backend and can hide shutdown failures.
+        $proc = Start-Process -FilePath $current.Exe -Environment $env -WorkingDirectory $fixture -PassThru
         [pscustomobject]@{Id=$proc.Id;Origin=$origin} | ConvertTo-Json
     }
     'CheckB' {

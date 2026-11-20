@@ -17,7 +17,9 @@ test('installed build uses embedded Python exclusively and rejects missing runti
   const directory = path.join(root, 'runtime', 'python');
   fs.mkdirSync(directory, { recursive: true });
   fs.writeFileSync(path.join(directory, 'python.exe'), 'fixture');
-  assert.equal(launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root, 'win32').python, path.join(directory, 'python.exe'));
+  const config = launchConfig('desktop-production', { TTC_PYTHON: '/other/python' }, root, 'win32');
+  assert.equal(config.python, path.join(directory, 'python.exe'));
+  assert.equal(config.backendStdout, 'ignore');
 });
 
 test('Linux package uses isolated bundled Python instead of host overrides', (t) => {
@@ -51,6 +53,7 @@ test('production ignores development URL and uses build without reload', () => {
   assert.throws(() => launchConfig('desktop-production', { TTC_DESKTOP_PRODUCTION_URL: 'https://example.org' }), /lokale HTTP-Origin/);
 });
 test('web start uses source files; reload only in development', () => {
+  assert.equal(launchConfig('web').backendStdout, 'inherit');
   assert.ok(!launchConfig('web').args.includes('--reload'));
   assert.ok(launchConfig('web-dev').args.includes('--reload'));
   assert.equal(launchConfig('web').desktop, false);
