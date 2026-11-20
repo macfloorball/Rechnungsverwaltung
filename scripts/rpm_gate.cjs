@@ -60,6 +60,6 @@ if (require.main === module) (async () => {
   if (process.env.GITHUB_EVENT_NAME !== 'push' || process.env.GITHUB_REF_TYPE !== 'tag' || process.env.GITHUB_REPOSITORY !== policy.repository
       || process.env.GITHUB_REF_NAME !== process.env.TTC_RPM_RELEASE_TAG) throw Error('RPM-Tag-Push im festgelegten Repository erforderlich.');
   const release = rpmRelease(root, { release: Number(process.env.TTC_RPM_RELEASE_NUMBER) });
-  await checkRpmGate(githubAPI(process.env.GITHUB_TOKEN), policy, release);
+  await checkRpmGate(githubAPI(process.env.DESKTOP_POLICY_READ_TOKEN || process.env.GITHUB_TOKEN), policy, release);
   console.log(`RPM-Freigabebedingungen geprüft: ${release.tag} (${release.commit})`);
 })().catch(error => { console.error(error.message); process.exitCode = 1; });

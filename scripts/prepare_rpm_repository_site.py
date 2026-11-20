@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.rpm_repository import verify_metadata, fingerprint, site_texts
 
 
-def unpack(archive, public_key, output, expected_fingerprint, base_url):
+def unpack(archive, public_key, output, expected_fingerprint, base_url, history=False):
     if output.exists() or fingerprint(public_key) != expected_fingerprint:
         raise ValueError('New output and pinned public key required')
     with tarfile.open(archive) as source:
@@ -26,7 +26,7 @@ def unpack(archive, public_key, output, expected_fingerprint, base_url):
     if {p.name for p in output.iterdir()} != {'rpm'} or {p.name for p in root.iterdir()} != set(expected) | {'keys', 'repodata'}:
         raise ValueError('Unexpected Pages contents')
     for name, value in expected.items():
-        if (root/name).read_text() != value:
+        if not history and (root/name).read_text() != value:
             raise ValueError('Modified repository bootstrap content')
     keys = list((root/'keys').iterdir())
     if len(keys) != 1 or keys[0].name != expected_fingerprint+'.asc' or keys[0].read_bytes() != public_key.read_bytes():

@@ -32,7 +32,9 @@ function githubAPI(token, fetchImpl = fetch) {
     }
     throw Error('GitHub-Liste überschreitet das sichere Seitenlimit.');
   }
-  async function verifyAsset(repository, asset, expected) {
+  async function verifyAsset(repository, asset, expected, collect = false) {
+    if (!Number.isSafeInteger(expected.size) || expected.size < 0 || !/^[a-f0-9]{64}$/.test(expected.sha256 || '')) throw Error('Ungültige Asset-Prüfdaten.');
+    if (collect && expected.size > 64 * 1024 * 1024) throw Error('Repository-Archiv ist zu groß.');
     if (!Number.isSafeInteger(asset.id) || asset.id <= 0) throw Error('Ungültige Asset-ID.');
     let url = `https://api.github.com/repos/${repository}/releases/assets/${asset.id}`;
     let authorization = true;
@@ -53,14 +55,16 @@ function githubAPI(token, fetchImpl = fetch) {
       }
       if (!response.ok || !response.body) throw new GitHubError(response.status);
       let size = 0;
+      const chunks = [];
       const digest = createHash('sha256');
       for await (const chunk of response.body) {
         size += chunk.length;
         if (size > expected.size) throw Error('Uploadprüfung: Asset ist größer als erwartet.');
         digest.update(chunk);
+        if (collect) chunks.push(Buffer.from(chunk));
       }
       if (size !== expected.size || digest.digest('hex') !== expected.sha256) throw Error('Uploadprüfung: Asset-Prüfsumme stimmt nicht überein.');
-      return;
+      return collect ? Buffer.concat(chunks) : undefined;
     }
     throw Error('Zu viele GitHub-Downloadumleitungen.');
   }

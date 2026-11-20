@@ -28,6 +28,9 @@ def must_fail(function):
 
 def main(first, second, output):
     first, second, output = Path(first).resolve(), Path(second).resolve(), Path(output).resolve()
+    first_version = run(['rpm', '-qp', '--queryformat', '%{VERSION}-%{RELEASE}', first])
+    second_version = run(['rpm', '-qp', '--queryformat', '%{VERSION}-%{RELEASE}', second])
+    assert first_version != second_version
     with tempfile.TemporaryDirectory(prefix='ttc-dnf-native-') as temporary:
         root = Path(temporary)
         home = root/'gnupg'; home.mkdir(mode=0o700)
@@ -71,7 +74,7 @@ def main(first, second, output):
             (repo/'repodata/repomd.xml').write_bytes(original)
             verify_metadata(repo, public)
             dnf('--refresh', 'install', 'ttc-rechnungsverwaltung')
-            assert run(['rpm', '-q', '--queryformat', '%{RELEASE}', 'ttc-rechnungsverwaltung']) == '0.1.dev'
+            assert run(['rpm', '-q', '--queryformat', '%{VERSION}-%{RELEASE}', 'ttc-rechnungsverwaltung']) == first_version
             data = Path('/root/.config/ttc-rechnungsverwaltung'); data.mkdir(parents=True, exist_ok=True)
             database = data/'acceptance.sqlite3'
             with sqlite3.connect(database) as connection:
@@ -89,18 +92,18 @@ def main(first, second, output):
                 assert child.stdout.readline().strip() == 'ready', child.stderr.read()
                 blocked = subprocess.run(['dnf', '-y', '--refresh', 'upgrade', 'ttc-rechnungsverwaltung'], capture_output=True, text=True)
                 assert blocked.returncode != 0 and 'läuft noch' in blocked.stdout+blocked.stderr, blocked.stdout+blocked.stderr
-                assert run(['rpm', '-q', '--queryformat', '%{RELEASE}', 'ttc-rechnungsverwaltung']) == '0.1.dev'
+                assert run(['rpm', '-q', '--queryformat', '%{VERSION}-%{RELEASE}', 'ttc-rechnungsverwaltung']) == first_version
             finally:
                 child.terminate(); child.wait(timeout=10)
             dnf('upgrade', 'ttc-rechnungsverwaltung')
-            assert run(['rpm', '-q', '--queryformat', '%{RELEASE}', 'ttc-rechnungsverwaltung']) == '0.2.dev'
+            assert run(['rpm', '-q', '--queryformat', '%{VERSION}-%{RELEASE}', 'ttc-rechnungsverwaltung']) == second_version
             assert hashlib.sha256(database.read_bytes()).hexdigest() == before
             dnf('remove', 'ttc-rechnungsverwaltung')
             assert not Path(executable).exists()
             assert hashlib.sha256(database.read_bytes()).hexdigest() == before
             result = dict(passed=True, packageSignaturesVerified=True, tamperedRpmRejected=True,
                           unsignedRpmRejected=True, tamperedMetadataRejectedByDnf=True,
-                          installed='0.1.1-0.1.dev', upgraded='0.1.1-0.2.dev',
+                          installed=first_version, upgraded=second_version,
                           runningApplicationBlockedUpgrade=True, dataSurvivedUpgradeAndRemoval=True,
                           signingKey=key, disposableTestKey=True)
             output.parent.mkdir(parents=True, exist_ok=True); output.write_text(json.dumps(result, indent=2)+'\n')
