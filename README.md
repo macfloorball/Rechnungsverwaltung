@@ -16,7 +16,7 @@ Die fertige App benötigt **kein separat installiertes Python, Node.js, npm oder
 Git**. Die [deutschsprachige Installationsanleitung](Planung/Installation.md)
 erklärt Download, Installation, Start, Updates, Datensicherung und Fehlerhilfe.
 
-- **Windows x64:** [Setup-EXE im stabilen Desktop-Release 0.1.2](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.1.2).
+- **Windows x64:** [Setup-EXE im stabilen Desktop-Release 0.1.3](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.1.3).
 - **Linux x86_64:** AppImage im selben Desktop-Release.
 - **Fedora 45 x86_64:** Installation und Updates über das
   [signierte DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/).
@@ -27,7 +27,7 @@ stehen in der Anleitung. Die vollständige Windows-Live-Abnahme aus
 [Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32) bleibt offen.
 
 Windows 0.1.0/0.1.1 benötigt wegen eines Fehlers in der Updateübergabe einmal
-das manuelle vollständige Setup von 0.1.2 über die bestehende Installation.
+ein manuelles vollständiges Setup ab Version 0.1.2 über die bestehende Installation.
 Vorher sichern und die App schließen; Details stehen in der Installationsanleitung.
 
 Die folgenden Python-/npm-Befehle beschreiben die **Entwicklung und den Start aus
@@ -1213,7 +1213,7 @@ Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
 Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
 Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
 Ergebnis ohne Release-Tag:
-`dist/installer/TT Rechnungsverwaltung-0.1.2-windows-x64-development-setup.exe`.
+`dist/installer/TT Rechnungsverwaltung-0.1.3-windows-x64-development-setup.exe`.
 Produktionsbuilds behalten den Dateinamen ohne `-development`; Einzelheiten zur
 Versionsprüfung stehen unter [Desktop-Release-Versionierung](#desktop-release-versionierung).
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
@@ -1223,7 +1223,7 @@ Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
 ### Produktidentität
 
 App-Name: **TT Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
-Paketversion: **0.1.2** aus `package.json`. Das vorhandene TTC-Symbol wird
+Paketversion: **0.1.3** aus `package.json`. Das vorhandene TTC-Symbol wird
 für App, EXE und Installer verwendet. Der technische Profilname bleibt
 `ttc-rechnungsverwaltung`; eine Änderung der Herausgeberangabe verschiebt
 damit keine Bestandsdaten. AppUserModelID: `de.mac-floorball.ttc-rechnungsverwaltung`.
@@ -1240,7 +1240,7 @@ Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
 
 `package.json` bleibt die einzige Versionsquelle für die Desktop-App; die
 beiden Wurzelversionen in `package-lock.json` müssen übereinstimmen. Die aktuelle
-Version ist **0.1.2**. Die Backend-/Web-Versionierung wird nicht geändert.
+Version ist **0.1.3**. Die Backend-/Web-Versionierung wird nicht geändert.
 Versionsänderungen immer gemeinsam in Paket und Lockfile pflegen.
 
 ```sh
