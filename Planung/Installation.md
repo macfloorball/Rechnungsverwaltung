@@ -77,7 +77,6 @@ wird das bestehende Profil wiederverwendet.
    mkdir -p "$HOME/Anwendungen/TT-Rechnungsverwaltung"
    cd "$HOME/Anwendungen/TT-Rechnungsverwaltung"
    chmod u+rwx ttc-rechnungsverwaltung-0.1.1-linux-x64.AppImage
-   ./ttc-rechnungsverwaltung-0.1.1-linux-x64.AppImage
    ```
 
 2. Optional `SHA256SUMS` vom Desktop-Release in denselben Ordner herunterladen
@@ -87,10 +86,16 @@ wird das bestehende Profil wiederverwendet.
    sha256sum ttc-rechnungsverwaltung-0.1.1-linux-x64.AppImage
    ```
 
-   Bei Abweichung nicht starten. Die Prüfung dann vor dem ersten Start durchführen.
-3. Später dieselbe Datei im Dateimanager öffnen oder den letzten Startbefehl
-   wiederholen. Ein automatischer Menüeintrag wird für das AppImage nicht zugesagt.
-   Die App als eigenen Benutzer starten.
+   Bei Abweichung nicht starten.
+3. Die Datei im Dateimanager öffnen oder im Terminal starten:
+
+   ```sh
+   cd "$HOME/Anwendungen/TT-Rechnungsverwaltung"
+   ./ttc-rechnungsverwaltung-0.1.1-linux-x64.AppImage
+   ```
+
+   Später denselben Start wiederholen. Ein automatischer Menüeintrag wird für das
+   AppImage nicht zugesagt. Die App als eigenen Benutzer starten.
 
 ### FUSE und Linux-Voraussetzungen
 
