@@ -55,8 +55,11 @@ Workflow übernimmt sie nur aus zuvor signierten, geprüften Archiven.
 
 ## Einmalige Einrichtung durch den Repository-Verantwortlichen
 
-Die produktive Veröffentlichung bleibt durch `enabled: false` gesperrt, bis
-folgende Einrichtung ausdrücklich freigegeben und durchgeführt wurde:
+Die produktive Einrichtung wurde ausdrücklich freigegeben. Der festgelegte
+öffentliche Schlüssel hat den Fingerprint
+`60A054FE46173E3741B60A37186ED775C7DC9771` und eine zweijährige Gültigkeit ab
+2026-11-20. Die folgenden Schritte beschreiben die Einrichtung; eine neue
+Einrichtung oder Schlüsselrotation benötigt wieder eine ausdrückliche Freigabe:
 
 1. Einen separaten produktiven RSA-Signierschlüssel erzeugen und geschützt sichern.
    Öffentlichen ASCII-Schlüssel unter `build/linux/rpm/RPM-GPG-KEY-ttc.asc`

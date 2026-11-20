@@ -1362,7 +1362,7 @@ Schutzprüfungen für Datenlöschung, Installationspfad und Downgrade aus.
 
 ### Fedora: Installation und Updates über DNF
 
-Eine eigene signierte RPM-Distribution wird zusätzlich zum AppImage vorbereitet.
-Sie installiert einen Menüeintrag und aktualisiert sich über DNF. Die produktive
-Freigabe steht noch aus. Einrichtung, Build und Veröffentlichungsablauf sind in
+Zusätzlich zum AppImage gibt es eine eigene signierte RPM-Distribution.
+Sie installiert einen Menüeintrag und aktualisiert sich über DNF.
+Installation, Einrichtung, Build und Veröffentlichungsablauf sind in
 [Linux RPM-Repository](Planung/Linux_RPM_Repository.md) beschrieben.

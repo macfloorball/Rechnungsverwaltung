@@ -1,11 +1,11 @@
 {
   "formatVersion": 1,
-  "enabled": false,
+  "enabled": true,
   "repository": "macfloorball/Rechnungsverwaltung",
   "repositoryId": 1447003404,
   "environment": "rpm-repository",
   "baseUrl": "https://macfloorball.github.io/Rechnungsverwaltung/rpm/",
-  "keyFingerprint": null,
+  "keyFingerprint": "60A054FE46173E3741B60A37186ED775C7DC9771",
   "publicKeyFile": "build/linux/rpm/RPM-GPG-KEY-ttc.asc",
-  "publicKeySha256": null
+  "publicKeySha256": "13ce80bde3f986f8b3ef2619c58085f069e02fe1c00eb00358d12e78c7c1cd4a"
 }
