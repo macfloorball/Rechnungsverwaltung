@@ -1,6 +1,6 @@
 # TT Rechnungsverwaltung
 
-Eine lokale Webanwendung mit zusätzlichem Electron-Desktop-Grundgerüst zur
+Eine lokale Anwendung mit fertiger Electron-Desktop-App und Weboberfläche zur
 Verwaltung von Trainingsterminen und zur Erstellung monatlicher Rechnungen
 für einen Tischtennisverein. Das Projekt
 verbindet eine FastAPI-Schnittstelle mit einer browserbasierten Oberfläche,
@@ -9,6 +9,25 @@ SQLite und PDF-Rechnungserstellung.
 > **Portfolio-Hinweis:** Die Anwendung enthält keine Benutzerkonten oder
 > Authentifizierung. Sie ist für den lokalen Betrieb gedacht und sollte nicht
 > ungeschützt über ein Netzwerk oder das Internet erreichbar gemacht werden.
+
+## App herunterladen und installieren
+
+Die fertige App benötigt **kein separat installiertes Python, Node.js, npm oder
+Git**. Die [deutschsprachige Installationsanleitung](Planung/Installation.md)
+erklärt Download, Installation, Start, Updates, Datensicherung und Fehlerhilfe.
+
+- **Windows x64:** [Setup-EXE im stabilen Desktop-Release 0.1.1](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.1.1).
+- **Linux x86_64:** AppImage im selben Desktop-Release.
+- **Fedora 45 x86_64:** Installation und Updates über das
+  [signierte DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/).
+
+Der Windows-Installer besitzt derzeit keine Authenticode-Signatur; Windows kann
+Warnungen anzeigen. Details und die Grenzen der bisherigen nativen Prüfungen
+stehen in der Anleitung. Die vollständige Windows-Live-Abnahme aus
+[Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32) bleibt offen.
+
+Die folgenden Python-/npm-Befehle beschreiben die **Entwicklung und den Start aus
+dem Quellcode**, nicht die Installation der fertigen App.
 
 ## Lizenz
 
@@ -56,7 +75,7 @@ Das Frontend wird vom FastAPI-Backend ausgeliefert und kommuniziert mit ihm
 über die API. Es gibt keinen Frontend-Bundler; für den Desktop-Produktionsstart
 kopiert `npm run frontend:build` die Dateien nach `dist/frontend`.
 
-## Voraussetzungen
+## Entwicklung: Voraussetzungen
 
 - Python 3.10 oder neuer
 - `pip`
@@ -64,7 +83,7 @@ kopiert `npm run frontend:build` die Dateien nach `dist/frontend`.
 Die folgenden Schritte sind für Linux/macOS geschrieben. Unter Windows kann
 die virtuelle Umgebung mit `.venv\Scripts\activate` aktiviert werden.
 
-## Installation und Start
+## Entwicklung: Installation und Start aus dem Quellcode
 
 ```bash
 git clone https://github.com/macfloorball/Rechnungsverwaltung.git
@@ -161,7 +180,7 @@ versionsgebunden. Die zusätzlichen JavaScript-Abhängigkeiten sind über
 
 # TTC Invoice Management
 
-A local web application with an additional Electron desktop shell for managing
+A local application with a packaged Electron desktop app and a web interface for managing
 training sessions and creating monthly invoices for a table-tennis club. It combines a FastAPI backend, a browser-based
 interface, SQLite persistence, and PDF invoice generation.
 
@@ -194,7 +213,14 @@ The FastAPI backend serves the frontend, which communicates with it through the
 API. There is no frontend bundler; `npm run frontend:build` copies the static
 files to `dist/frontend` for desktop production mode.
 
-## Requirements
+## Download and install the desktop app
+
+Use the [German installation guide](Planung/Installation.md) for Windows Setup,
+Linux AppImage and Fedora DNF. Packaged apps include their runtimes; Python,
+Node.js, npm and Git are not installation prerequisites. The commands below
+are for development and running from source.
+
+## Development requirements
 
 - Python 3.10 or newer
 - `pip`
@@ -202,7 +228,7 @@ files to `dist/frontend` for desktop production mode.
 The commands below are for Linux/macOS. On Windows, activate the virtual
 environment with `.venv\Scripts\activate`.
 
-## Install and run
+## Development: install and run from source
 
 ```bash
 git clone https://github.com/macfloorball/Rechnungsverwaltung.git
@@ -270,13 +296,14 @@ the operating-system level, especially on shared machines.
 
 Python dependencies are listed in `requirements.txt` and are not currently
 pinned. JavaScript dependencies are locked in `package-lock.json`. Electron
-owns the local Python backend during desktop use; Python and its packages
-are still external prerequisites of the Phase 1 Windows test build. Native
-Windows execution has not yet been verified.
+owns the local Python backend during desktop use. Packaged releases include
+Python and its dependencies. Native Windows 11 installation and data-preservation
+tests are partially documented in [the historical test record](Planung/Windows_Installationspruefung.md);
+the full Windows live-update acceptance remains open in issue #32.
 
 ## Electron: Entwicklung und Produktionsstart
 
-Der Desktop-Start benötigt Python mit den Paketen aus `requirements.txt`.
+Der Desktop-Start aus dem Quellcode benötigt Python mit den Paketen aus `requirements.txt`.
 Zum Entwickeln, Testen und Bauen zusätzlich Node.js ab 22.12 und npm:
 
 ```bash
@@ -1107,7 +1134,8 @@ Sie veröffentlicht keine produktiven Releases. Linux-Buildanleitung und
 Abnahmegrenzen stehen ebenfalls dort.
 
 Der getrennte [Desktop-Release-Workflow](Planung/Desktop_Release_Einrichtung.md)
-ist für ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags vorbereitet. Er verwendet
+veröffentlicht ausdrücklich freigegebene `desktop-vX.Y.Z`-Tags. Die stabilen
+Desktop-Releases 0.1.0 und 0.1.1 sind veröffentlicht. Er verwendet
 dasselbe inzwischen öffentliche Repository. Windows nutzt ausdrücklich den Modus
 `ed25519-only` ohne Authenticode; das gemeinsame Ed25519-Manifest bleibt für beide
 Plattformen verpflichtend. Das produktive Ed25519-Vertrauen und das geschützte
@@ -1123,12 +1151,14 @@ manuelle Prüfung und persönlichen GitHub-Zugang. Der
 [verifizierte Paketdownload](Planung/Desktop_Update_Download.md) ist nach
 Nutzerzustimmung implementiert. Die
 [Windows-Installationsübergabe](Planung/Desktop_Windows_Update.md) nutzt den
-vorhandenen sichtbaren NSIS-Installer nach erneuter Bestätigung. Native Windows-
-Abnahme und produktive Vertrauensinfrastruktur stehen aus; ohne konfigurierte
-Vertrauensdaten bleibt der Updateweg gesperrt. Der
+vorhandenen sichtbaren NSIS-Installer nach erneuter Bestätigung. Das produktive
+Ed25519-Vertrauen ist eingerichtet; die vollständige Windows-Live-Abnahme steht
+weiterhin aus. Ohne konfigurierte Vertrauensdaten bleibt der Updateweg gesperrt. Der
 [Linux-AppImage-Updateweg](Planung/Desktop_Linux_Update.md) ersetzt benutzereigene,
 sicher beschreibbare AppImages nach Bestätigung atomar. Bei ungeeigneten Pfaden
-bleibt die manuelle Aktualisierung vorgesehen; DEB/RPM werden nicht eingeführt.
+bleibt die manuelle Aktualisierung vorgesehen. Daneben ist eine eigene signierte
+RPM-Distribution veröffentlicht, deren Updates DNF verwaltet; DEB-Pakete werden
+nicht angeboten.
 [Offlinebetrieb und Fehlerbehandlung](Planung/Desktop_Update_Fehlerbehandlung.md)
 sichern Abbruch, konkurrierende Aktionen und Neustart-Bereinigung ab.
 Die [Regressionstestmatrix](Planung/Desktop_Update_Tests.md) beschreibt die
@@ -1136,13 +1166,14 @@ automatisierten Prüfungen und grenzt echte Linux-/Electron-Ausführung von
 Testadaptern und noch ausstehender nativer Installationsabnahme ab.
 Die [Release- und Abnahmeanleitung](Planung/Desktop_Update_Abnahme.md) führt durch
 GitHub-Einrichtung, Freigabe, native Windows-/Linux-Prüfungen mit zwei Versionen,
-Datenerhaltsvergleich und manuelle Wiederherstellung. Der lokale Probelauf ist
-geprüft; signierter Live-Release und native Installationsabnahme stehen aus.
+Datenerhaltsvergleich und manuelle Wiederherstellung. Signierte Desktop-Livereleases
+sind veröffentlicht; dies ersetzt nicht die noch offene vollständige native
+Windows- und gemeinsame Live-A/B-Abnahme.
 
 Das Repository ist laut aktuellem Arbeitsauftrag öffentlich. Die
 [Freigabevorbereitung](Planung/Repository_Public_Freigabe.md) bleibt als historischer
 Prüfstand erhalten; sie belegt keine erledigten Lizenzpflichten für Binärpakete.
-Der [aktuelle Umsetzungsstand](Planung/Desktop_Update_Stand_2026-11-18.md) trennt
+Der [historische Umsetzungsstand vom 18.11.2026](Planung/Desktop_Update_Stand_2026-11-18.md) trennt
 bestandene automatische Tests und den nativen Linux-Testwechsel mit Testfeed
 von ausstehender Gesamt-Abnahme und Einrichtung. Restaufgaben stehen in
 [Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32).
@@ -1334,11 +1365,13 @@ digitale Signatur. Datenprofile werden weder gehasht noch in das Paket aufgenomm
 Windows-Backendausgaben werden für die Electron-Prozessschnittstelle als UTF-8
 übertragen, auch bei einer anderen Windows-Konsolencodierung.
 
-Der Installer unterstützt Windows 10/11 x64. Native Installations-, Rechte-,
-SmartScreen-, Verknüpfungs- und Deinstallationstests sowie der Versionswechsel
-sind noch in der Windows-VM abzunehmen. Die unabhängige zweite Windows-Umgebung
-bleibt ebenfalls offen. Der nächste praktische Schritt ist die
-[Windows-Abnahmeanleitung](Planung/Windows_Installationspruefung.md).
+Der Installer ist für Windows 10/11 x64 vorgesehen. Das
+[native Teilprotokoll vom 13.11.2026](Planung/Windows_Installationspruefung.md)
+belegt in einer Windows-11-VM Installation, Start ohne Entwicklungswerkzeuge,
+Desktop-Verknüpfung, Neuinstallation und Datenerhalt bei einem Versionswechsel.
+Die dort benannten offenen Rechte-, SmartScreen- und weiteren Prüffälle, die
+unabhängige zweite Windows-Umgebung sowie die vollständige aktuelle Live-Abnahme
+bleiben offen; Windows 10 ist damit nicht als nativ abgenommen erklärt.
 
 Linux bleibt für Entwicklung, Webbetrieb und Tests unterstützt. Ein Windows-
 Crossbuild benötigt unter Linux zusätzlich ein funktionsfähiges Wine. Es kann
