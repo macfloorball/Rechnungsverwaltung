@@ -1359,3 +1359,10 @@ ausschließlich temporäre Profile und ein fremdes Arbeitsverzeichnis.
 Die NSIS-Compilerprüfung benötigt `TTC_MAKENSIS` und `TTC_NSIS_PLUGINS`
 (das Verzeichnis der x86-unicode-Plugins). Mit Wine führt sie auch die
 Schutzprüfungen für Datenlöschung, Installationspfad und Downgrade aus.
+
+### Fedora: Installation und Updates über DNF
+
+Zusätzlich zum AppImage gibt es eine eigene signierte RPM-Distribution.
+Sie installiert einen Menüeintrag und aktualisiert sich über DNF.
+Installation, Einrichtung, Build und Veröffentlichungsablauf sind in
+[Linux RPM-Repository](Planung/Linux_RPM_Repository.md) beschrieben.

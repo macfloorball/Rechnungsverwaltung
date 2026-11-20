@@ -161,3 +161,15 @@ test('old RPC snapshots cannot replace newer download progress and cancellation 
   assert.equal(ui.get('desktop-update-cancel').hidden, true);
   ui.dispose();
 });
+
+
+test('RPM installations explain DNF ownership and offer no competing update action', async () => {
+  const f = fixture({ state: 'disabled', reason: 'package_manager', requiresAuthentication: false });
+  await flush();
+  assert.match(f.get('desktop-update-status').textContent, /Softwareverwaltung \(DNF\)/);
+  assert.equal(f.get('check-desktop-updates').disabled, true);
+  assert.equal(f.get('install-desktop-update').hidden, true);
+  assert.equal(f.get('desktop-update-dialog').open, false);
+  assert.deepEqual(f.calls, []);
+  f.dispose();
+});

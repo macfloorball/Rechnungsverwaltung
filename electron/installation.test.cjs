@@ -102,3 +102,23 @@ test('AppImage validates its own runtime and rejects Windows or altered Linux fi
   fs.writeFileSync(interpreter, 'changed interpreter');
   assert.throws(() => validate(root, true, 'linux'), /beschädigt/);
 });
+
+
+test('RPM startup retains complete file validation and requires package-manager metadata', (t) => {
+  const { requiredFiles } = require('./installation.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-rpm-installation-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const name of requiredFiles('linux')) {
+    fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+    fs.writeFileSync(path.join(root, name), 'fixture');
+  }
+  const metadata = { version: '0.1.1', main: 'electron/bootstrap.cjs', ttcDistribution: 'rpm',
+    desktopAppId: 'de.mac-floorball.ttc-rechnungsverwaltung', desktopUpdateTrust: { enabled: false },
+    desktopRelease: { formatVersion: 1, version: '0.1.1', channel: 'development', tag: null, commit: null },
+    rpmRelease: { formatVersion: 1, version: '0.1.1', release: 1, channel: 'development', tag: null, commit: null } };
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(metadata));
+  fs.writeFileSync(path.join(root, 'installation-manifest.json'), JSON.stringify(createInstallationManifest(root, 'linux')));
+  assert.equal(validate(root, true, 'linux'), true);
+  fs.writeFileSync(path.join(root, 'backend/main.py'), 'corrupted');
+  assert.throws(() => validate(root, true, 'linux'), /beschädigt/);
+});

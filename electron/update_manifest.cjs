@@ -11,6 +11,11 @@ const hex = (value, length) => typeof value === 'string' && value.length === len
 const positive = (value) => Number.isSafeInteger(value) && value > 0;
 
 function configuration(metadata, { packaged, currentVersion, platform, arch }) {
+  if (packaged && platform === 'linux' && arch === 'x64' && metadata.ttcDistribution === 'rpm') {
+    if (metadata.version !== currentVersion) invalid();
+    require('./rpm_package.cjs').validateRpmMetadata(metadata);
+    return { enabled: false, reason: 'package_manager' };
+  }
   if (!packaged || metadata.desktopRelease?.channel !== 'stable') return { enabled: false, reason: 'development' };
   if (metadata.desktopUpdateTrust?.enabled !== true) return { enabled: false, reason: 'not_configured' };
   if (arch !== 'x64' || !['win32', 'linux'].includes(platform)

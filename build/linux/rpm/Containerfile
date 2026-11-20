@@ -1,0 +1,2 @@
+FROM registry.fedoraproject.org/fedora@sha256:3156944cdf17f20c4076165836538075ef3f0f8252d4b00522b49cefd58056bb
+RUN dnf -y install git rpm-build rpm-sign createrepo_c gnupg2 python3 nodejs cpio binutils procps-ng diffutils && dnf clean all

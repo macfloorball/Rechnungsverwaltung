@@ -6,7 +6,7 @@ const { validateReleaseMetadata } = require('./version.cjs');
 
 const REQUIRED_FILES = [
   'package.json', 'packaged-runtime.json', 'electron/bootstrap.cjs', 'electron/main.cjs', 'electron/installation.cjs', 'electron/version.cjs',
-  'electron/windows_trust.cjs', 'electron/updates.cjs', 'electron/update_manifest.cjs', 'electron/update_transport.cjs', 'electron/update_credentials.cjs',
+  'electron/rpm_package.cjs', 'electron/windows_trust.cjs', 'electron/updates.cjs', 'electron/update_manifest.cjs', 'electron/update_transport.cjs', 'electron/update_credentials.cjs',
   'electron/update_controller.cjs', 'electron/update_download.cjs', 'electron/windows_update.cjs', 'electron/windows_update_helper.cjs',
   'backend/desktop_update_gate.py', 'backend/linux_update_helper.py', 'electron/linux_update.cjs',
   'scripts/run.cjs', 'scripts/managed_server.py', 'backend/main.py',
@@ -42,9 +42,11 @@ function validateInstallation(root, installed = false, platform = process.platfo
   if (!installed && !fs.existsSync(path.join(root, 'packaged-runtime.json'))) return false;
   try {
     const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-    if (metadata.ttcDistribution !== (platform === 'linux' ? 'appimage' : 'installer') || typeof metadata.desktopAppId !== 'string' ||
+    const distributions = platform === 'linux' ? ['appimage', 'rpm'] : ['installer'];
+    if (!distributions.includes(metadata.ttcDistribution) || typeof metadata.desktopAppId !== 'string' ||
         !metadata.desktopAppId || metadata.main !== 'electron/bootstrap.cjs') throw Error();
     validateReleaseMetadata(metadata.desktopRelease, metadata.version);
+    if (metadata.ttcDistribution === 'rpm') require('./rpm_package.cjs').validateRpmMetadata(metadata);
     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'installation-manifest.json'), 'utf8'));
     if (manifest.formatVersion !== 1 || !manifest.files || Array.isArray(manifest.files)) throw Error();
     // Preserve compatibility with existing Windows format-1 manifests.
@@ -64,4 +66,4 @@ function validateInstallation(root, installed = false, platform = process.platfo
     throw Error('Die Installation ist unvollständig oder beschädigt. Anwendung mit dem vollständigen Installer reparieren. Persönliche Daten bleiben erhalten.');
   }
 }
-module.exports = { REQUIRED_FILES, createInstallationManifest, validateInstallation };
+module.exports = { REQUIRED_FILES, requiredFiles, createInstallationManifest, validateInstallation };

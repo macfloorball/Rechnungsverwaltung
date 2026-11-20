@@ -38,3 +38,11 @@ test('API errors omit response bodies and authenticated API requests never auto-
   await assert.rejects(api.request('GET', '/repos/owner/repo'), (error) => error.status === 403 && !error.message.includes('secret'));
   assert.throws(() => githubAPI(''));
 });
+
+test('repository archive collection remains bounded and returns only verified bytes', async () => {
+  const bytes = Buffer.from('small signed repository archive'); let calls = 0;
+  const api = githubAPI('test', async () => { calls++; return new Response(bytes); });
+  assert.deepEqual(await api.verifyAsset('owner/repository', { id: 1 }, { size: bytes.length, sha256: sha256(bytes) }, true), bytes);
+  for (const size of [64 * 1024 * 1024 + 1, NaN, -1]) await assert.rejects(api.verifyAsset('owner/repository', { id: 1 }, { size, sha256: sha256(bytes) }, true));
+  assert.equal(calls, 1);
+});
