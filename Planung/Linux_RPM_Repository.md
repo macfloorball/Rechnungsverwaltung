@@ -85,7 +85,9 @@ zurück; der Workflow überschreibt oder löscht keine Releases.
 
 Ein zweiter geschützter Job prüft das signierte Archiv, den festgelegten Schlüssel
 und die aus dem Quellcode erzeugten Installationshinweise, bevor er Pages ausrollt.
-Er benötigt keinen privaten Signierschlüssel. Die beiden Freigaben bleiben bestehen.
+Er benötigt keinen privaten Signierschlüssel. Vor dem Pages-Deployment muss der
+Tag weiterhin den neuesten veröffentlichten RPM-Release bezeichnen; Wiederholungen
+älterer Jobs dürfen das Repository nicht zurücksetzen. Die beiden Freigaben bleiben bestehen.
 Bei einem Pages-Fehler nach erfolgreicher RPM-Veröffentlichung nur den fehlgeschlagenen
 Pages-Job innerhalb der siebentägigen Artefaktaufbewahrung erneut ausführen;
 keinen Ersatz-Release für denselben Tag erstellen. Bis zum Pages-Erfolg bleibt

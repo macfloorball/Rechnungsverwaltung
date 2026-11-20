@@ -14,6 +14,13 @@ function newerOrEqual(tag, release) {
   const order = compareVersions(match[1], release.version);
   return order > 0 || (order === 0 && Number(match[2]) >= release.release);
 }
+async function checkPagesRelease(api, policy, release) {
+  const releases = await api.pages(`/repos/${policy.repository}/releases`);
+  const stable = releases.filter(x => !x.draft && !x.prerelease);
+  if (!stable.some(x => x.tag_name === release.tag) || stable.some(x => x.tag_name !== release.tag && newerOrEqual(x.tag_name, release))) {
+    throw Error('Pages darf ausschließlich den neuesten veröffentlichten RPM-Release bereitstellen.');
+  }
+}
 async function publishRpm({ api, policyAPI = api, policy, release, prepare, gate = checkRpmGate }) {
   const base = `/repos/${policy.repository}`;
   async function existing(exclude = null) {
@@ -62,6 +69,12 @@ async function main() {
   const root = path.join(__dirname, '..'); const policy = loadRpmPolicy(root);
   if (process.env.GITHUB_EVENT_NAME !== 'push' || process.env.GITHUB_REF_TYPE !== 'tag' || process.env.GITHUB_REPOSITORY !== policy.repository || process.env.GITHUB_REF_NAME !== process.env.TTC_RPM_RELEASE_TAG) throw Error('Exakter RPM-Tag-Push erforderlich.');
   const release = rpmRelease(root, { release: Number(process.env.TTC_RPM_RELEASE_NUMBER) });
+  if (process.argv.includes('--verify-pages')) {
+    const api = githubAPI(process.env.GITHUB_TOKEN);
+    await checkRpmGate(githubAPI(process.env.DESKTOP_POLICY_READ_TOKEN || process.env.GITHUB_TOKEN), policy, release);
+    await checkPagesRelease(api, policy, release);
+    console.log(`Pages-Freigabe für neuesten RPM-Release geprüft: ${release.tag}`); return;
+  }
   const key = process.env.RPM_REPOSITORY_PRIVATE_KEY;
   delete process.env.RPM_REPOSITORY_PRIVATE_KEY;
   if (!key?.includes('-----BEGIN PGP PRIVATE KEY BLOCK-----')) throw Error('Privater RPM-Schlüssel fehlt.');
@@ -83,5 +96,5 @@ async function main() {
     console.log(`RPM-Release veröffentlicht: ${result.html_url}`);
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 }
-module.exports = { publishRpm, newerOrEqual };
+module.exports = { publishRpm, newerOrEqual, checkPagesRelease };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

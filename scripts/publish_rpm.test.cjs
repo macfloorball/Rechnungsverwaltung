@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { publishRpm, newerOrEqual } = require('./publish_rpm.cjs');
+const { publishRpm, newerOrEqual, checkPagesRelease } = require('./publish_rpm.cjs');
 function fixture({ existing = [], badUpload = false, extra = false, invalidKey = false, revoke = false } = {}) {
   const release = { version: '0.1.1', release: 2, tag: 'rpm-v0.1.1-2', channel: 'stable', commit: 'a'.repeat(40) };
   const assets = []; const events = []; let checks = 0;
@@ -46,4 +46,14 @@ test('bad downloads, extra assets and withdrawn authorization leave RPM draft un
   for (const settings of [{ badUpload: true }, { extra: true }, { revoke: true }]) {
     const f = fixture(settings); await assert.rejects(publishRpm(f.options)); assert.equal(f.events.includes('PATCH'), false);
   }
+});
+
+test('rerunning an old Pages job cannot roll back a newer published repository', async () => {
+  const { policy, release } = fixture().options;
+  const check = items => checkPagesRelease({ pages: async () => items }, policy, release);
+  const current = { tag_name: release.tag, draft: false, prerelease: false };
+  await check([current, { tag_name: 'desktop-v99.0.0' }]);
+  await assert.rejects(check([]));
+  await assert.rejects(check([{ ...current, draft: true }]));
+  await assert.rejects(check([current, { tag_name: 'rpm-v0.1.1-3', draft: false, prerelease: false }]));
 });

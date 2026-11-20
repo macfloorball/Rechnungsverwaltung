@@ -137,7 +137,7 @@ jobs:
         with:
           node-version: '24.22.3'
           package-manager-cache: false
-      - run: node scripts/rpm_gate.cjs
+      - run: node scripts/publish_rpm.cjs --verify-pages
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DESKTOP_POLICY_READ_TOKEN: ${{ secrets.DESKTOP_POLICY_READ_TOKEN }}
