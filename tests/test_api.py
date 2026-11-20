@@ -3253,7 +3253,12 @@ def test_ten_activities_preserve_plan_training_and_final_invoice(client):
                 "is_active": False} for i, a in enumerate(activities)]
     assert client.put("/api/settings", json={"activities": changed}).status_code == 200
     assert client.get("/api/weekly-plan").json() == saved_plans
-    assert client.put("/api/weekly-plan", json=[{**{key: p[key] for key in ("id", "weekday", "activity_type_id", "is_active")}, "hours": int(p["hours"])} for p in saved_plans]).status_code == 200
+    retained_plans = [
+        {**{key: plan[key] for key in ("id", "weekday", "activity_type_id", "is_active")},
+         "hours": int(plan["hours"])}
+        for plan in saved_plans
+    ]
+    assert client.put("/api/weekly-plan", json=retained_plans).status_code == 200
     assert client.put("/api/weekly-plan", json=plans).status_code == 422
     assert client.post("/api/trainings", json={"training_date": "2020-02-15",
         "activity_type_id": activities[-1]["id"], "hours": 1}).status_code == 404

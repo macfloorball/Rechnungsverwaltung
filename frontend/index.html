@@ -95,8 +95,8 @@
             </div>
           </div>
           <p class="section-description">
-            Verwalte bis zu vier Tätigkeiten. Deaktiviere verwendete Tätigkeiten,
-            statt sie zu löschen.
+            Verwalte bis zu zehn insgesamt angelegte Tätigkeiten einschließlich deaktivierter Einträge.
+            Gespeicherte Tätigkeiten bleiben erhalten; deaktiviere sie bei Bedarf.
           </p>
           <form id="activity-settings-form">
             <div class="settings-table-wrapper">
@@ -106,11 +106,15 @@
                     <th scope="col">Tätigkeit</th>
                     <th scope="col">Stundenpreis (€)</th>
                     <th scope="col">Aktiv</th>
+                    <th scope="col">Speicherstatus</th>
                   </tr>
                 </thead>
                 <tbody id="activity-settings-rows"></tbody>
               </table>
             </div>
+            <p id="activity-empty">Noch keine Tätigkeiten. Füge die erste Tätigkeit hinzu.</p>
+            <p id="activity-capacity" role="status"></p>
+            <button id="add-activity" class="secondary-button" type="button" aria-describedby="activity-capacity">+ Tätigkeit hinzufügen</button>
             <p id="activity-settings-error" class="error-message" role="alert" hidden></p>
             <p id="activity-settings-success" class="success-message" role="status" hidden></p>
             <button id="save-activity-settings" class="primary-button" type="submit">

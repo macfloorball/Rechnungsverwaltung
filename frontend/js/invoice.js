@@ -115,7 +115,7 @@ export function initializeInvoicePreview() {
   const now = new Date();
   monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  monthInput.addEventListener("input", () => {
+  function invalidatePreview() {
     previewPeriod = null;
     errorMessage.hidden = true;
     preview.hidden = true;
@@ -124,7 +124,9 @@ export function initializeInvoicePreview() {
     createError.hidden = true;
     openPdfLink.hidden = true;
     downloadPdfLink.hidden = true;
-  });
+  }
+  monthInput.addEventListener("input", invalidatePreview);
+  document.addEventListener("activities-updated", invalidatePreview);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
