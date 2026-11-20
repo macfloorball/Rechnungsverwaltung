@@ -1267,7 +1267,7 @@ def test_existing_training_can_keep_its_now_inactive_activity_when_edited(client
 def test_inactive_activities_do_not_generate_or_accept_new_appointments(client, calendar_activities):
     inactive = calendar_activities[2]["id"]
     assert client.post("/api/trainings", json={"training_date": "2032-02-29", "activity_type_id": inactive}).status_code == 404
-    assert client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": inactive, "hours": 1}]).status_code == 200
+    assert client.put("/api/weekly-plan", json=[{"weekday": 0, "activity_type_id": inactive, "hours": 1}]).status_code == 422
     assert all(not day["trainings"] for day in client.get("/api/calendar/2032/2").json()["days"])
 
 
@@ -3154,3 +3154,111 @@ def test_delete_after_another_request_completed_returns_not_found_and_preserves_
     assert list_records("invoices", database_path=database) == []
     assert get_organization(database)["next_invoice_number"] == sequence
     assert not list(client.app.state.test_invoice_directory.iterdir())
+
+
+@pytest.mark.parametrize("count", [0, 1, 4, 5, 10, 11])
+def test_dynamic_activity_capacity(client, count):
+    activities = [{"name": f"Tätigkeit {i}", "hourly_rate_cents": 1234,
+                   "is_active": i % 2 == 0} for i in range(count)]
+    response = client.put("/api/settings", json={"activities": activities})
+    assert response.status_code == (422 if count > 10 else 200)
+    saved = client.get("/api/settings").json()["activities"]
+    assert len(saved) == (0 if count > 10 else count)
+    # A fresh client/connection reads the persisted records, with stable IDs.
+    with TestClient(app) as restarted:
+        assert restarted.get("/api/settings").json()["activities"] == saved
+
+
+def test_activity_limit_counts_omitted_and_inactive_records(client):
+    saved = client.put("/api/settings", json={"activities": [
+        {"name": f"Alt {i}", "hourly_rate_cents": 100, "is_active": False}
+        for i in range(10)
+    ]}).json()["activities"]
+    response = client.put("/api/settings", json={"activities": [
+        {"id": saved[0]["id"], "name": "Geändert", "hourly_rate_cents": 200},
+        {"name": "Elfte", "hourly_rate_cents": 100},
+    ]})
+    assert response.status_code == 422
+    assert client.get("/api/settings").json()["activities"] == saved
+    assert client.put("/api/settings", json={"activities": []}).json()["activities"] == saved
+    edited = {key: saved[0][key] for key in ("id", "name", "hourly_rate_cents", "is_active")}
+    edited["is_active"] = True
+    response = client.put("/api/settings", json={"activities": [edited]})
+    assert response.status_code == 200
+    assert {item["id"] for item in response.json()["activities"]} == {item["id"] for item in saved}
+    assert client.put("/api/settings", json={"activities": [edited, edited]}).status_code == 422
+
+
+@pytest.mark.parametrize("invalid", [
+    {"name": "   ", "hourly_rate_cents": 100},
+    {"name": "X", "hourly_rate_cents": -1},
+    {"name": "X", "hourly_rate_cents": 1.5},
+    {"name": "X", "hourly_rate_cents": True},
+    {"name": "X", "hourly_rate_cents": 10000000000},
+])
+def test_invalid_activity_batch_is_atomic(client, invalid):
+    assert client.put("/api/settings", json={"activities": [
+        {"name": "Valid", "hourly_rate_cents": 1}, invalid,
+    ]}).status_code == 422
+    assert client.get("/api/settings").json()["activities"] == []
+
+
+def test_activity_final_slot_is_atomic(client):
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.database import InvalidRecordError, save_activities
+
+    client.put("/api/settings", json={"activities": [
+        {"name": f"Alt {i}", "hourly_rate_cents": 100} for i in range(9)
+    ]})
+    path = client.app.state.test_database_path
+    def save(index):
+        try:
+            save_activities([{"id": None, "name": f"Parallel {index}",
+                              "hourly_rate_cents": 100, "is_active": True}], path)
+            return "ok"
+        except InvalidRecordError:
+            return "full"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(save, range(2))) == ["full", "ok"]
+    assert len(client.get("/api/settings").json()["activities"]) == 10
+
+
+def test_ten_activities_preserve_plan_training_and_final_invoice(client):
+    activities = client.put("/api/settings", json={"activities": [
+        {"name": f"Leistung {i}", "hourly_rate_cents": 1234 + i} for i in range(10)
+    ]}).json()["activities"]
+    plans = [{"weekday": 0, "activity_type_id": a["id"], "hours": 1} for a in activities]
+    response = client.put("/api/weekly-plan", json=plans)
+    assert response.status_code == 200
+    saved_plans = response.json()
+    training_ids = []
+    for activity in activities:
+        response = client.post("/api/trainings", json={
+            "training_date": "2020-01-15", "activity_type_id": activity["id"],
+            "hours": 1, "status": "completed",
+        })
+        assert response.status_code == 201
+        training_ids.append(response.json()["id"])
+    period = {"year": 2020, "month": 1}
+    preview = client.post("/api/invoices/preview", json=period).json()
+    assert len(preview["items"]) == 10
+    assert preview["total_amount_cents"] == sum(1234 + i for i in range(10))
+    created = client.post("/api/invoices", json=period)
+    assert created.status_code == 201
+    invoice_id = created.json()["id"]
+    before = get_invoice(invoice_id, client.app.state.test_database_path)
+    pdf = client.get(f"/api/invoices/{invoice_id}/pdf").content
+    assert pdf.startswith(b"%PDF-")
+    changed = [{"id": a["id"], "name": f"Neu {i}", "hourly_rate_cents": 9999,
+                "is_active": False} for i, a in enumerate(activities)]
+    assert client.put("/api/settings", json={"activities": changed}).status_code == 200
+    assert client.get("/api/weekly-plan").json() == saved_plans
+    assert client.put("/api/weekly-plan", json=[{**{key: p[key] for key in ("id", "weekday", "activity_type_id", "is_active")}, "hours": int(p["hours"])} for p in saved_plans]).status_code == 200
+    assert client.put("/api/weekly-plan", json=plans).status_code == 422
+    assert client.post("/api/trainings", json={"training_date": "2020-02-15",
+        "activity_type_id": activities[-1]["id"], "hours": 1}).status_code == 404
+    calendar = client.get("/api/calendar/2020/1").json()
+    loaded = [t for day in calendar["days"] for t in day["trainings"]]
+    assert {t["id"] for t in loaded} == set(training_ids)
+    assert get_invoice(invoice_id, client.app.state.test_database_path) == before
+    assert client.get(f"/api/invoices/{invoice_id}/pdf").content == pdf

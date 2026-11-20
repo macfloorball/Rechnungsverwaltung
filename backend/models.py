@@ -12,7 +12,7 @@ class APIModel(BaseModel):
 class ActivityInput(APIModel):
     id: int | None = Field(default=None, gt=0)
     name: str = Field(min_length=1, max_length=100)
-    hourly_rate_cents: int = Field(ge=0)
+    hourly_rate_cents: int = Field(ge=0, le=9999999999, strict=True)
     is_active: bool = True
 
     @field_validator("name")

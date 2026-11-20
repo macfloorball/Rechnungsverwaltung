@@ -351,12 +351,6 @@ def put_settings(
     payload: SettingsUpdate,
     database_path: DatabasePath,
 ) -> dict[str, Any]:
-    if len(payload.activities) > 4:
-        raise HTTPException(
-            status_code=422,
-            detail="Es können höchstens vier Tätigkeitsarten verwaltet werden",
-        )
-
     save_activities([activity.model_dump() for activity in payload.activities], database_path)
     return get_settings(database_path)
 
