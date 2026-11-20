@@ -34,7 +34,10 @@ function launchConfig(mode, env = process.env, root = ROOT, platform = process.p
     args = ['-I', '-B', '-c', 'import runpy,sys;sys.path.insert(0,sys.argv.pop(1));runpy.run_module("scripts.managed_server",run_name="__main__")', root, ...args.slice(2)];
   }
   if (!production) args.push('--reload', '--reload-dir', path.join(root, 'backend'));
-  return { ...config, python, args, desktop: mode.startsWith('desktop-'),
+  // A Windows GUI launch can inherit an invalid stdout handle. Give bundled
+  // Python a valid NUL handle so logging cannot fail its final flush.
+  const backendStdout = packagedRuntime && platform === 'win32' ? 'ignore' : 'inherit';
+  return { ...config, python, args, backendStdout, desktop: mode.startsWith('desktop-'),
     frontend: mode === 'desktop-production' ? path.join(root, 'dist', 'frontend') : path.join(root, 'frontend') };
 }
 
@@ -121,7 +124,7 @@ function validateFrontend(config) {
 function spawnBackend(config, root, env) {
   const child = spawn(config.python, config.args, {
     cwd: root, env: { ...env, PYTHONIOENCODING: 'utf-8', TTC_FRONTEND_DIRECTORY: config.frontend },
-    stdio: ['pipe', 'inherit', 'pipe'], detached: true, windowsHide: true,
+    stdio: ['pipe', config.backendStdout ?? 'inherit', 'pipe'], detached: true, windowsHide: true,
   });
   let errorOutput = '';
   child.stderr.setEncoding('utf8');
