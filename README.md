@@ -1403,3 +1403,23 @@ Zusätzlich zum AppImage gibt es eine eigene signierte RPM-Distribution.
 Sie installiert einen Menüeintrag und aktualisiert sich über DNF.
 Installation, Einrichtung, Build und Veröffentlichungsablauf sind in
 [Linux RPM-Repository](Planung/Linux_RPM_Repository.md) beschrieben.
+
+### Tätigkeiten und Preise
+
+Die Liste zeigt nur vorhandene Tätigkeiten. **+ Tätigkeit hinzufügen** ergänzt
+jeweils eine neue, als ungespeichert gekennzeichnete Zeile. Name, Stundenpreis
+(bis zwei Nachkommastellen) und Aktivstatus werden mit **Tätigkeiten speichern**
+übernommen. Neue Zeilen lassen sich vorher mit **Verwerfen** entfernen. Bei
+Speicherfehlern bleiben die Eingaben erhalten.
+
+Es sind höchstens **zehn insgesamt angelegte Tätigkeiten einschließlich
+deaktivierter Einträge** möglich. Die Kapazitätsanzeige zählt auch neue Zeilen.
+Gespeicherte Tätigkeiten werden nicht gelöscht; Deaktivieren gibt keinen Platz
+frei. Namen müssen nach Entfernen äußerer Leerzeichen eindeutig sein; die
+bestehende Unterscheidung von Groß- und Kleinschreibung bleibt erhalten.
+
+Neue Zuordnungen im Wochenplan und Kalender bieten aktive Tätigkeiten an.
+Bestehende Zuordnungen zu deaktivierten Tätigkeiten bleiben erhalten. Änderungen
+an Tätigkeiten ändern keine historischen Rechnungssnapshots oder fertigen PDFs.
+Die Speicherung bleibt lokal und verwendet die vorhandene Einzelkonfiguration;
+eine Datenbankmigration ist dafür nicht erforderlich.
