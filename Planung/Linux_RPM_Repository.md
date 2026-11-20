@@ -2,12 +2,15 @@
 
 Die RPM-Distribution verwendet DNF für Installation und Updates. Die App zeigt
 für diese Installationsart den Hinweis auf die Softwareverwaltung und bietet
-keinen AppImage-Austausch an. Zunächst wird Fedora 45 auf x86_64 geprüft.
+keinen AppImage-Austausch an. Fedora 45 auf x86_64 ist die geprüfte
+Container-Zielplattform; daraus folgt keine
+vollständige Desktop-Abnahme anderer Plattformen. Für normale Nutzer steht die
+[zentrale Installationsanleitung](Installation.md) bereit.
 
-## Installation nach der ersten Veröffentlichung
+## Installation aus dem veröffentlichten Repository
 
-Die folgenden Befehle funktionieren erst nach Aktivierung und Veröffentlichung
-des Repositorys unter der in `rpm-repository-policy.json` festgelegten URL:
+Das Repository ist unter der in `rpm-repository-policy.json` festgelegten URL
+veröffentlicht (RPM 0.1.1-1, Stand 20.11.2026). Installation:
 
 ```sh
 sudo dnf config-manager addrepo --from-repofile=https://macfloorball.github.io/Rechnungsverwaltung/rpm/ttc-rechnungsverwaltung.repo
