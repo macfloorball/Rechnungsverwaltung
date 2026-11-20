@@ -195,6 +195,7 @@ export function initializeCalendar() {
     successMessage.hidden = true;
     loadMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1));
   });
+  document.addEventListener("activities-updated", () => loadMonth(visibleMonth));
   document.addEventListener("weekly-plan-updated", () => {
     loadMonth(visibleMonth);
   });

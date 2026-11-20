@@ -124,6 +124,8 @@ async function run() {
     console.log('DESKTOP_CALENDAR_CHECK restart');
     assert.deepEqual(new Set(calendarState.calendar.days.flatMap(day => day.trainings.map(training => training.status))),
       new Set(['planned','completed','cancelled']));
+    const restartedActivities = (await (await fetch(new URL('/api/settings', origin))).json()).activities;
+    assert.deepEqual(restartedActivities, JSON.parse(await fs.readFile(path.join(output, 'activities.json'), 'utf8')));
     console.log('DESKTOP_STATUS_CHECK restart');
     const invoices = await (await fetch(new URL('/api/invoices', origin))).json();
     assert.equal(invoices.length, 2);
@@ -161,6 +163,13 @@ async function run() {
   await js('document.querySelector("#cancel-training-edit").click()');
   await until(() => js('!document.querySelector("#saved-invoices-empty").hidden'), 'empty invoice archive');
   console.log('DESKTOP_EMPTY_CHECK saved');
+
+  await until(() => js('document.querySelector("#activity-capacity").textContent.includes("0 von 10")'), 'empty activities');
+  await js('document.querySelector("#add-activity").click()');
+  assert.equal(await js('document.querySelector("#activity-settings-rows").rows.length'), 1);
+  assert.equal(await js('document.activeElement.id.startsWith("activity-name-")'), true);
+  await js('document.querySelector("#activity-settings-rows button").click()');
+  assert.equal(await js('document.querySelector("#activity-settings-rows").rows.length'), 0);
 
   const originalSettings = await (await fetch(new URL('/api/organization/settings', origin))).json();
   await js(`const form = document.querySelector('#organization-settings-form');
@@ -650,6 +659,37 @@ async function run() {
   assert.equal(BrowserWindow.getAllWindows().length, 1);
   assert.equal(contents.getURL(), new URL('/', url).href);
   assert.deepEqual(errors, []);
+  // Fill remaining capacity through the real UI; preserve all saved records.
+  const priorActivities = (await (await fetch(new URL('/api/settings', origin))).json()).activities;
+  await new Promise(resolve => { contents.once('did-finish-load', resolve); contents.reload(); });
+  await until(() => js('document.querySelector("#activity-settings-rows").rows.length > 0'), 'saved activities loaded');
+  await js(`while (!document.querySelector('#add-activity').disabled) {
+    document.querySelector('#add-activity').click();
+    const row = document.querySelector('#activity-settings-rows').lastElementChild;
+    row.querySelector('input[type=text]').value = 'Zusatz ' + row.rowIndex;
+    row.querySelector('input[type=number]').value = '19.99';
+  }`);
+  assert.equal(await js('document.querySelector("#activity-settings-rows").rows.length'), 10);
+  await js('document.querySelector("#save-activity-settings").click()');
+  await until(() => js('!document.querySelector("#activity-settings-success").hidden'), 'ten activities saved');
+  assert.equal(await js('document.querySelector("#activity-settings-rows").rows.length'), 10);
+  assert.equal(await js('document.querySelector("#activity-settings-rows button") === null'), true);
+  assert.equal(await js('document.querySelector("#add-activity").disabled'), true);
+  const tenSaved = (await (await fetch(new URL('/api/settings', origin))).json()).activities;
+  assert.equal(tenSaved.length, 10);
+  for (const prior of priorActivities) assert.deepEqual(tenSaved.find(activity => activity.id === prior.id), prior);
+  await js('document.querySelector("#activity-settings-form").scrollIntoView()');
+  await fs.writeFile(path.join(output, 'activities.png'), (await contents.capturePage()).toPNG());
+  assert.ok(tenSaved.some(activity => activity.hourly_rate_cents === 1999));
+  expectedHTTPFailure = 409;
+  await js(`const names = document.querySelectorAll('#activity-settings-rows input[type=text]');
+    names[0].value = names[1].value;
+    document.querySelector('#save-activity-settings').click()`);
+  await until(() => js('!document.querySelector("#activity-settings-error").hidden && !document.querySelector("#save-activity-settings").disabled'), 'activity conflict retained');
+  assert.equal(await js('document.querySelectorAll("#activity-settings-rows input[type=text]")[0].value === document.querySelectorAll("#activity-settings-rows input[type=text]")[1].value'), true);
+  assert.deepEqual((await (await fetch(new URL('/api/settings', origin))).json()).activities, tenSaved);
+  expectedHTTPFailure = null;
+  await fs.writeFile(path.join(output, 'activities.json'), JSON.stringify(tenSaved));
   expectedHTTPFailure = 503;
   await js(`document.querySelector('#backup-directory').value='relative'; document.querySelector('#create-backup').click()`);
   await until(() => js(`!document.querySelector('#create-backup').disabled && document.querySelector('#backup-message').textContent.includes('fehlgeschlagen')`), 'invalid backup target');

@@ -1117,6 +1117,21 @@ class InvalidRecordError(ValueError):
 
 def save_activities(activities: list[dict[str, Any]], database_path: Path) -> None:
     with get_connection(database_path) as connection:
+        # Serialize the count and writes: concurrent requests cannot claim the
+        # same final slot. Omitted records are retained, including inactive ones.
+        connection.execute("BEGIN IMMEDIATE")
+        existing_ids = {row[0] for row in connection.execute(
+            "SELECT id FROM activity_types WHERE organization_id = 1"
+        )}
+        requested_ids = [activity["id"] for activity in activities if activity["id"] is not None]
+        if len(requested_ids) != len(set(requested_ids)):
+            raise InvalidRecordError("Eine Tätigkeit wurde mehrfach übermittelt")
+        if not set(requested_ids) <= existing_ids:
+            raise RecordNotFoundError("Tätigkeitsart wurde nicht gefunden")
+        if len(existing_ids) + sum(activity["id"] is None for activity in activities) > 10:
+            raise InvalidRecordError(
+                "Es können höchstens zehn Tätigkeiten insgesamt angelegt werden, einschließlich deaktivierter Tätigkeiten"
+            )
         for activity in activities:
             if activity["id"] is None:
                 connection.execute(
@@ -1141,7 +1156,7 @@ def save_activities(activities: list[dict[str, Any]], database_path: Path) -> No
                     """
                     UPDATE activity_types
                     SET name = ?, hourly_rate_cents = ?, is_active = ?
-                    WHERE id = ?
+                    WHERE id = ? AND organization_id = 1
                     """,
                     (
                         activity["name"],
@@ -1270,6 +1285,15 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
         retained_ids: set[int] = set()
         requested_ids: set[int] = set()
         for entry in entries:
+            activity = connection.execute(
+                "SELECT is_active FROM activity_types WHERE id = ? AND organization_id = 1",
+                (entry["activity_type_id"],),
+            ).fetchone()
+            previous = existing_entries.get(entry["id"])
+            if activity is not None and not activity[0] and (
+                previous is None or previous[2] != entry["activity_type_id"]
+            ):
+                raise InvalidRecordError("Bitte wähle eine aktive Tätigkeit für neue Zuordnungen")
             if entry["id"] is not None:
                 if entry["id"] in requested_ids:
                     raise InvalidRecordError("Ein Planeintrag wurde mehrfach übermittelt")

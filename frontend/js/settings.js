@@ -7,7 +7,8 @@ const weekdays = [
   "Samstag",
   "Sonntag",
 ];
-const maximumActivities = 4;
+const maximumActivities = 10;
+let activityRowSequence = 0;
 const monthFormatter = new Intl.DateTimeFormat("de-DE", {
   month: "long",
   year: "numeric",
@@ -84,7 +85,8 @@ function showMessage(node, message) {
   node.hidden = false;
 }
 
-function buildActivityRow(activity, index) {
+function buildActivityRow(activity) {
+  const index = activityRowSequence++;
   const row = element("tr");
   if (activity.id !== undefined) {
     row.dataset.activityId = String(activity.id);
@@ -96,6 +98,7 @@ function buildActivityRow(activity, index) {
   nameInput.type = "text";
   nameInput.id = `activity-name-${index + 1}`;
   nameInput.name = `activity-name-${index + 1}`;
+  nameInput.required = true;
   nameInput.maxLength = 100;
   nameInput.value = activity.name || "";
   nameInput.autocomplete = "off";
@@ -109,6 +112,7 @@ function buildActivityRow(activity, index) {
   rateInput.type = "number";
   rateInput.id = `activity-rate-${index + 1}`;
   rateInput.name = `activity-rate-${index + 1}`;
+  rateInput.required = true;
   rateInput.min = "0";
   rateInput.max = "99999999.99";
   rateInput.step = "0.01";
@@ -126,28 +130,52 @@ function buildActivityRow(activity, index) {
   activeInput.type = "checkbox";
   activeInput.id = `activity-active-${index + 1}`;
   activeInput.name = `activity-active-${index + 1}`;
-  activeInput.checked = activity.is_active !== false;
+  activeInput.checked = activity.is_active === undefined ? true : Boolean(activity.is_active);
   activeLabel.className = "settings-checkbox-label";
   activeLabel.htmlFor = activeInput.id;
   activeCell.append(activeInput, activeLabel);
-  row.append(nameCell, rateCell, activeCell);
+  const stateCell = element("td", activity.id === undefined ? "Neu – ungespeichert " : "Gespeichert");
+  if (activity.id === undefined) {
+    const discard = element("button", "Verwerfen");
+    discard.type = "button";
+    discard.addEventListener("click", () => {
+      row.remove();
+      updateActivityCapacity();
+      document.querySelector("#add-activity").focus();
+    });
+    stateCell.append(discard);
+  }
+  row.append(nameCell, rateCell, activeCell, stateCell);
   return row;
 }
 
+function updateActivityCapacity() {
+  const count = document.querySelector("#activity-settings-rows").rows.length;
+  const button = document.querySelector("#add-activity");
+  button.disabled = count >= maximumActivities;
+  document.querySelector("#activity-capacity").textContent =
+    `${count} von ${maximumActivities} Tätigkeiten${count >= maximumActivities ? " – Maximum erreicht, einschließlich deaktivierter Einträge." : ""}`;
+  document.querySelector("#activity-empty").hidden = count !== 0;
+}
+
 function renderActivities(rows, activities) {
-  if (activities.length > maximumActivities) {
-    throw new Error(
-      "Es sind mehr als vier Tätigkeitsarten gespeichert. Bitte prüfe die Datenbank.",
-    );
-  }
   rows.replaceChildren();
-  for (let index = 0; index < maximumActivities; index += 1) {
-    rows.append(buildActivityRow(activities[index] || {}, index));
+  for (const activity of activities) {
+    rows.append(buildActivityRow(activity));
   }
+  updateActivityCapacity();
+}
+
+// Parse decimal digits directly; no floating-point multiplication of euros.
+function rateInCents(value) {
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number((match[2] || "").padEnd(2, "0"));
+  return Number.isSafeInteger(cents) && cents <= 9999999999 ? cents : null;
 }
 
 function activityOptions(activities, selectedId) {
-  const options = activities.map((activity) => {
+  const options = activities.filter((activity) => activity.is_active || activity.id === selectedId).map((activity) => {
     const option = element(
       "option",
       activity.is_active ? activity.name : `${activity.name} (inaktiv)`,
@@ -214,7 +242,7 @@ function renderWeeklyPlan(container, activities, entries) {
     addButton.type = "button";
     addButton.className = "secondary-button weekly-plan-add";
     addButton.dataset.addPlanEntry = "";
-    addButton.disabled = activities.length === 0;
+    addButton.disabled = !activities.some((activity) => activity.is_active);
     day.append(addButton);
     container.append(day);
   }
@@ -482,6 +510,15 @@ export function initializeSettings() {
     }
   });
 
+  document.querySelector("#add-activity").addEventListener("click", () => {
+    if (activityRows.rows.length >= maximumActivities) return;
+    const row = buildActivityRow({});
+    activityRows.append(row);
+    updateActivityCapacity();
+    activitySuccess.hidden = true;
+    row.querySelector("input").focus();
+  });
+
   activityForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     activityError.hidden = true;
@@ -495,16 +532,13 @@ export function initializeSettings() {
       const rateText = rateInput.value.trim();
       const id = row.dataset.activityId;
 
-      if (!name && !rateText && !id) {
-        continue;
-      }
-      if (!name || !rateText || !rateInput.validity.valid) {
+      if (!name || !rateText || !rateInput.validity.valid || rateInCents(rateText) === null) {
         showMessage(activityError, "Bitte fülle Bezeichnung und gültigen Stundenpreis je Tätigkeit aus.");
         return;
       }
       const activity = {
         name,
-        hourly_rate_cents: Math.round(Number(rateText) * 100),
+        hourly_rate_cents: rateInCents(rateText),
         is_active: activeInput.checked,
       };
       if (id) {
@@ -514,11 +548,12 @@ export function initializeSettings() {
     }
 
     if (payloadActivities.length > maximumActivities) {
-      showMessage(activityError, "Es können höchstens vier Tätigkeitsarten verwaltet werden.");
+      showMessage(activityError, "Es können höchstens zehn Tätigkeitsarten verwaltet werden.");
       return;
     }
 
-    saveActivitiesButton.disabled = true;
+    const activityFields = [...activityForm.querySelectorAll("input, button")];
+    activityFields.forEach((field) => { field.disabled = true; });
     try {
       const result = await requestJson("/api/settings", {
         method: "PUT",
@@ -528,6 +563,7 @@ export function initializeSettings() {
       activities = result.activities;
       renderActivities(activityRows, activities);
       renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
+      document.dispatchEvent(new Event("activities-updated"));
       showMessage(activitySuccess, "Tätigkeiten und Preise wurden gespeichert.");
     } catch (error) {
       showMessage(
@@ -535,7 +571,8 @@ export function initializeSettings() {
         error instanceof Error ? error.message : "Einstellungen konnten nicht gespeichert werden.",
       );
     } finally {
-      saveActivitiesButton.disabled = false;
+      activityFields.forEach((field) => { field.disabled = false; });
+      updateActivityCapacity();
     }
   });
 
