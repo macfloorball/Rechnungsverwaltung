@@ -9,8 +9,8 @@ benötigt. Die Rechnungsverwaltung arbeitet lokal ohne Benutzerkonto.
 
 | System | Download / Installationsweg | Nachweis und Grenze |
 | --- | --- | --- |
-| Windows 10/11, x64 (Intel/AMD 64 Bit) | [Desktop 0.1.2: Setup-EXE](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.1.2/ttc-rechnungsverwaltung-0.1.2-windows-x64-setup.exe) | Windows 11 nativ teilweise geprüft; vollständige Live-Abnahme offen |
-| Linux, x86_64 / amd64 | [Desktop 0.1.2: AppImage](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.1.2/ttc-rechnungsverwaltung-0.1.2-linux-x64.AppImage) | Native Fedora-45-Nachweise für Vorgängerversionen; Ubuntu 24.04 LTS ist Ziel-/CI-System, keine vollständige GUI-Abnahme |
+| Windows 10/11, x64 (Intel/AMD 64 Bit) | [Desktop 0.1.3: Setup-EXE](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.1.3/ttc-rechnungsverwaltung-0.1.3-windows-x64-setup.exe) | Windows 11 nativ teilweise geprüft; vollständige Live-Abnahme offen |
+| Linux, x86_64 / amd64 | [Desktop 0.1.3: AppImage](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.1.3/ttc-rechnungsverwaltung-0.1.3-linux-x64.AppImage) | Native Fedora-45-Nachweise für Vorgängerversionen; Ubuntu 24.04 LTS ist Ziel-/CI-System, keine vollständige GUI-Abnahme |
 | Fedora 45, x86_64 | [Signiertes DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/) | RPM 0.1.1-1 veröffentlicht; Installation, Update, Entfernung und Signaturablehnung im isolierten Fedora-Container geprüft |
 
 Für ARM und macOS sind keine fertigen Pakete veröffentlicht. Andere
@@ -19,20 +19,20 @@ DNF der integrierte Installationsweg; das AppImage ist eine separate Alternative
 Beide Linux-Ausgaben teilen das Benutzerprofil: vor einem Wechsel sichern und
 alle Instanzen schließen. Nicht gleichzeitig mit demselben Datenbestand starten.
 
-Der [stabile Desktop-Release 0.1.2](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.1.2)
+Der [stabile Desktop-Release 0.1.3](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.1.3)
 enthält beide Desktopdateien. Unter „Assets“ die oben genannte Datei wählen,
 nicht „Source code“, `desktop-update.json` oder die Drittanbieter-Quellarchive.
 Der neueste allgemeine GitHub-Release kann stattdessen ein RPM-Release sein.
 
 ## 2. Windows installieren und starten
 
-1. Die oben verlinkte Datei `ttc-rechnungsverwaltung-0.1.2-windows-x64-setup.exe`
+1. Die oben verlinkte Datei `ttc-rechnungsverwaltung-0.1.3-windows-x64-setup.exe`
    herunterladen, zum Beispiel in „Downloads“.
-2. Optional die Datei [SHA256SUMS](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.1.2/SHA256SUMS)
+2. Optional die Datei [SHA256SUMS](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.1.3/SHA256SUMS)
    desselben Releases herunterladen. Im Downloadordner in PowerShell prüfen:
 
    ```powershell
-   Get-FileHash -Algorithm SHA256 .\ttc-rechnungsverwaltung-0.1.2-windows-x64-setup.exe
+   Get-FileHash -Algorithm SHA256 .\ttc-rechnungsverwaltung-0.1.3-windows-x64-setup.exe
    ```
 
    Den vollständigen Hash mit der Zeile für genau diesen Dateinamen vergleichen.
@@ -61,9 +61,9 @@ erhalten. Bei abgebrochenem Update kann der vollständige aktuelle Installer bei
 geschlossener App erneut ausgeführt werden. Ältere Versionen werden gesperrt.
 
 **Einmalige Reparatur für Windows 0.1.0 und 0.1.1:** Diese Versionen können
-beim Beenden des Backends vor dem Installerstart abbrechen. Version 0.1.2 enthält
-die Korrektur. Weil der Fehler in der installierten Ausgangsversion auftritt,
-einmal vollständig sichern, die App schließen und das oben verlinkte 0.1.2-Setup
+beim Beenden des Backends vor dem Installerstart abbrechen. Ab Version 0.1.2 ist
+die Korrektur enthalten. Weil der Fehler in der installierten Ausgangsversion auftritt,
+einmal vollständig sichern, die App schließen und das oben verlinkte aktuelle Setup
 im selben Windows-Konto über die bestehende Installation ausführen. Nicht vorher
 deinstallieren oder Datenordner löschen. Ein erfolgreicher manueller Wechsel
 ersetzt die noch offene Live-Update-Abnahme aus Issue #32 nicht.
@@ -84,14 +84,14 @@ wird das bestehende Profil wiederverwendet.
    ```sh
    mkdir -p "$HOME/Anwendungen/TT-Rechnungsverwaltung"
    cd "$HOME/Anwendungen/TT-Rechnungsverwaltung"
-   chmod u+rwx ttc-rechnungsverwaltung-0.1.2-linux-x64.AppImage
+   chmod u+rwx ttc-rechnungsverwaltung-0.1.3-linux-x64.AppImage
    ```
 
 2. Optional `SHA256SUMS` vom Desktop-Release in denselben Ordner herunterladen
    und den Wert für das AppImage mit dieser Ausgabe vergleichen:
 
    ```sh
-   sha256sum ttc-rechnungsverwaltung-0.1.2-linux-x64.AppImage
+   sha256sum ttc-rechnungsverwaltung-0.1.3-linux-x64.AppImage
    ```
 
    Bei Abweichung nicht starten.
@@ -99,7 +99,7 @@ wird das bestehende Profil wiederverwendet.
 
    ```sh
    cd "$HOME/Anwendungen/TT-Rechnungsverwaltung"
-   ./ttc-rechnungsverwaltung-0.1.2-linux-x64.AppImage
+   ./ttc-rechnungsverwaltung-0.1.3-linux-x64.AppImage
    ```
 
    Später denselben Start wiederholen. Ein automatischer Menüeintrag wird für das
