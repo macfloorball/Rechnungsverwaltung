@@ -413,8 +413,20 @@ button {
 
 .invoice-preview-form {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px;
+}
+
+.invoice-period-field {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.invoice-period-field .section-description {
+  margin: 0;
 }
 
 .invoice-preview-form label {
@@ -971,6 +983,10 @@ dialog textarea {
   .invoice-preview-form {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .invoice-period-field {
+    flex: auto;
   }
 
   .invoice-preview-form input,

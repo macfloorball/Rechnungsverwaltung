@@ -69,12 +69,16 @@
           </div>
 
           <form id="invoice-preview-form" class="invoice-preview-form">
-            <label for="invoice-month">Abrechnungsmonat</label>
-            <input id="invoice-month" name="month" type="month" required readonly aria-describedby="invoice-month-hint">
-            <p id="invoice-month-hint" class="section-description">Der Abrechnungsmonat folgt dem Kalender. Wechsle den Monat über die Kalendernavigation.</p>
-            <label for="invoice-date">Rechnungsdatum</label>
-            <input id="invoice-date" name="invoice_date" type="date" required aria-describedby="invoice-date-hint">
-            <p id="invoice-date-hint" class="section-description">Datum auf der Rechnung und vorgesehenes Versanddatum. Das Jahr bestimmt den Nummernkreis.</p>
+            <div class="invoice-period-field">
+              <label for="invoice-month">Abrechnungsmonat</label>
+              <input id="invoice-month" name="month" type="month" required readonly aria-describedby="invoice-month-hint">
+              <p id="invoice-month-hint" class="section-description">Der Abrechnungsmonat folgt dem Kalender. Wechsle den Monat über die Kalendernavigation.</p>
+            </div>
+            <div class="invoice-period-field">
+              <label for="invoice-date">Rechnungsdatum</label>
+              <input id="invoice-date" name="invoice_date" type="date" required aria-describedby="invoice-date-hint">
+              <p id="invoice-date-hint" class="section-description">Datum auf der Rechnung und vorgesehenes Versanddatum. Das Jahr bestimmt den Nummernkreis.</p>
+            </div>
             <button id="load-invoice-preview" class="primary-button" type="submit">
               Vorschau erstellen/aktualisieren
             </button>
