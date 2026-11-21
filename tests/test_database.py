@@ -281,7 +281,7 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone() == (6,)
+        ).fetchone() == (7,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
@@ -315,15 +315,20 @@ def test_schema_rejects_future_and_gapped_versions_without_modification(database
         assert database_path.read_bytes() == before
 
 
-def test_upgrade_creates_recovery_copy_and_is_idempotent(database_path):
+def test_upgrade_creates_recovery_copy_and_is_idempotent(tmp_path, monkeypatch):
+    import backend.database as database
+    database_path = tmp_path / 'upgrade.db'
+    original = database._migrate_profiles
+    monkeypatch.setattr(database, '_migrate_profiles', lambda connection: None)
+    initialize_database(database_path)
+    monkeypatch.setattr(database, '_migrate_profiles', original)
     with sqlite3.connect(database_path) as connection:
-        connection.execute("DELETE FROM schema_migrations WHERE version = 6")
         connection.execute("INSERT INTO activity_types (name, hourly_rate_cents) VALUES ('Keep', 50)")
     initialize_database(database_path)
     copies = list(database_path.parent.glob("*.before-migration-*.sqlite3"))
     assert len(copies) == 1
     with sqlite3.connect(copies[0]) as connection:
-        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone() == (5,)
+        assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone() == (6,)
         assert connection.execute("SELECT name FROM activity_types").fetchone() == ('Keep',)
     initialize_database(database_path)
     assert list(database_path.parent.glob("*.before-migration-*.sqlite3")) == copies
@@ -389,7 +394,7 @@ def test_locked_database_has_bounded_actionable_failure(database_path):
 def test_failed_migration_rolls_back_marker_and_schema(database_path, monkeypatch):
     import backend.database as database
     with sqlite3.connect(database_path) as connection:
-        connection.execute("DELETE FROM schema_migrations WHERE version = 6")
+        connection.execute("DELETE FROM schema_migrations WHERE version >= 6")
 
     def failing_migration(connection):
         connection.execute("BEGIN IMMEDIATE")

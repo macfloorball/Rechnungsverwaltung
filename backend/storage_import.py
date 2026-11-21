@@ -7,7 +7,7 @@ from contextlib import closing
 from pathlib import Path
 
 from backend.database import (
-    TABLE_COLUMNS, get_schema_version, initialize_database,
+    TABLE_COLUMNS, get_schema_version, initialize_database, validate_profile_relationships,
 )
 from backend.paths import get_database_path
 
@@ -29,6 +29,8 @@ def validate_database(connection: sqlite3.Connection, *, current: bool = False) 
         columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
         if not fields <= columns:
             raise ValueError("Die Datei enthält keine unterstützte Rechnungsdatenbank")
+    if get_schema_version(connection) >= 7:
+        validate_profile_relationships(connection)
     if connection.execute("PRAGMA foreign_key_check").fetchall():
         raise sqlite3.DatabaseError("Fremdschlüsselprüfung der Importdaten fehlgeschlagen")
 

@@ -51,9 +51,9 @@ def test_failed_import_never_publishes_or_changes_source(tmp_path, kind):
         legacy_database(source)
         with sqlite3.connect(source) as connection:
             if kind == "future":
-                connection.execute("INSERT INTO schema_migrations (version) VALUES (7)")
+                connection.execute("INSERT INTO schema_migrations (version) VALUES (8)")
             else:
-                connection.execute("DELETE FROM schema_migrations WHERE version = 6")
+                connection.execute("DELETE FROM schema_migrations WHERE version >= 6")
                 connection.execute("DROP INDEX idx_invoices_unique_preview_period")
                 connection.executemany(
                     "INSERT INTO invoices (year, month, is_preview, invoice_date, total_amount_cents) VALUES (2026, 1, 1, '2026-01-01', ?)",

@@ -18,6 +18,7 @@ DATABASE_PATH = PROJECT_ROOT / "data" / "ttc.db"
 
 TABLE_COLUMNS = {
     "organizations": {
+        "profile_name",
         "name",
         "address",
         "street",
@@ -102,11 +103,31 @@ TABLE_COLUMNS = {
 }
 
 
+class ProfileDatabasePath(type(Path())):
+    """Request-local database address; never a process-wide active profile."""
+    def __new__(cls, path, profile_id=1):
+        instance = super().__new__(cls, path)
+        instance._profile_id = int(profile_id)
+        return instance
+
+    def __init__(self, path, profile_id=1):
+        super().__init__(path)
+
+    @property
+    def profile_id(self):
+        return self._profile_id
+
+
+def profile_id(database_path):
+    return getattr(database_path, "profile_id", 1)
+
+
 @contextmanager
 def get_connection(
     database_path: Path | None = None, *, create: bool = False,
 ) -> Iterator[sqlite3.Connection]:
     """One transaction per operation; always close, including on rollback."""
+    requested_profile = profile_id(database_path)
     database_path = Path(database_path) if database_path is not None else get_database_path()
     connection = None
     try:
@@ -120,6 +141,7 @@ def get_connection(
             database_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         uri = database_path.resolve().as_uri() + ("?mode=rwc" if create else "?mode=rw")
         connection = sqlite3.connect(uri, uri=True, timeout=5)
+        connection.create_function("current_profile", 0, lambda: requested_profile)
         connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             yield connection
@@ -134,7 +156,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -190,6 +212,7 @@ def initialize_database(database_path: Path | None = None) -> None:
         if existed and version == SCHEMA_VERSION:
             if connection.execute("PRAGMA foreign_key_check").fetchall():
                 raise DatabaseAccessError("corrupt")
+            validate_profile_relationships(connection)
             # A normal restart/update validates only; never recreate or reseed data.
             return
         if existed and version < SCHEMA_VERSION:
@@ -338,6 +361,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_optional_training_hours,
             _migrate_weekly_plan_generated,
             _migrate_invoice_previews,
+            _migrate_profiles,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -657,8 +681,9 @@ def _migrate_weekly_plan_generated(connection: sqlite3.Connection) -> None:
 
 def get_organization(
     database_path: Path | None = None,
-    organization_id: int = 1,
+    organization_id: int | None = None,
 ) -> dict[str, Any] | None:
+    organization_id = organization_id or profile_id(database_path)
     with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
@@ -671,8 +696,9 @@ def get_organization(
 def update_organization(
     values: dict[str, Any],
     database_path: Path | None = None,
-    organization_id: int = 1,
+    organization_id: int | None = None,
 ) -> bool:
+    organization_id = organization_id or profile_id(database_path)
     _validate_fields("organizations", values)
     if not values:
         return False
@@ -714,6 +740,8 @@ def create_record(
     if not values:
         raise ValueError("Zum Anlegen eines Datensatzes sind Werte erforderlich")
 
+    if table != "organizations":
+        values = {**values, "organization_id": profile_id(database_path)}
     columns = ", ".join(values)
     placeholders = ", ".join("?" for _ in values)
     with get_connection(database_path) as connection:
@@ -772,8 +800,8 @@ def get_record(
     with get_connection(database_path) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
-            f"SELECT * FROM {table} WHERE id = ?",
-            (record_id,),
+            f"SELECT * FROM {table} WHERE id = ? AND {'id' if table == 'organizations' else 'organization_id'} = ?",
+            (record_id, profile_id(database_path)),
         ).fetchone()
         return dict(row) if row is not None else None
 
@@ -783,8 +811,10 @@ def list_records(
     filters: dict[str, Any] | None = None,
     database_path: Path | None = None,
 ) -> list[dict[str, Any]]:
-    filters = filters or {}
-    _validate_fields(table, filters)
+    filters = dict(filters or {})
+    if isinstance(database_path, ProfileDatabasePath):
+        filters["id" if table == "organizations" else "organization_id"] = profile_id(database_path)
+    _validate_fields(table, {k: v for k, v in filters.items() if k != "id"})
     where_clause = ""
     parameters: tuple[Any, ...] = ()
     if filters:
@@ -816,8 +846,8 @@ def update_record(
     with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
-            f"UPDATE {table} SET {assignments} WHERE id = ?",
-            (*values.values(), record_id),
+            f"UPDATE {table} SET {assignments} WHERE id = ? AND organization_id = ?",
+            (*values.values(), record_id, profile_id(database_path)),
         )
         return cursor.rowcount > 0
 
@@ -831,8 +861,8 @@ def delete_record(
     with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
-            f"DELETE FROM {table} WHERE id = ?",
-            (record_id,),
+            f"DELETE FROM {table} WHERE id = ? AND organization_id = ?",
+            (record_id, profile_id(database_path)),
         )
         return cursor.rowcount > 0
 
@@ -844,9 +874,11 @@ def create_invoice_with_items(
     expected_next_invoice_number: int | None = None,
     updated_next_invoice_number: int | None = None,
 ) -> int:
+    invoice = {**invoice, "organization_id": profile_id(database_path)}
     _validate_fields("invoices", invoice)
     if not invoice:
         raise ValueError("Rechnungsdaten sind erforderlich")
+    items = [{**item, "organization_id": profile_id(database_path)} for item in items]
     for item in items:
         _validate_fields("invoice_items", item)
 
@@ -865,7 +897,7 @@ def create_invoice_with_items(
             """
             SELECT id, is_preview
             FROM invoices
-            WHERE year = ? AND month = ?
+            WHERE organization_id = current_profile() AND year = ? AND month = ?
             ORDER BY id
             """,
             (invoice["year"], invoice["month"]),
@@ -882,7 +914,7 @@ def create_invoice_with_items(
             raise InvoiceDocumentConflictError
 
         if expected_next_invoice_number is not None:
-            organization_id = invoice.get("organization_id", 1)
+            organization_id = invoice.get("organization_id", profile_id(database_path))
             cursor = connection.execute(
                 """
                 UPDATE organizations
@@ -991,7 +1023,7 @@ def delete_final_invoice(
         connection.execute("BEGIN IMMEDIATE")
         connection.row_factory = sqlite3.Row
         row = connection.execute(
-            "SELECT * FROM invoices WHERE id = ?",
+            "SELECT * FROM invoices WHERE id = ? AND organization_id = current_profile()",
             (invoice_id,),
         ).fetchone()
         if row is None:
@@ -1026,6 +1058,7 @@ def save_invoice_preview(
     items: list[dict[str, Any]],
     database_path: Path | None = None,
 ) -> int:
+    items = [{**item, "organization_id": profile_id(database_path)} for item in items]
     for item in items:
         _validate_fields("invoice_items", item)
 
@@ -1040,7 +1073,7 @@ def save_invoice_preview(
             """
             SELECT id
             FROM invoices
-            WHERE year = ? AND month = ? AND is_preview = 1
+            WHERE organization_id = current_profile() AND year = ? AND month = ? AND is_preview = 1
             ORDER BY id
             """,
             (year, month),
@@ -1073,8 +1106,8 @@ def save_invoice_preview(
             cursor = connection.execute(
                 """
                 INSERT INTO invoices (
-                    year, month, is_preview, invoice_date, total_amount_cents
-                ) VALUES (?, ?, 1, ?, ?)
+                    organization_id, year, month, is_preview, invoice_date, total_amount_cents
+                ) VALUES (current_profile(), ?, ?, 1, ?, ?)
                 """,
                 (year, month, invoice_date, total_amount_cents),
             )
@@ -1121,7 +1154,7 @@ def save_activities(activities: list[dict[str, Any]], database_path: Path) -> No
         # same final slot. Omitted records are retained, including inactive ones.
         connection.execute("BEGIN IMMEDIATE")
         existing_ids = {row[0] for row in connection.execute(
-            "SELECT id FROM activity_types WHERE organization_id = 1"
+            "SELECT id FROM activity_types WHERE organization_id = current_profile()"
         )}
         requested_ids = [activity["id"] for activity in activities if activity["id"] is not None]
         if len(requested_ids) != len(set(requested_ids)):
@@ -1136,8 +1169,8 @@ def save_activities(activities: list[dict[str, Any]], database_path: Path) -> No
             if activity["id"] is None:
                 connection.execute(
                     """
-                    INSERT INTO activity_types (name, hourly_rate_cents, is_active)
-                    VALUES (?, ?, ?)
+                    INSERT INTO activity_types (organization_id, name, hourly_rate_cents, is_active)
+                    VALUES (current_profile(), ?, ?, ?)
                     """,
                     (
                         activity["name"],
@@ -1156,7 +1189,7 @@ def save_activities(activities: list[dict[str, Any]], database_path: Path) -> No
                     """
                     UPDATE activity_types
                     SET name = ?, hourly_rate_cents = ?, is_active = ?
-                    WHERE id = ? AND organization_id = 1
+                    WHERE id = ? AND organization_id = current_profile()
                     """,
                     (
                         activity["name"],
@@ -1180,7 +1213,7 @@ def _ensure_weekly_plan_occurrences(
         JOIN activity_types
           ON activity_types.id = weekly_plan.activity_type_id
          AND activity_types.organization_id = weekly_plan.organization_id
-        WHERE weekly_plan.organization_id = 1
+        WHERE weekly_plan.organization_id = current_profile()
           AND weekly_plan.is_active = 1
           AND activity_types.is_active = 1
         ORDER BY weekly_plan.id
@@ -1203,7 +1236,7 @@ def _ensure_weekly_plan_occurrences(
                 """
                 SELECT id, weekly_plan_id
                 FROM trainings
-                WHERE organization_id = 1
+                WHERE organization_id = current_profile()
                   AND training_date = ?
                   AND activity_type_id = ?
                 ORDER BY id
@@ -1278,7 +1311,7 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
                 """
                 SELECT id, weekday, activity_type_id, hours, is_active
                 FROM weekly_plan
-                WHERE organization_id = 1
+                WHERE organization_id = current_profile()
                 """
             ).fetchall()
         }
@@ -1286,7 +1319,7 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
         requested_ids: set[int] = set()
         for entry in entries:
             activity = connection.execute(
-                "SELECT is_active FROM activity_types WHERE id = ? AND organization_id = 1",
+                "SELECT is_active FROM activity_types WHERE id = ? AND organization_id = current_profile()",
                 (entry["activity_type_id"],),
             ).fetchone()
             previous = existing_entries.get(entry["id"])
@@ -1304,7 +1337,7 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
                     """
                     UPDATE weekly_plan
                     SET weekday = ?, activity_type_id = ?, hours = ?, is_active = ?
-                    WHERE id = ? AND organization_id = 1
+                    WHERE id = ? AND organization_id = current_profile()
                     """,
                     (
                         entry["weekday"],
@@ -1321,7 +1354,7 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
                 """
                 INSERT INTO weekly_plan (
                     organization_id, weekday, activity_type_id, hours, is_active
-                ) VALUES (1, ?, ?, ?, ?)
+                ) VALUES (current_profile(), ?, ?, ?, ?)
                 """,
                 (
                     entry["weekday"],
@@ -1361,7 +1394,7 @@ def complete_planned_month(year: int, month: int, database_path: Path) -> int:
             """
             UPDATE trainings
             SET status = 'completed'
-            WHERE organization_id = 1
+            WHERE organization_id = current_profile()
               AND training_date BETWEEN ? AND ?
               AND status = 'planned'
               AND weekly_plan_id IS NOT NULL
@@ -1373,3 +1406,88 @@ def complete_planned_month(year: int, month: int, database_path: Path) -> int:
         updated_count = result.rowcount
 
     return updated_count
+
+
+def validate_profile_relationships(connection):
+    """Check existing rows too: triggers alone cannot validate imported archives."""
+    for table in TABLE_COLUMNS.keys() - {"organizations"}:
+        if connection.execute(f"SELECT 1 FROM {table} t LEFT JOIN organizations o ON o.id=t.organization_id WHERE o.id IS NULL LIMIT 1").fetchone():
+            raise ValueError("Ungültige Profilzuordnung")
+    if connection.execute("SELECT 1 FROM invoices WHERE pdf_path IS NOT NULL AND pdf_path != '' GROUP BY pdf_path COLLATE NOCASE HAVING COUNT(DISTINCT organization_id) > 1 LIMIT 1").fetchone():
+        raise ValueError("Profilübergreifende Dokumentreferenz")
+    from backend.invoice_generator import build_invoice_filename
+    for identifier, year, month, reference in connection.execute("SELECT organization_id, year, month, pdf_path FROM invoices WHERE organization_id != 1 AND pdf_path IS NOT NULL AND pdf_path != ''"):
+        if reference != f"profile-{identifier}-{build_invoice_filename(year, month)}":
+            raise ValueError("Ungültige profilbezogene Dokumentreferenz")
+    for table, column, parent in PROFILE_RELATIONSHIPS:
+        if connection.execute(f"SELECT 1 FROM {table} t JOIN {parent} p ON p.id=t.{column} WHERE t.organization_id != p.organization_id LIMIT 1").fetchone():
+            raise ValueError("Profilübergreifende Beziehung")
+
+
+PROFILE_RELATIONSHIPS = (
+    ("weekly_plan", "activity_type_id", "activity_types"),
+    ("trainings", "activity_type_id", "activity_types"),
+    ("trainings", "weekly_plan_id", "weekly_plan"),
+    ("invoice_items", "invoice_id", "invoices"),
+    ("invoice_items", "training_id", "trainings"),
+)
+
+
+def _migrate_profiles(connection):
+    if get_schema_version(connection) >= 7:
+        validate_profile_relationships(connection)
+        return
+    # Rebuild only the activity catalog to replace its old global UNIQUE name.
+    # Foreign keys are restored and checked before commit, without file moves.
+    connection.execute("PRAGMA foreign_keys = OFF")
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute("ALTER TABLE organizations ADD COLUMN profile_name TEXT NOT NULL DEFAULT 'TTC' CHECK(length(trim(profile_name)) BETWEEN 1 AND 100)")
+        ddl = connection.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='activity_types'").fetchone()[0]
+        ddl = re.sub(r'CREATE TABLE\s+"?activity_types"?', 'CREATE TABLE activity_types_profiles', ddl, count=1, flags=re.I)
+        ddl = re.sub(r'\bUNIQUE\b', '', ddl, flags=re.I)
+        connection.execute(ddl)
+        columns = ', '.join(row[1] for row in connection.execute('PRAGMA table_info(activity_types)'))
+        connection.execute(f'INSERT INTO activity_types_profiles ({columns}) SELECT {columns} FROM activity_types')
+        connection.execute('DROP TABLE activity_types')
+        connection.execute('ALTER TABLE activity_types_profiles RENAME TO activity_types')
+        connection.execute('CREATE UNIQUE INDEX idx_activity_profile_name ON activity_types(organization_id, name)')
+        connection.execute('DROP INDEX idx_invoices_unique_preview_period')
+        connection.execute('CREATE UNIQUE INDEX idx_invoices_unique_preview_period ON invoices(organization_id, year, month) WHERE is_preview=1')
+        for table in TABLE_COLUMNS.keys() - {'organizations'}:
+            connection.execute(f'CREATE INDEX IF NOT EXISTS idx_{table}_profile ON {table}(organization_id)')
+            for operation in ('INSERT', 'UPDATE'):
+                checks = ["NEW.organization_id IS NULL", "NOT EXISTS (SELECT 1 FROM organizations WHERE id=NEW.organization_id)"]
+                checks.extend(f'(NEW.{column} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {parent} WHERE id=NEW.{column} AND organization_id=NEW.organization_id))' for child, column, parent in PROFILE_RELATIONSHIPS if child == table)
+                connection.execute(f"CREATE TRIGGER profile_{table}_{operation.lower()} BEFORE {operation} ON {table} WHEN {' OR '.join(checks)} BEGIN SELECT RAISE(ABORT, 'Ungültige Profilbeziehung'); END")
+            connection.execute(f"CREATE TRIGGER profile_{table}_immutable BEFORE UPDATE OF organization_id ON {table} WHEN NEW.organization_id != OLD.organization_id BEGIN SELECT RAISE(ABORT, 'Profilzuordnung ist unveränderlich'); END")
+        validate_profile_relationships(connection)
+        if connection.execute('PRAGMA foreign_key_check').fetchall():
+            raise ValueError('Fremdschlüsselprüfung der Profilmigration fehlgeschlagen')
+        connection.execute('INSERT INTO schema_migrations(version) VALUES (7)')
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.execute('PRAGMA foreign_keys = ON')
+
+
+def list_profiles(database_path):
+    with get_connection(database_path) as connection:
+        return [{'id': row[0], 'name': row[1]} for row in connection.execute('SELECT id, profile_name FROM organizations ORDER BY id')]
+
+
+def create_profile(name, database_path):
+    with get_connection(database_path) as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        # AUTOINCREMENT semantics without rebuilding historical organization IDs.
+        maximum = connection.execute('SELECT COALESCE(MAX(id), 0) FROM organizations').fetchone()[0]
+        identifier = maximum + 1
+        connection.execute('INSERT INTO organizations(id, profile_name) VALUES (?, ?)', (identifier, name))
+        return {'id': identifier, 'name': name}
+
+
+def rename_profile(identifier, name, database_path):
+    with get_connection(database_path) as connection:
+        return connection.execute('UPDATE organizations SET profile_name=? WHERE id=?', (name, identifier)).rowcount == 1
