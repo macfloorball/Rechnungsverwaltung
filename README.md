@@ -16,15 +16,16 @@ Die fertige App benötigt **kein separat installiertes Python, Node.js, npm oder
 Git**. Die [deutschsprachige Installationsanleitung](Planung/Installation.md)
 erklärt Download, Installation, Start, Updates, Datensicherung und Fehlerhilfe.
 
-- **Windows x64:** [Setup-EXE im stabilen Desktop-Release 0.1.3](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.1.3).
+- **Windows x64:** [Setup-EXE im stabilen Desktop-Release 0.2.0](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.0).
 - **Linux x86_64:** AppImage im selben Desktop-Release.
 - **Fedora 45 x86_64:** Installation und Updates über das
   [signierte DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/).
 
 Der Windows-Installer besitzt derzeit keine Authenticode-Signatur; Windows kann
 Warnungen anzeigen. Details und die Grenzen der bisherigen nativen Prüfungen
-stehen in der Anleitung. Die vollständige Windows-Live-Abnahme aus
-[Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32) bleibt offen.
+stehen in der Anleitung. Der öffentliche Windows-Live-Wechsel 0.1.2 → 0.1.3 ist in
+[Issue #32](https://github.com/macfloorball/Rechnungsverwaltung/issues/32) nachgewiesen.
+Zusätzliche Sonderfälle bleiben in [#46](https://github.com/macfloorball/Rechnungsverwaltung/issues/46) offen.
 
 Windows 0.1.0/0.1.1 benötigt wegen eines Fehlers in der Updateübergabe einmal
 ein manuelles vollständiges Setup ab Version 0.1.2 über die bestehende Installation.
@@ -32,6 +33,22 @@ Vorher sichern und die App schließen; Details stehen in der Installationsanleit
 
 Die folgenden Python-/npm-Befehle beschreiben die **Entwicklung und den Start aus
 dem Quellcode**, nicht die Installation der fertigen App.
+
+## Neu in 0.2.0
+
+- Bis zu zehn dynamisch angelegte Tätigkeiten je Profil.
+- Fünf getrennte Ansichten mit zentraler Navigation.
+- Unabhängige Rechnungsprofile für verschiedene Vereine und Auftraggeber.
+- Wöchentliche und 14-tägige Wochenplaneinträge mit geschützter Synchronisierung.
+- Jährliche profilbezogene Rechnungsnummern, Steuer ID und lesbare Zahlungsangaben.
+
+**Vor dem Update eine vollständige App-Sicherung erstellen.** Die vorhandene
+Datenbank wird beim ersten Start migriert; bestehende Daten erscheinen im
+Standardprofil TTC. Historische Rechnungen und PDFs bleiben erhalten. Neue
+Jahresnummernkreise übernehmen bei unklaren Altwerten konservative Untergrenzen;
+dadurch können Nummernlücken entstehen. Für eine Rückkehr zu einer älteren
+Appversion ist eine passende Sicherung erforderlich; die migrierte Datenbank
+nicht einfach mit einem älteren Programm öffnen.
 
 ## Lizenz
 
@@ -1322,7 +1339,7 @@ Windows-Pakete sind in `requirements-windows.txt` versioniert. Es werden nur
 Windows-x64-Wheels eingebunden, keine Entwicklungsumgebung und keine Testpakete.
 Der Build kontrolliert die Laufzeitdateien und den Stand der Paketliste.
 Ergebnis ohne Release-Tag:
-`dist/installer/TT Rechnungsverwaltung-0.1.3-windows-x64-development-setup.exe`.
+`dist/installer/TT Rechnungsverwaltung-0.2.0-windows-x64-development-setup.exe`.
 Produktionsbuilds behalten den Dateinamen ohne `-development`; Einzelheiten zur
 Versionsprüfung stehen unter [Desktop-Release-Versionierung](#desktop-release-versionierung).
 Der bisherige `desktop:build:win` bleibt ein entpackter Entwickler-Testbuild
@@ -1332,7 +1349,7 @@ Installationspaket. Build-Ausgaben unter `dist/` werden nicht versioniert.
 ### Produktidentität
 
 App-Name: **TT Rechnungsverwaltung**, Herausgeber: **mac-floorball**,
-Paketversion: **0.1.3** aus `package.json`. Das vorhandene TTC-Symbol wird
+Paketversion: **0.2.0** aus `package.json`. Das vorhandene TTC-Symbol wird
 für App, EXE und Installer verwendet. Der technische Profilname bleibt
 `ttc-rechnungsverwaltung`; eine Änderung der Herausgeberangabe verschiebt
 damit keine Bestandsdaten. AppUserModelID: `de.mac-floorball.ttc-rechnungsverwaltung`.
@@ -1349,7 +1366,7 @@ Prüfung beider Verknüpfungen ist Bestandteil der Windows-VM-Abnahme.
 
 `package.json` bleibt die einzige Versionsquelle für die Desktop-App; die
 beiden Wurzelversionen in `package-lock.json` müssen übereinstimmen. Die aktuelle
-Version ist **0.1.3**. Die Backend-/Web-Versionierung wird nicht geändert.
+Version ist **0.2.0**. Die Backend-/Web-Versionierung wird nicht geändert.
 Versionsänderungen immer gemeinsam in Paket und Lockfile pflegen.
 
 ```sh
