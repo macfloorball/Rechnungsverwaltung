@@ -93,6 +93,7 @@ def test_tax_iban_snapshot_pdf_backup_and_export(environment, tmp_path, monkeypa
     assert rendered[0].footer.payment_notice == 'Freier Zahlungshinweis'
     snapshot = db.get_invoice(invoice['id'], database)['invoice_snapshot_json']
     assert json.loads(snapshot)['tax_id'] == 'Separate <ID>'
+    assert 'payment_due_days' not in json.loads(snapshot)
     request(client, 'PUT', '/api/organization/settings', body={'tax_id': 'Changed'})
     assert db.get_invoice(invoice['id'], database)['invoice_snapshot_json'] == snapshot
     assert request(client, 'GET', f'/api/invoices/{invoice["id"]}/pdf') == pdf
@@ -109,7 +110,7 @@ def test_tax_iban_snapshot_pdf_backup_and_export(environment, tmp_path, monkeypa
         assert '2026;2;2' in export.read('csv/invoice_counters.csv').decode('utf-8-sig')
 
 
-@pytest.mark.parametrize('iban', ['DE89 3704 0044 0532 0130 00', 'GB82 WEST 1234 5698 7654 32', 'NO93 8601 1117 947'])
+@pytest.mark.parametrize('iban', ['DE89 3704 0044 0532 0130 00', 'GB82 WEST 1234 5698 7654 32', 'NO93 8601 1117 947', 'MT84 MALT 0110 0001 2345 MTLC AST0 01S'])
 def test_international_iban_normalizes_before_length_validation(iban):
     assert OrganizationSettingsUpdate(iban=iban).iban == iban.replace(' ', '')
     with pytest.raises(ValueError):

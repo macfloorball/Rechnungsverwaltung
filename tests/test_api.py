@@ -857,7 +857,7 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
         )
         assert created.status_code == 201
 
-    first_response = client.post("/api/invoices", json={"year": 2026, "month": 11})
+    first_response = client.post("/api/invoices", json={"year": 2026, "month": 11, "invoice_date": "2026-11-30"})
     assert first_response.status_code == 201
     first_invoice = first_response.json()
     assert first_invoice["invoice_number"] == "2026-01"
@@ -881,7 +881,7 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
     assert changed.status_code == 200
     client.delete("/api/organization/logo")
 
-    second_response = client.post("/api/invoices", json={"year": 2026, "month": 12})
+    second_response = client.post("/api/invoices", json={"year": 2026, "month": 12, "invoice_date": "2026-12-31"})
     assert second_response.status_code == 201
     second_invoice = second_response.json()
     assert second_invoice["invoice_number"] == "2026-02"
