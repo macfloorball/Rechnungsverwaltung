@@ -37,9 +37,10 @@ function invoiceUI(create) {
   let events = 0;
   document.addEventListener('invoice-created', () => { events++; });
   const source = fs.readFileSync(path.join(__dirname, '../frontend/js/invoice.js'), 'utf8')
+    .replace(/^import .*;\r?\n/gm, '')
     .replace('export function initializeInvoicePreview', 'function initializeInvoicePreview');
   vm.runInNewContext(source + '\ninitializeInvoicePreview();', {
-    document, Event, Intl, Date, Error,
+    document, Event, Intl, Date, Error, profileUrl: url => url,
     HTMLElement: Element, HTMLFormElement: Element, HTMLInputElement: Element,
     HTMLButtonElement: Element, HTMLTableSectionElement: Element,
     HTMLTableCellElement: Element, HTMLAnchorElement: Element,

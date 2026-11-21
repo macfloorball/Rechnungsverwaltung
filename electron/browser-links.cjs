@@ -5,7 +5,8 @@ function invoicePDFURL(value, frontendURL) {
     const url = new URL(value);
     const frontend = new URL(frontendURL);
     if (url.protocol !== 'http:' || url.origin !== frontend.origin
-        || url.username || url.password || url.search || url.hash
+        || url.username || url.password || url.hash
+        || (url.search && !/^\?profile_id=[1-9]\d*$/.test(url.search))
         || !/^\/api\/invoices\/[1-9]\d*\/pdf$/.test(url.pathname)) return null;
     return url.href;
   } catch { return null; }

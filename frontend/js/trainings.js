@@ -1,3 +1,4 @@
+import { profileFetch as fetch, profileUrl } from "./profiles.js";
 function showError(element, error) {
   element.textContent = error instanceof Error
     ? error.message

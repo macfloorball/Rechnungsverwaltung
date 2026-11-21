@@ -1,3 +1,4 @@
+import { profileFetch as fetch, profileUrl } from "./profiles.js";
 const monthFormatter = new Intl.DateTimeFormat("de-DE", {
   month: "long",
   year: "numeric",
@@ -254,7 +255,7 @@ export function initializeInvoicePreview() {
       const invoice = await response.json();
       document.dispatchEvent(new Event("invoice-created"));
       if (version !== requestVersion) return;
-      const pdfUrl = `/api/invoices/${invoice.id}/pdf`;
+      const pdfUrl = profileUrl(`/api/invoices/${invoice.id}/pdf`);
       openPdfLink.href = pdfUrl;
       openPdfLink.hidden = false;
       downloadPdfLink.href = pdfUrl;

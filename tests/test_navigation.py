@@ -11,8 +11,9 @@ import pytest
 
 
 @pytest.mark.skipif(os.environ.get("TTC_RUN_ELECTRON_TESTS") != "1", reason="Opt-in Electron/GUI test")
+@pytest.mark.parametrize("scenario", ["navigation", "profiles"])
 @pytest.mark.parametrize("mode", ["development", "production"])
-def test_navigation_drafts_month_and_restart(tmp_path, mode):
+def test_navigation_drafts_month_and_restart(tmp_path, mode, scenario):
     root = Path(__file__).resolve().parent.parent
     executable = root / "node_modules/electron/dist" / ("electron.exe" if os.name == "nt" else "electron")
     installation = tmp_path / "Application"
@@ -20,9 +21,9 @@ def test_navigation_drafts_month_and_restart(tmp_path, mode):
     for folder in ("backend", "electron", "scripts", "frontend"):
         shutil.copytree(root / folder, installation / folder, ignore=shutil.ignore_patterns("__pycache__"))
     metadata = json.loads((root / "package.json").read_text())
-    metadata["main"] = "navigation_check.cjs"
+    metadata["main"] = f"{scenario}_check.cjs"
     (installation / "package.json").write_text(json.dumps(metadata))
-    shutil.copyfile(root / "tests/navigation_check.cjs", installation / metadata["main"])
+    shutil.copyfile(root / f"tests/{scenario}_check.cjs", installation / metadata["main"])
     profile, output = tmp_path / "Profile", tmp_path / "artifacts"
     profile.mkdir()
     output.mkdir()
@@ -45,9 +46,9 @@ def test_navigation_drafts_month_and_restart(tmp_path, mode):
         try:
             stdout, stderr = process.communicate(timeout=100)
             assert process.returncode == 0, stdout + stderr
-            assert ("NAVIGATION_RESTART_OK" if resume == "1" else "NAVIGATION_OK") in stdout, stdout + stderr
+            assert (f"{scenario.upper()}_RESTART_OK" if resume == "1" else f"{scenario.upper()}_OK") in stdout, stdout + stderr
         finally:
             if process.poll() is None:
                 process.kill()
                 process.wait(timeout=10)
-    assert (output / "navigation.png").stat().st_size > 1000
+    assert (output / f"{scenario}.png").stat().st_size > 1000

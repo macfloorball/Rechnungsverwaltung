@@ -1051,3 +1051,21 @@ dialog textarea {
   .section-heading { flex-wrap: wrap; }
   .month-navigation { flex-wrap: wrap; max-width: 100%; }
 }
+
+.profile-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+.profile-controls label { font-weight: 700; }
+.profile-controls select { max-width: 100%; min-width: 10rem; }
+#profile-message { flex-basis: 100%; margin: 0; }
+.profile-controls select,
+.profile-controls button {
+  min-height: 40px;
+  padding: 8px 10px;
+  color: #173c5d;
+  font: inherit;
+  background: #fff;
+  border: 1px solid #cbd6e0;
+  border-radius: 8px;
+}
+.profile-controls button { cursor: pointer; }
+.profile-controls :focus-visible { outline: 3px solid #8fc9ff; outline-offset: 3px; }
+.profile-controls :disabled { opacity: .65; cursor: wait; }
