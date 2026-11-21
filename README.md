@@ -63,6 +63,65 @@ offene Punkte vor einer Binärveröffentlichung stehen in der
   Einstellungssnapshots anzeigen.
 - SQLite-Datenbank migrieren und mit dem optionalen systemd-Timer sichern.
 
+## Wiederholung je Wochenplaneintrag
+
+Unter **Wochenplan konfigurieren** pro Zeile „Jede Woche“ oder „Alle 2 Wochen“
+wählen. Neue und bestehende Zeilen verwenden standardmäßig „Jede Woche“.
+Bei „Alle 2 Wochen“ ist **Erster Termin** ausdrücklich anzugeben; das Datum muss
+zum Wochentag der Zeile passen. Speichern übernimmt die Regel, erneutes Öffnen
+und ein App-Neustart erhalten die Auswahl. Mehrere Tätigkeiten und gemischte
+Rhythmen am selben Tag sind möglich. Die Felder sind per Tab bedienbar.
+Bei einem Fehler bleiben die Eingaben erhalten.
+
+Die 14-tägige Folge verwendet die Differenz von Kalenderdaten: Datum ≥ Startdatum
+und Tagesdifferenz durch 14 teilbar. Sie hängt weder von ISO-Wochennummern noch
+von UTC oder vergangenen Stunden ab. Donnerstag, 03.12.2026 ergibt 03.12.,
+17.12., 31.12. und 14.01.2027, nicht 10.12. oder 24.12. Im wöchentlichen Modus
+wird ein eventuell gespeichertes Startdatum **ignoriert**; es begrenzt die Folge
+nicht. Beim Wechsel auf 14-tägig wird kein Startdatum automatisch erfunden.
+
+Das Speichern einer Änderung von Rhythmus, Startdatum, Wochentag oder Aktivierung
+synchronisiert ausschließlich zukünftige Termine des jeweiligen Planeintrags im
+aktuellen Profil. „Zukünftig“ bedeutet strikt nach dem lokalen heutigen Datum.
+Passende Termine behalten ihre IDs. Nicht mehr passende Termine werden nur dann
+entfernt, wenn ihre automatische Herkunft und ihre Unverändertheit bewiesen sind,
+sie noch geplant sind und keine Rechnungsposition (Vorschau oder final) auf sie
+verweist. Manuelle, bearbeitete, heutige, vergangene und abgeschlossene Termine
+bleiben erhalten. Die Bearbeitung eines Kalendertermins ändert den Wochenplan
+nicht. Stunden-/Tätigkeitsänderungen im Plan überschreiben bestehende Termine
+weiterhin nicht; neu erzeugte Termine nutzen die gespeicherten Planwerte.
+
+Für neue automatische Termine ist `manually_modified=0` der Änderungsnachweis.
+Ein SQLite-Trigger setzt ihn bei fachlichen Änderungen dauerhaft auf 1, auch bei
+Verschiebung, Status-/Sammelaktionen, Änderungen von Tätigkeit, Stunden, Notiz,
+Preis oder Herkunft über andere Datenzugriffswege. Eine spätere Rückänderung
+stellt den Nachweis nicht wieder her. Migration 8 lässt den Wert für Altbestände
+bewusst NULL (unbekannt); diese werden konservativ erhalten. Ähnliche manuelle
+Termine werden durch die bestehende Kollisionsregel weiterhin berücksichtigt,
+aber niemals als automatisch erzeugt oder unbearbeitet eingestuft. Automatische
+Vorkommen reservieren ihr Ursprungsdatum und bei Verschiebung auch ihr tatsächliches
+Datum für denselben Planeintrag gegen Ersatzduplikate.
+
+Die bestehenden Migrationssicherungen werden weiterverwendet. Migration und
+Neustart sind idempotent. Planänderung, gezielte Bereinigung, Ergänzung und
+Ergebniszahlen werden gemeinsam in einer Transaktion gespeichert; ein Fehler
+rollt alles zurück. `weekly_plan_months` speichert die verwalteten Monate pro
+Profil, auch nach Deaktivierung oder vollständiger Bereinigung eines Monats.
+Nur diese Monate werden ergänzt; neue Pläne initialisieren wie bisher den aktuellen
+und folgenden Monat. Weitere Monate folgen beim Öffnen. Es gibt keine unbegrenzte
+Vorausgenerierung. Historische Rechnungsdaten, Nummern, Snapshots und PDFs werden
+von dieser Synchronisierung nicht geschrieben.
+
+`GET /api/weekly-plan` und die Listen-Antwort von `PUT /api/weekly-plan` bleiben
+kompatibel. Die Eingaben enthalten zusätzlich `repeat_weeks` (nur Ganzzahl 1 oder 2,
+Default 1) und `start_date` (ISO-Kalenderdatum oder null). PUT liefert im zusätzlichen
+Header `X-Weekly-Plan-Sync` ein JSON-Objekt mit `added`, `removed`, `updated` und
+`preserved`. `updated` bleibt 0, da passende Termine unverändert wiederverwendet
+werden. `preserved` zählt nur zukünftige, nicht mehr passende Ausnahmen, keine
+unbetroffene Historie. Die Oberfläche zeigt diese Zahlen nach erfolgreichem
+Speichern an und lädt den sichtbaren Kalender neu. Profilwechsel ersetzen wie
+bisher das Dokument; verspätete Antworten wirken nicht auf das neue Profil.
+
 ## Ansichten und Navigation
 
 Die App startet mit **Kalender / Übersicht**. Die Hauptnavigation wechselt im
@@ -72,7 +131,7 @@ selben Fenster zwischen fünf Ansichten; ein Seitenneustart ist dafür nicht nö
 | --- | --- |
 | Kalender / Übersicht | Monat wechseln, Termine erfassen/bearbeiten, Status und Sammelaktion; direkt darunter Monatsvorschau erstellen/aktualisieren und endgültige Monatsrechnung mit PDF öffnen/herunterladen oder nach Bestätigung löschen |
 | Rechnung konfigurieren | Absender, Empfänger, Bankverbindung, Steuerangaben, Rechnungstexte und Logo |
-| Wochenplan konfigurieren | Wochentage, Tätigkeiten, Stunden und Aktivierung der Planeinträge |
+| Wochenplan konfigurieren | Wochentage, Tätigkeiten, Stunden, Wiederholung, erster Termin und Aktivierung je Planeintrag |
 | Tätigkeiten und Preise | Bis zu zehn Tätigkeiten mit Stundenpreis und Aktivstatus (auch deaktivierte Einträge zählen) |
 | Verwaltung / App-Einstellungen | Vollständige Datensicherung, CSV-/Dokumentenexport und Desktop-Updates; Wiederherstellung gemäß Anleitung bei beendeter App |
 
