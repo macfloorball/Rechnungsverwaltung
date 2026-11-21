@@ -1160,12 +1160,16 @@ def test_weekly_plan_covers_all_weekdays_and_leap_year_without_duplicates(client
         assert client.get(f"/api/calendar/{year}/{month}").json() == calendar
 
 
-def test_plan_changes_deactivation_and_removal_preserve_existing_trainings(client, calendar_activities):
+def test_plan_changes_deactivation_and_removal_preserve_legacy_trainings(client, calendar_activities):
     from backend.database import list_records
 
     plan = client.put("/api/weekly-plan", json=[
         {"weekday": 0, "activity_type_id": calendar_activities[0]["id"], "hours": 1},
     ]).json()[0]
+    # Legacy records have no reliable proof that they have never been edited.
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        connection.execute("DROP TRIGGER training_manual_change")
+        connection.execute("UPDATE trainings SET manually_modified=NULL")
     before = list_records("trainings", database_path=client.app.state.test_database_path)
     changed = {"id": plan["id"], "weekday": 6, "activity_type_id": calendar_activities[1]["id"], "hours": 3}
     assert client.put("/api/weekly-plan", json=[changed]).status_code == 200
@@ -1175,6 +1179,8 @@ def test_plan_changes_deactivation_and_removal_preserve_existing_trainings(clien
     generated = [training for day in february["days"] for training in day["trainings"]]
     assert len(generated) == 5  # February 2032 has five Sundays.
     assert all(training["hours"] == 3 and training["activity_type_id"] == calendar_activities[1]["id"] for training in generated)
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        connection.execute("UPDATE trainings SET manually_modified=NULL")
     assert client.put("/api/weekly-plan", json=[{**changed, "is_active": False}]).status_code == 200
     assert all(not day["trainings"] for day in client.get("/api/calendar/2032/3").json()["days"])
     assert client.put("/api/weekly-plan", json=[]).json() == []
@@ -1394,10 +1400,10 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
             """
             SELECT training_date, hours, status, unit_rate_cents
             FROM trainings
-            WHERE weekly_plan_id = ?
+            WHERE weekly_plan_id = ? OR id = ?
             ORDER BY training_date
             """,
-            (plan_entry["id"],),
+            (plan_entry["id"], manual.json()["id"]),
         ).fetchall()
     assert occurrences == [
         ("2026-11-05", 2.0, "planned", 2000),
@@ -1563,8 +1569,8 @@ def test_month_completion_is_repeatable_and_excludes_moved_and_manual_appointmen
     after = {training["id"]: training for training in list_records("trainings", database_path=client.app.state.test_database_path)}
     assert set(after) == {training["id"] for training in before}
     for training in before:
-        assert {key: value for key, value in after[training["id"]].items() if key != "status"} == {
-            key: value for key, value in training.items() if key != "status"
+        assert {key: value for key, value in after[training["id"]].items() if key not in {"status", "manually_modified"}} == {
+            key: value for key, value in training.items() if key not in {"status", "manually_modified"}
         }
     assert client.post("/api/calendar/2032/2/complete").json() == {"updated_count": 0}
 
@@ -3267,3 +3273,17 @@ def test_ten_activities_preserve_plan_training_and_final_invoice(client):
     assert {t["id"] for t in loaded} == set(training_ids)
     assert get_invoice(invoice_id, client.app.state.test_database_path) == before
     assert client.get(f"/api/invoices/{invoice_id}/pdf").content == pdf
+
+
+def test_weekly_recurrence_api_validation_and_result_header(client, calendar_activities):
+    activity = calendar_activities[0]['id']
+    entry = {'weekday': 3, 'activity_type_id': activity, 'hours': 1, 'repeat_weeks': 2}
+    for change in ({}, {'start_date': '2032-12-03'}, {'start_date': 'invalid'}, {'repeat_weeks': 3}, {'repeat_weeks': True}, {'repeat_weeks': 2.0}):
+        response = client.put('/api/weekly-plan', json=[{**entry, **change}])
+        assert response.status_code == 422
+        assert client.get('/api/weekly-plan').json() == []
+    response = client.put('/api/weekly-plan', json=[{**entry, 'start_date': '2032-12-02'}])
+    assert response.status_code == 200
+    assert set(json.loads(response.headers['X-Weekly-Plan-Sync'])) == {'added', 'removed', 'updated', 'preserved'}
+    assert response.json()[0]['start_date'] == '2032-12-02'
+    assert response.json()[0]['repeat_weeks'] == 2

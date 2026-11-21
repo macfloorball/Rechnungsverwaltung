@@ -78,7 +78,11 @@ async function requestJson(url, options) {
     }
     throw new Error(detail);
   }
-  return response.json();
+  const data = await response.json();
+  if (url === "/api/weekly-plan" && options?.method === "PUT") {
+    data.sync = JSON.parse(response.headers.get("X-Weekly-Plan-Sync") || "null");
+  }
+  return data;
 }
 
 function showMessage(node, message) {
@@ -224,7 +228,27 @@ function buildPlanRow(activities, entry = {}) {
   removeButton.className = "remove-plan-entry";
   removeButton.setAttribute("aria-label", "Planeintrag entfernen");
   removeButton.dataset.removePlanEntry = "";
-  row.append(activitySelect, hoursInput, activeLabel, removeButton);
+  const repeatLabel = element("label", "Wiederholung");
+  const repeatSelect = element("select");
+  repeatSelect.setAttribute("aria-label", "Wiederholung");
+  repeatSelect.dataset.planRepeat = "";
+  repeatSelect.append(new Option("Jede Woche", "1"), new Option("Alle 2 Wochen", "2"));
+  repeatSelect.value = String(entry.repeat_weeks ?? 1);
+  repeatLabel.append(repeatSelect);
+  const startLabel = element("label", "Erster Termin");
+  const startInput = element("input");
+  startInput.type = "date";
+  startInput.setAttribute("aria-label", "Erster Termin");
+  startInput.dataset.planStart = "";
+  startInput.value = entry.start_date ?? "";
+  startLabel.append(startInput);
+  const updateRepeat = () => {
+    startLabel.hidden = repeatSelect.value !== "2";
+    startInput.required = repeatSelect.value === "2";
+  };
+  repeatSelect.addEventListener("change", updateRepeat);
+  updateRepeat();
+  row.append(activitySelect, hoursInput, repeatLabel, startLabel, activeLabel, removeButton);
   return row;
 }
 
@@ -667,6 +691,8 @@ export function initializeSettings() {
           activity_type_id: Number(activitySelect.value),
           hours,
           is_active: activeInput.checked,
+          repeat_weeks: Number(row.querySelector("[data-plan-repeat]").value),
+          start_date: row.querySelector("[data-plan-start]").value || null,
         };
         if (row.dataset.planId) {
           entry.id = Number(row.dataset.planId);
@@ -685,7 +711,10 @@ export function initializeSettings() {
       unlock();
       renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
       document.dispatchEvent(new Event("weekly-plan-updated"));
-      showMessage(weeklyPlanSuccess, "Der wöchentliche Trainingsplan wurde gespeichert.");
+      const sync = weeklyPlan.sync;
+      showMessage(weeklyPlanSuccess, sync
+        ? `Wochenplan gespeichert: ${sync.added} Termine ergänzt, ${sync.removed} entfernt, ${sync.updated} aktualisiert. ${sync.preserved} zukünftige Ausnahmen wegen Bearbeitung, Schutz oder unbekannter Änderungshistorie erhalten.`
+        : "Wochenplan gespeichert.");
     } catch (error) {
       showMessage(
         weeklyPlanError,

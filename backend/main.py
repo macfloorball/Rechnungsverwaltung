@@ -397,8 +397,10 @@ def get_weekly_plan(database_path: DatabasePath) -> list[dict[str, Any]]:
 def put_weekly_plan(
     entries: list[WeeklyPlanEntry],
     database_path: DatabasePath,
+    response: Response,
 ) -> list[dict[str, Any]]:
-    save_weekly_plan([entry.model_dump() for entry in entries], database_path)
+    result = save_weekly_plan([entry.model_dump() for entry in entries], database_path)
+    response.headers["X-Weekly-Plan-Sync"] = json.dumps(result)
     return get_weekly_plan(database_path)
 
 

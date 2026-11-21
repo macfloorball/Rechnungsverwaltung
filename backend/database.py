@@ -59,6 +59,8 @@ TABLE_COLUMNS = {
         "is_active",
     },
     "weekly_plan": {
+        "repeat_weeks",
+        "start_date",
         "organization_id",
         "weekday",
         "activity_type_id",
@@ -66,6 +68,7 @@ TABLE_COLUMNS = {
         "is_active",
     },
     "trainings": {
+        "manually_modified",
         "organization_id",
         "training_date",
         "weekly_plan_id",
@@ -156,7 +159,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -362,6 +365,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_weekly_plan_generated,
             _migrate_invoice_previews,
             _migrate_profiles,
+            _migrate_recurrence,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -791,6 +795,45 @@ def _migrate_invoice_previews(connection: sqlite3.Connection) -> None:
         raise
 
 
+def _migrate_recurrence(connection):
+    if get_schema_version(connection) != 7:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute("ALTER TABLE weekly_plan ADD COLUMN repeat_weeks INTEGER NOT NULL DEFAULT 1 CHECK(repeat_weeks IN (1, 2))")
+        connection.execute("ALTER TABLE weekly_plan ADD COLUMN start_date TEXT")
+        # NULL means unknown legacy history, never proof of an untouched record.
+        connection.execute("ALTER TABLE trainings ADD COLUMN manually_modified INTEGER CHECK(manually_modified IN (0, 1))")
+        connection.execute("""CREATE TABLE weekly_plan_months (
+            organization_id INTEGER NOT NULL REFERENCES organizations(id),
+            month_start TEXT NOT NULL, PRIMARY KEY(organization_id, month_start))""")
+        connection.execute("""INSERT OR IGNORE INTO weekly_plan_months
+            SELECT organization_id, substr(weekly_plan_date, 1, 7) || '-01'
+            FROM trainings WHERE weekly_plan_id IS NOT NULL AND weekly_plan_date IS NOT NULL""")
+        fields = ("training_date", "activity_type_id", "hours", "status", "note",
+                  "unit_rate_cents", "weekly_plan_id", "weekly_plan_date",
+                  "weekly_plan_generated", "organization_id")
+        changed = " OR ".join(f"NEW.{field} IS NOT OLD.{field}" for field in fields)
+        connection.execute(f"""CREATE TRIGGER training_manual_change AFTER UPDATE ON trainings
+            WHEN {changed} OR NEW.manually_modified IS NOT OLD.manually_modified
+            BEGIN UPDATE trainings SET manually_modified = 1 WHERE id = NEW.id; END""")
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (8)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def _plan_matches(weekday, repeat_weeks, start_date, day):
+    if day.weekday() != weekday:
+        return False
+    # Weekly mode deliberately ignores the optional stored start date.
+    if repeat_weeks == 1:
+        return True
+    start = date.fromisoformat(start_date)
+    return day >= start and (day - start).days % 14 == 0
+
+
 def get_record(
     table: str,
     record_id: int,
@@ -1203,12 +1246,15 @@ def save_activities(activities: list[dict[str, Any]], database_path: Path) -> No
 def _ensure_weekly_plan_occurrences(
     connection: sqlite3.Connection,
     month_start: date,
-) -> None:
+    *, after: date | None = None, only_ids: set[int] | None = None,
+) -> int:
+    connection.execute("INSERT OR IGNORE INTO weekly_plan_months VALUES (current_profile(), ?)", (month_start.isoformat(),))
+    added = 0
     plan_entries = connection.execute(
         """
         SELECT weekly_plan.id, weekly_plan.organization_id, weekly_plan.weekday,
                weekly_plan.activity_type_id, weekly_plan.hours,
-               activity_types.hourly_rate_cents
+               activity_types.hourly_rate_cents, weekly_plan.repeat_weeks, weekly_plan.start_date
         FROM weekly_plan
         JOIN activity_types
           ON activity_types.id = weekly_plan.activity_type_id
@@ -1223,10 +1269,12 @@ def _ensure_weekly_plan_occurrences(
 
     for day_number in range(1, days_in_month + 1):
         current_date = date(month_start.year, month_start.month, day_number)
+        if after is not None and current_date <= after:
+            continue
         date_string = current_date.isoformat()
         matching_entries: dict[int, list[tuple[int, int, float, int]]] = {}
         for entry in plan_entries:
-            if entry[2] == current_date.weekday():
+            if (only_ids is None or entry[0] in only_ids) and _plan_matches(entry[2], entry[6], entry[7], current_date):
                 matching_entries.setdefault(entry[3], []).append(
                     (entry[0], entry[1], entry[4], entry[5])
                 )
@@ -1250,9 +1298,10 @@ def _ensure_weekly_plan_occurrences(
                     """
                     SELECT id
                     FROM trainings
-                    WHERE weekly_plan_id = ? AND weekly_plan_date = ?
+                    WHERE organization_id = current_profile() AND weekly_plan_id = ?
+                      AND (weekly_plan_date = ? OR training_date = ?)
                     """,
-                    (plan_id, date_string),
+                    (plan_id, date_string, date_string),
                 ).fetchone()
                 if occurrence is not None:
                     used_training_ids.add(occurrence[0])
@@ -1262,21 +1311,14 @@ def _ensure_weekly_plan_occurrences(
                     (
                         training
                         for training in existing_trainings
-                        if training[0] not in used_training_ids
+                        if training[0] not in used_training_ids and training[1] is None
                     ),
                     None,
                 )
                 if existing is not None:
                     used_training_ids.add(existing[0])
-                    if existing[1] is None:
-                        connection.execute(
-                            """
-                            UPDATE trainings
-                            SET weekly_plan_id = ?, weekly_plan_date = ?
-                            WHERE id = ? AND weekly_plan_id IS NULL
-                            """,
-                            (plan_id, date_string, existing[0]),
-                        )
+                    # A collision is not evidence of origin. Leave manual rows
+                    # completely untouched, including provenance and edit proof.
                     continue
 
                 cursor = connection.execute(
@@ -1284,8 +1326,8 @@ def _ensure_weekly_plan_occurrences(
                     INSERT INTO trainings (
                         organization_id, training_date, weekly_plan_id,
                         weekly_plan_date, activity_type_id, hours, status,
-                        note, unit_rate_cents, weekly_plan_generated
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?, 1)
+                        note, unit_rate_cents, weekly_plan_generated, manually_modified
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'planned', NULL, ?, 1, 0)
                     """,
                     (
                         organization_id,
@@ -1297,11 +1339,18 @@ def _ensure_weekly_plan_occurrences(
                         unit_rate_cents,
                     ),
                 )
+                added += 1
                 used_training_ids.add(cursor.lastrowid)
                 existing_trainings.append((cursor.lastrowid, plan_id))
 
+    return added
 
-def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None:
+def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> dict[str, int]:
+    from backend.models import WeeklyPlanEntry
+    # Validate direct database callers too, before making any writes.
+    entries = [WeeklyPlanEntry.model_validate(entry).model_dump(mode="json") for entry in entries]
+    result = {"added": 0, "removed": 0, "updated": 0, "preserved": 0}
+    today = date.today()
     with get_connection(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
@@ -1309,7 +1358,7 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
             row[0]: row
             for row in connection.execute(
                 """
-                SELECT id, weekday, activity_type_id, hours, is_active
+                SELECT id, weekday, activity_type_id, hours, is_active, repeat_weeks, start_date
                 FROM weekly_plan
                 WHERE organization_id = current_profile()
                 """
@@ -1336,7 +1385,7 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
                 connection.execute(
                     """
                     UPDATE weekly_plan
-                    SET weekday = ?, activity_type_id = ?, hours = ?, is_active = ?
+                    SET weekday = ?, activity_type_id = ?, hours = ?, is_active = ?, repeat_weeks = ?, start_date = ?
                     WHERE id = ? AND organization_id = current_profile()
                     """,
                     (
@@ -1344,6 +1393,8 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
                         entry["activity_type_id"],
                         entry["hours"],
                         entry["is_active"],
+                        entry["repeat_weeks"],
+                        entry["start_date"],
                         entry["id"],
                     ),
                 )
@@ -1353,30 +1404,60 @@ def save_weekly_plan(entries: list[dict[str, Any]], database_path: Path) -> None
             cursor = connection.execute(
                 """
                 INSERT INTO weekly_plan (
-                    organization_id, weekday, activity_type_id, hours, is_active
-                ) VALUES (current_profile(), ?, ?, ?, ?)
+                    organization_id, weekday, activity_type_id, hours, is_active, repeat_weeks, start_date
+                ) VALUES (current_profile(), ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry["weekday"],
                     entry["activity_type_id"],
                     entry["hours"],
                     entry["is_active"],
+                    entry["repeat_weeks"],
+                    entry["start_date"],
                 ),
             )
             retained_ids.add(cursor.lastrowid)
 
-        for plan_id in existing_entries.keys() - retained_ids:
-            connection.execute("DELETE FROM weekly_plan WHERE id = ?", (plan_id,))
+        changed_ids = set()
+        for entry in entries:
+            if entry["id"] in existing_entries:
+                old = existing_entries[entry["id"]]
+                if (old[1], old[4], old[5], old[6]) != (entry["weekday"], entry["is_active"], entry["repeat_weeks"], entry["start_date"]):
+                    changed_ids.add(entry["id"])
+        omitted = existing_entries.keys() - retained_ids
+        changed_ids.update(omitted)
+        new_rules = {entry["id"]: entry for entry in entries}
+        for plan_id in changed_ids:
+            rule = new_rules.get(plan_id)
+            candidates = connection.execute("""SELECT t.id, t.training_date, t.weekly_plan_date,
+                t.weekly_plan_generated, t.manually_modified, t.status,
+                EXISTS(SELECT 1 FROM invoice_items i WHERE i.training_id=t.id)
+                FROM trainings t WHERE t.organization_id=current_profile()
+                  AND t.weekly_plan_id=? AND t.training_date>?""", (plan_id, today.isoformat())).fetchall()
+            for identifier, actual, original, generated, modified, status, bound in candidates:
+                matches = rule and rule["is_active"] and original and _plan_matches(
+                    rule["weekday"], rule["repeat_weeks"], rule["start_date"], date.fromisoformat(original))
+                if matches:
+                    continue
+                if generated == 1 and modified == 0 and actual == original and status == "planned" and not bound:
+                    connection.execute("DELETE FROM trainings WHERE id=?", (identifier,))
+                    result["removed"] += 1
+                else:
+                    result["preserved"] += 1
+        for plan_id in omitted:
+            connection.execute("DELETE FROM weekly_plan WHERE id = ? AND organization_id=current_profile()", (plan_id,))
 
-        current_month = date.today().replace(day=1)
+        current_month = today.replace(day=1)
         following_month_index = current_month.year * 12 + current_month.month
-        following_month = date(
-            following_month_index // 12,
-            following_month_index % 12 + 1,
-            1,
-        )
-        _ensure_weekly_plan_occurrences(connection, current_month)
-        _ensure_weekly_plan_occurrences(connection, following_month)
+        following_month = date(following_month_index // 12, following_month_index % 12 + 1, 1)
+        # Preserve the existing current/next-month initialization for new plans.
+        new_ids = retained_ids - existing_entries.keys()
+        for month in (current_month, following_month):
+            result["added"] += _ensure_weekly_plan_occurrences(connection, month, only_ids=new_ids)
+        months = connection.execute("SELECT month_start FROM weekly_plan_months WHERE organization_id=current_profile() AND month_start>=?", (current_month.isoformat(),)).fetchall()
+        for (month,) in months:
+            result["added"] += _ensure_weekly_plan_occurrences(connection, date.fromisoformat(month), after=today, only_ids=changed_ids - omitted)
+    return result
 
 
 def ensure_weekly_plan_month(month_start: date, database_path: Path) -> None:

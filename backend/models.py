@@ -2,7 +2,7 @@ from datetime import date
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class APIModel(BaseModel):
@@ -144,6 +144,34 @@ class WeeklyPlanEntry(APIModel):
     activity_type_id: int = Field(gt=0)
     hours: int = Field(gt=0, strict=True)
     is_active: bool = True
+    repeat_weeks: Literal[1, 2] = 1
+    start_date: date | None = None
+
+    @field_validator("repeat_weeks", mode="before")
+    @classmethod
+    def validate_repeat_weeks(cls, value):
+        if type(value) is not int or value not in (1, 2):
+            raise ValueError("Wiederholung muss Jede Woche (1) oder Alle 2 Wochen (2) sein")
+        return value
+
+    @field_validator("start_date", mode="before")
+    @classmethod
+    def validate_start_date(cls, value):
+        if isinstance(value, str):
+            try:
+                return date.fromisoformat(value)
+            except ValueError:
+                raise ValueError("Erster Termin muss ein gültiges Kalenderdatum sein") from None
+        return value
+
+    @model_validator(mode="after")
+    def validate_recurrence(self):
+        if self.repeat_weeks == 2:
+            if self.start_date is None:
+                raise ValueError("Für Alle 2 Wochen bitte Erster Termin ausdrücklich wählen")
+            if self.start_date.weekday() != self.weekday:
+                raise ValueError("Erster Termin muss zum gewählten Wochentag passen")
+        return self
 
 
 class TrainingCreate(APIModel):
