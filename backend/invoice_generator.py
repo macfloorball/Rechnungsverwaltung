@@ -10,6 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
+from reportlab.pdfbase.pdfmetrics import getAscentDescent
 from reportlab.platypus import Paragraph, Table, TableStyle
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
@@ -415,7 +416,10 @@ def draw_invoice_footer(
         raise ValueError("Die Rechnungssumme darf nicht negativ sein")
 
     total_y = table_bottom_y - FOOTER_ROW_GAP
-    rule_top_y = total_y + FOOTER_LINE_GAP
+    # Canvas text coordinates mark the baseline, not the visual text centre.
+    ascent, _ = getAscentDescent(BODY_FONT_BOLD, BODY_FONT_SIZE)
+    rule_top_y = total_y + ascent + FOOTER_LINE_GAP
+    # Neither "Endsumme:" nor the formatted amount has descending glyphs.
     rule_bottom_y = total_y - FOOTER_LINE_GAP
     lines = []
     if details.account_holder:
