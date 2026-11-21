@@ -457,6 +457,20 @@
       </div>
     </dialog>
 
+    <dialog id="profile-name-dialog" aria-labelledby="profile-name-title">
+      <form id="profile-name-form" novalidate>
+        <div class="dialog-heading"><h2 id="profile-name-title">Neues Profil</h2></div>
+        <label for="profile-name">Profilname</label>
+        <input id="profile-name" name="name" type="text" autocomplete="off" aria-describedby="profile-name-hint profile-name-error">
+        <p id="profile-name-hint">1 bis 100 Zeichen. Während des Speicherns bitte warten.</p>
+        <p id="profile-name-error" class="error-message" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button id="cancel-profile-name" class="secondary-button" type="button">Abbrechen</button>
+          <button id="save-profile-name" class="primary-button" type="submit">Profil anlegen</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="training-dialog" aria-labelledby="training-dialog-title">
       <form id="training-form">
         <div class="dialog-heading">

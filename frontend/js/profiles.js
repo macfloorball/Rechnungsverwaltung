@@ -58,7 +58,7 @@ export async function initializeProfiles() {
   select.addEventListener('change', () => {
     const requested = select.value;
     select.value = String(activeId);
-    if (pendingWrites) {
+    if (editing || pendingWrites) {
       message.textContent = 'Speicherung läuft. Bitte vor dem Profilwechsel warten.';
       select.focus();
       return;
@@ -72,31 +72,91 @@ export async function initializeProfiles() {
     location.reload();
   });
 
-  async function editProfile(create) {
-    const name = window.prompt(create ? 'Name des neuen Profils' : 'Neuer Profilname', create ? '' : select.selectedOptions[0].textContent);
-    if (name === null) return;
-    if (!name.trim() || name.trim().length > 100) {
-      message.textContent = 'Bitte einen Profilnamen mit 1 bis 100 Zeichen eingeben.';
+  const dialog = document.querySelector('#profile-name-dialog');
+  const form = document.querySelector('#profile-name-form');
+  const input = document.querySelector('#profile-name');
+  const title = document.querySelector('#profile-name-title');
+  const errorMessage = document.querySelector('#profile-name-error');
+  const save = document.querySelector('#save-profile-name');
+  const cancel = document.querySelector('#cancel-profile-name');
+  let editing = null;
+  let saving = false;
+
+  function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.hidden = !message;
+  }
+  function lock(locked) {
+    createButton.disabled = renameButton.disabled = select.disabled = locked;
+  }
+  function editProfile(create, trigger) {
+    if (editing || switching || saving) return;
+    try {
+      editing = { create, id: Number(select.value), trigger };
+      form.reset();
+      showError('');
+      title.textContent = create ? 'Neues Profil' : 'Profil umbenennen';
+      save.textContent = create ? 'Profil anlegen' : 'Speichern';
+      input.value = create ? '' : select.selectedOptions[0].textContent;
+      lock(true);
+      dialog.showModal();
+      input.focus();
+      if (!create) input.select();
+    } catch (error) {
+      editing = null;
+      lock(false);
+      message.textContent = 'Profildialog konnte nicht geöffnet werden. Bitte erneut versuchen.';
+    }
+  }
+  dialog.addEventListener('cancel', event => {
+    if (saving) event.preventDefault();
+  });
+  cancel.addEventListener('click', () => { if (!saving) dialog.close(); });
+  dialog.addEventListener('close', () => {
+    const trigger = editing?.trigger;
+    editing = null;
+    form.reset();
+    showError('');
+    lock(false);
+    trigger?.focus();
+  });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!editing || saving) return;
+    const name = input.value.trim();
+    if (!name || name.length > 100) {
+      showError('Bitte einen Profilnamen mit 1 bis 100 Zeichen eingeben.');
+      input.focus();
       return;
     }
-    createButton.disabled = renameButton.disabled = select.disabled = true;
+    const target = editing;
+    saving = true;
+    save.disabled = cancel.disabled = input.disabled = true;
+    form.setAttribute('aria-busy', 'true');
+    showError('');
     try {
-      const response = await profileFetch(create ? '/api/profiles' : `/api/profiles/${activeId}`, {
-        method: create ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }),
+      const response = await profileFetch(target.create ? '/api/profiles' : `/api/profiles/${target.id}`, {
+        method: target.create ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
       });
       if (!response.ok) throw new Error('Profil konnte nicht gespeichert werden. Bitte erneut versuchen.');
       const profile = await response.json();
-      if (create) select.add(new Option(profile.name, String(profile.id)));
-      else select.selectedOptions[0].textContent = profile.name;
-      message.textContent = create ? 'Leeres Profil angelegt. Zum Wechseln oben auswählen.' : 'Profil umbenannt.';
+      if (target.create) select.add(new Option(profile.name, String(profile.id)));
+      else {
+        const option = Array.from(select.options).find(option => Number(option.value) === target.id);
+        if (option) option.textContent = profile.name;
+      }
+      message.textContent = target.create ? 'Leeres Profil angelegt. Zum Wechseln oben auswählen.' : 'Profil umbenannt.';
+      dialog.close();
     } catch (error) {
-      message.textContent = error.message;
+      showError('Profil konnte nicht gespeichert werden. Bitte erneut versuchen.');
     } finally {
-      createButton.disabled = renameButton.disabled = select.disabled = false;
-      select.focus();
+      saving = false;
+      save.disabled = cancel.disabled = input.disabled = false;
+      form.removeAttribute('aria-busy');
+      if (dialog.open) input.focus();
     }
-  }
-  createButton.addEventListener('click', () => editProfile(true));
-  renameButton.addEventListener('click', () => editProfile(false));
+  });
+  createButton.addEventListener('click', () => editProfile(true, createButton));
+  renameButton.addEventListener('click', () => editProfile(false, renameButton));
   return true;
 }
