@@ -281,7 +281,7 @@ def test_legacy_database_migration_preserves_existing_invoice_data(
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone() == (8,)
+        ).fetchone() == (9,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
@@ -464,7 +464,7 @@ def test_parallel_finalizations_commit_invoice_and_number_once(database_path):
     def finalize():
         try:
             return create_invoice_with_items(
-                {"year": 2026, "month": 1, "invoice_date": "2026-01-31", "total_amount_cents": 0},
+                {"year": 2026, "month": 1, "invoice_date": "2026-01-31", "invoice_number": "2026-01", "total_amount_cents": 0},
                 [], database_path, expected_next_invoice_number=1,
             )
         except InvoiceAlreadyExistsError:

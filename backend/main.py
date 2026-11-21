@@ -715,7 +715,8 @@ def post_invoice(
     invoice_snapshot = {
         key: value
         for key, value in organization.items()
-        if key not in {"id", "logo_data", "logo_path", "created_at", "updated_at"}
+        if key not in {"id", "logo_data", "logo_path", "created_at", "updated_at",
+                       "payment_due_days", "invoice_number_prefix", "next_invoice_number"}
     }
     invoice_snapshot.update(
         {

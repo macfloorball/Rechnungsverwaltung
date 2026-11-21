@@ -29,6 +29,14 @@ def validate_database(connection: sqlite3.Connection, *, current: bool = False) 
         columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
         if not fields <= columns:
             raise ValueError("Die Datei enthält keine unterstützte Rechnungsdatenbank")
+    if get_schema_version(connection) >= 9:
+        for table, required_columns in {
+            "invoice_counters": {"organization_id", "year", "next_number", "minimum_number"},
+            "invoice_number_legacy_floors": {"organization_id", "minimum_number"},
+        }.items():
+            columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+            if not required_columns <= columns:
+                raise ValueError("Die Rechnungsnummernkreise fehlen in der Datenbank")
     if get_schema_version(connection) >= 7:
         validate_profile_relationships(connection)
     if connection.execute("PRAGMA foreign_key_check").fetchall():

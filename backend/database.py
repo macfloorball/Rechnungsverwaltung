@@ -885,13 +885,19 @@ def _invoice_counter(connection, identifier, year):
         "SELECT next_number, minimum_number FROM invoice_counters WHERE organization_id = ? AND year = ?",
         (identifier, year),
     ).fetchone()
-    if row:
-        return row
     legacy = connection.execute(
         "SELECT minimum_number FROM invoice_number_legacy_floors WHERE organization_id = ?", (identifier,)
     ).fetchone()
-    floor = legacy[0] if legacy else 1
-    return floor, floor
+    floor = row[1] if row else (legacy[0] if legacy else 1)
+    # Also reject collisions in imported records created without the allocator.
+    for (number,) in connection.execute(
+        "SELECT invoice_number FROM invoices WHERE organization_id = ? AND is_preview = 0",
+        (identifier,),
+    ):
+        match = re.fullmatch(r"([0-9]{4})-([0-9]+)", number or "")
+        if match and int(match[1]) == year:
+            floor = max(floor, int(match[2]) + 1)
+    return max(row[0], floor) if row else floor, floor
 
 
 def get_invoice_counter(year, database_path=None):

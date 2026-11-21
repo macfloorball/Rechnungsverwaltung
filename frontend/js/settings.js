@@ -398,7 +398,7 @@ export function initializeSettings() {
     event.preventDefault();
     if (!counterForm.reportValidity() || loadedYear !== Number(counterYear.value)) return;
     const year = loadedYear;
-    counterSave.disabled = true;
+    const unlock = lockForm(counterForm);
     try {
       await requestJson(`/api/organization/invoice-counter/${year}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
@@ -406,7 +406,7 @@ export function initializeSettings() {
       });
       counterMessage.textContent = "Nummernkreis gespeichert.";
     } catch (error) { counterMessage.textContent = error.message; }
-    finally { counterSave.disabled = loadedYear !== Number(counterYear.value); }
+    finally { unlock(); counterSave.disabled = loadedYear !== Number(counterYear.value); }
   });
   loadCounter();
 

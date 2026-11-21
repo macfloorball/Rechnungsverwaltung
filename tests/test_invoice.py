@@ -272,7 +272,7 @@ def test_invoice_footer_includes_total_bank_details_and_greeting() -> None:
 
     assert output.getvalue().startswith(b"%PDF-")
     assert "Kontoinhaber: Beispielverein" in commands
-    assert "IBAN: DE89370400440532013000" in commands
+    assert "IBAN: DE89 3704 0044 0532 0130 00" in commands
     assert "BIC: GENODEF1S04" in commands
     assert "Beispielbank" in commands
     assert "Zahlbar bis: 15.08.2026" in commands

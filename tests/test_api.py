@@ -860,7 +860,7 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
     first_response = client.post("/api/invoices", json={"year": 2026, "month": 11})
     assert first_response.status_code == 201
     first_invoice = first_response.json()
-    assert first_invoice["invoice_number"] == "TTC-2026-0001"
+    assert first_invoice["invoice_number"] == "2026-01"
     first_pdf = client.get(f"/api/invoices/{first_invoice['id']}/pdf").content
     assert b"/Subtype /Image" in first_pdf
 
@@ -884,7 +884,7 @@ def test_invoice_snapshot_and_saved_pdf_survive_organization_changes(
     second_response = client.post("/api/invoices", json={"year": 2026, "month": 12})
     assert second_response.status_code == 201
     second_invoice = second_response.json()
-    assert second_invoice["invoice_number"] == "TTC-2026-0002"
+    assert second_invoice["invoice_number"] == "2026-02"
     second_pdf = client.get(f"/api/invoices/{second_invoice['id']}/pdf").content
     assert b"/Subtype /Image" not in second_pdf
 
@@ -960,7 +960,7 @@ def test_invoice_archive_is_chronological_and_pdfs_remain_unchanged(
 
         invoice = client.post(
             "/api/invoices",
-            json={"year": year, "month": month},
+            json={"year": year, "month": month, "invoice_date": f"{year}-11-21"},
         )
         assert invoice.status_code == 201
         invoices_by_month[(year, month)] = invoice.json()
@@ -988,7 +988,7 @@ def test_invoice_archive_is_chronological_and_pdfs_remain_unchanged(
     assert [
         invoice["invoice_number"]
         for invoice in archived
-    ] == ["RE-2027-0003", "RE-2026-0002", "RE-2026-0001"]
+    ] == ["2027-01", "2026-02", "2026-01"]
 
     november_invoice = invoices_by_month[(2026, 11)]
     archived_november = next(
@@ -997,7 +997,7 @@ def test_invoice_archive_is_chronological_and_pdfs_remain_unchanged(
         if invoice["id"] == november_invoice["id"]
     )
     assert archived_november["total_amount_cents"] == 4000
-    assert archived_november["invoice_number"] == "RE-2026-0001"
+    assert archived_november["invoice_number"] == "2026-01"
     reopened = client.get(f"/api/invoices/{november_invoice['id']}/pdf")
     assert reopened.status_code == 200
     assert reopened.content == first_month_pdf
@@ -1800,8 +1800,8 @@ def test_training_and_invoice_endpoints(client: TestClient) -> None:
     assert response.status_code == 201
     invoice = response.json()
     assert invoice["total_amount_cents"] == 3000
-    assert invoice["invoice_date"] == date.today().isoformat()
-    assert invoice["invoice_number"] == "RE-2026-0001"
+    assert invoice["invoice_date"] == "2026-12-01"
+    assert invoice["invoice_number"] == "2026-01"
     assert invoice["items"][0]["unit_rate_cents"] == 1500
     assert invoice["pdf_path"] == "Rechnung_TTC_2026-11.pdf"
     saved_pdf_path = client.app.state.test_invoice_directory / invoice["pdf_path"]
@@ -1968,7 +1968,7 @@ def test_refreshing_empty_draft_clears_stale_items_and_preserves_other_period(cl
     for training in trainings:
         assert client.delete(f"/api/trainings/{training['id']}").status_code == 204
     response = client.post("/api/invoices/preview", json=period)
-    assert response.json() == {**period, "items": [], "total_amount_cents": 0}
+    assert {key: response.json()[key] for key in (*period, "items", "total_amount_cents")} == {**period, "items": [], "total_amount_cents": 0}
     initialize_database(database)
     assert get_invoice(draft_id, database)["items"] == []
     assert get_invoice(draft_id, database)["total_amount_cents"] == 0
@@ -2088,7 +2088,7 @@ def test_final_snapshot_and_pdf_survive_deleted_source_trainings(client, invoice
     for training in trainings:
         assert client.delete(f"/api/trainings/{training['id']}").status_code == 204
     response = client.post("/api/invoices/preview", json=period)
-    assert response.json() == {**period, "items": [], "total_amount_cents": 0}
+    assert {key: response.json()[key] for key in (*period, "items", "total_amount_cents")} == {**period, "items": [], "total_amount_cents": 0}
     after = get_invoice(final["id"], database)
     assert after["invoice_snapshot_json"] == stored["invoice_snapshot_json"]
     assert after["total_amount_cents"] == 4500
@@ -2132,7 +2132,7 @@ def test_deletion_and_refinalization_preserve_copies_draft_other_month_and_numbe
     assert response.status_code == 201
     recreated = response.json()
     assert recreated["id"] == preview["id"] and recreated["total_amount_cents"] == 7500
-    assert recreated["invoice_number"].endswith(f"-{sequence:04d}")
+    assert recreated["invoice_number"].endswith(f"-{sequence:02d}")
     assert recreated["invoice_number"] != original["invoice_number"]
     assert get_organization(database)["next_invoice_number"] == sequence + 1
     assert pdf_path.read_bytes() != copy.read_bytes()

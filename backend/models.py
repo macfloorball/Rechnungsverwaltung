@@ -104,6 +104,8 @@ class OrganizationSettingsUpdate(APIModel):
     @field_validator("iban", mode="before")
     @classmethod
     def validate_iban(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value  # Let Pydantic report its regular string validation error.
         value = "".join(value.upper().split())
         if not value:
             return value
