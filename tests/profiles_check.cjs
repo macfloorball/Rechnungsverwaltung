@@ -20,6 +20,9 @@ async function run() {
   await until(()=>!contents.isLoading() && contents.getURL().startsWith('http:'),'frontend');
   const loaded=()=>until(()=>js(`!document.querySelector('#active-profile').disabled && !document.querySelector('#save-organization-settings').disabled && document.querySelector('#calendar').getAttribute('aria-busy')==='false'`),'profile data');
   await loaded();
+  await until(()=>win.isVisible(),'visible app window');
+  win.focus(); contents.focus();
+  await until(()=>js('document.hasFocus()'),'focused renderer');
   async function reload(action) {
     const finished=new Promise(resolve=>contents.once('did-finish-load',resolve));
     await action(); await finished; await loaded();
@@ -37,9 +40,11 @@ async function run() {
   const originalInvoices = await js(`fetch('/api/invoices',{headers:{'X-Profile-ID':'1'}}).then(r=>r.json())`);
   // Actual UI creation and keyboard focus; creation never silently switches drafts.
   const click = async selector => {
-    const rect = await js(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`);
+    await js(`window.__testClick=false;document.querySelector(${JSON.stringify(selector)}).addEventListener('click',()=>{window.__testClick=true},{once:true});void 0;`);
+    const rect = await js(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`);
     contents.sendInputEvent({type:'mouseDown',...rect,button:'left',clickCount:1});
     contents.sendInputEvent({type:'mouseUp',...rect,button:'left',clickCount:1});
+    await until(()=>js('window.__testClick'),'native click delivered: '+selector);
     await pause();
   };
   const key = async keyCode => {
@@ -58,7 +63,7 @@ async function run() {
   await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,'profile-create-dialog.png'),(await contents.capturePage()).toPNG());
   await click('#cancel-profile-name');
   assert.equal(await isOpen(),false);
-  assert.equal(await js('document.activeElement.id'),'create-profile');
+  await until(()=>js("document.activeElement.id==='create-profile'"),'focus returned to create-profile');
   await click('#create-profile'); await key('Escape');
   assert.equal(await isOpen(),false);
   await click('#create-profile');
@@ -88,7 +93,7 @@ async function run() {
   assert.equal(await js(`document.querySelector('#active-profile').disabled`),true);
   await until(()=>js(`document.querySelector('#active-profile').options.length===2`),'profile created');
   assert.equal(await selected(),'1');
-  assert.equal(await js('document.activeElement.id'),'create-profile');
+  await until(()=>js("document.activeElement.id==='create-profile'"),'focus returned to create-profile');
   assert.equal(await js('window.__writes'),1);
   assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'Entwurf bleibt');
   await js(`window.fetch=window.__fetch;void 0;`);
@@ -124,7 +129,7 @@ async function run() {
   assert.equal(await js('document.documentElement.scrollWidth <= innerWidth'),true);
   await setName('Firma neu'); await click('#profile-name'); await key('Return');
   await until(()=>js(`document.querySelector('#active-profile').selectedOptions[0].textContent==='Firma neu'`),'rename');
-  assert.equal(await js('document.activeElement.id'),'rename-profile');
+  await until(()=>js("document.activeElement.id==='rename-profile'"),'focus returned to rename-profile');
   await click('#rename-profile'); await click('#cancel-profile-name');
   await switchTo(1);
   assert.equal(await js(`document.querySelector('#active-profile').selectedOptions[0].textContent`),originalName);
