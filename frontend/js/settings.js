@@ -349,12 +349,26 @@ export function initializeSettings() {
   let activities = [];
   let weeklyPlan = [];
 
-  function applyOrganizationSettings(settings) {
+  function lockForm(form) {
+    const controls = [...form.querySelectorAll("input, textarea, select, button")];
+    const disabled = controls.map((control) => control.disabled);
+    controls.forEach((control) => { control.disabled = true; });
+    form.setAttribute("aria-busy", "true");
+    let locked = true;
+    return () => {
+      if (!locked) return;
+      locked = false;
+      controls.forEach((control, index) => { control.disabled = disabled[index]; });
+      form.setAttribute("aria-busy", "false");
+    };
+  }
+
+  function applyOrganizationSettings(settings, logoOnly = false) {
     for (const control of organizationForm.elements) {
       if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
         continue;
       }
-      if (!control.name || control.type === "file") {
+      if (!control.name || control.type === "file" || (logoOnly && control.name !== "logo_enabled")) {
         continue;
       }
       if (control.type === "checkbox") {
@@ -381,14 +395,18 @@ export function initializeSettings() {
 
   async function loadOrganizationSettings() {
     organizationError.hidden = true;
+    const unlock = unlockOrganizationLoad;
     try {
       const settings = await requestJson("/api/organization/settings");
+      unlock();
       applyOrganizationSettings(settings);
     } catch (error) {
       showMessage(
         organizationError,
         error instanceof Error ? error.message : "Rechnungseinstellungen konnten nicht geladen werden.",
       );
+      // Keep unloaded fields locked: a partial form must never overwrite saved data.
+      retryOrganization.hidden = false;
     }
   }
 
@@ -417,13 +435,14 @@ export function initializeSettings() {
       }
     }
 
-    saveOrganizationButton.disabled = true;
+    const unlock = lockForm(organizationForm);
     try {
       const settings = await requestJson("/api/organization/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      unlock();
       applyOrganizationSettings(settings);
       showMessage(organizationSuccess, "Rechnungseinstellungen wurden gespeichert.");
     } catch (error) {
@@ -432,7 +451,7 @@ export function initializeSettings() {
         error instanceof Error ? error.message : "Rechnungseinstellungen konnten nicht gespeichert werden.",
       );
     } finally {
-      saveOrganizationButton.disabled = false;
+      unlock();
     }
   });
 
@@ -453,7 +472,7 @@ export function initializeSettings() {
       return;
     }
 
-    uploadLogoButton.disabled = true;
+    const unlock = lockForm(organizationForm);
     try {
       const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -478,7 +497,8 @@ export function initializeSettings() {
           data_base64: encodedData,
         }),
       });
-      applyOrganizationSettings(settings);
+      unlock();
+      applyOrganizationSettings(settings, true);
       logoFileInput.value = "";
       showMessage(organizationSuccess, "Logo wurde hochgeladen und für neue Rechnungen aktiviert.");
     } catch (error) {
@@ -487,26 +507,28 @@ export function initializeSettings() {
         error instanceof Error ? error.message : "Logo konnte nicht hochgeladen werden.",
       );
     } finally {
-      uploadLogoButton.disabled = false;
+      unlock();
     }
   });
 
   deleteLogoButton.addEventListener("click", async () => {
     organizationError.hidden = true;
     organizationSuccess.hidden = true;
-    deleteLogoButton.disabled = true;
+    const unlock = lockForm(organizationForm);
     try {
       const settings = await requestJson("/api/organization/logo", {
         method: "DELETE",
       });
-      applyOrganizationSettings(settings);
+      unlock();
+      applyOrganizationSettings(settings, true);
       showMessage(organizationSuccess, "Logo wurde entfernt. Bereits erstellte Rechnungen bleiben unverändert.");
     } catch (error) {
       showMessage(
         organizationError,
         error instanceof Error ? error.message : "Logo konnte nicht entfernt werden.",
       );
-      deleteLogoButton.disabled = false;
+    } finally {
+      unlock();
     }
   });
 
@@ -562,7 +584,14 @@ export function initializeSettings() {
       });
       activities = result.activities;
       renderActivities(activityRows, activities);
-      renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
+      // Refresh choices in place; retain unsaved additions, removals, hours and activation.
+      for (const select of weeklyPlanDays.querySelectorAll("[data-plan-activity]")) {
+        const selected = Number(select.value);
+        select.replaceChildren(...activityOptions(activities, selected));
+      }
+      for (const button of weeklyPlanDays.querySelectorAll("[data-add-plan-entry]")) {
+        button.disabled = !activities.some((activity) => activity.is_active);
+      }
       document.dispatchEvent(new Event("activities-updated"));
       showMessage(activitySuccess, "Tätigkeiten und Preise wurden gespeichert.");
     } catch (error) {
@@ -632,13 +661,14 @@ export function initializeSettings() {
       }
     }
 
-    savePlanButton.disabled = true;
+    const unlock = lockForm(weeklyPlanForm);
     try {
       weeklyPlan = await requestJson("/api/weekly-plan", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entries),
       });
+      unlock();
       renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
       document.dispatchEvent(new Event("weekly-plan-updated"));
       showMessage(weeklyPlanSuccess, "Der wöchentliche Trainingsplan wurde gespeichert.");
@@ -648,23 +678,34 @@ export function initializeSettings() {
         error instanceof Error ? error.message : "Trainingsplan konnte nicht gespeichert werden.",
       );
     } finally {
-      savePlanButton.disabled = false;
+      unlock();
     }
   });
 
+  let invoices = [];
+  function showMonthInvoices() {
+    const [year, month] = document.querySelector("#invoice-month").value.split("-").map(Number);
+    renderInvoices(invoiceRows, invoiceEmpty, invoices.filter((invoice) => invoice.year === year && invoice.month === month));
+  }
+  document.addEventListener("calendar-month-changed", showMonthInvoices);
+  let invoiceRequest = 0;
   async function loadInvoices() {
+    const request = ++invoiceRequest;
     invoiceError.hidden = true;
     reloadInvoicesButton.disabled = true;
     try {
-      const invoices = await requestJson("/api/invoices");
-      renderInvoices(invoiceRows, invoiceEmpty, invoices);
+      const result = await requestJson("/api/invoices");
+      if (request !== invoiceRequest) return;
+      invoices = result;
+      showMonthInvoices();
     } catch (error) {
+      if (request !== invoiceRequest) return;
       showMessage(
         invoiceError,
         error instanceof Error ? error.message : "Rechnungen konnten nicht geladen werden.",
       );
     } finally {
-      reloadInvoicesButton.disabled = false;
+      if (request === invoiceRequest) reloadInvoicesButton.disabled = false;
     }
   }
 
@@ -711,38 +752,46 @@ export function initializeSettings() {
 
   reloadInvoicesButton.addEventListener("click", loadInvoices);
   document.addEventListener("invoice-created", loadInvoices);
-  loadOrganizationSettings();
-
-  requestJson("/api/settings")
-    .then((result) => {
+  function retryButton(after, label, action) {
+    const button = element("button", label);
+    button.type = "button";
+    button.className = "secondary-button";
+    button.hidden = true;
+    after.after(button);
+    button.addEventListener("click", () => { button.hidden = true; action(); });
+    return button;
+  }
+  // Retry controls live outside locked forms and remain available after initial errors.
+  const retryOrganization = retryButton(organizationForm, "Rechnungseinstellungen erneut laden", loadOrganizationSettings);
+  const retryActivities = retryButton(activityForm, "Tätigkeiten und Wochenplan erneut laden", loadPlanSettings);
+  const retryPlan = retryButton(weeklyPlanForm, "Tätigkeiten und Wochenplan erneut laden", loadPlanSettings);
+  const unlockActivities = lockForm(activityForm);
+  const unlockPlan = lockForm(weeklyPlanForm);
+  async function loadPlanSettings() {
+    retryActivities.hidden = true;
+    retryPlan.hidden = true;
+    activityError.hidden = true;
+    weeklyPlanError.hidden = true;
+    try {
+      const [result, entries] = await Promise.all([
+        requestJson("/api/settings"), requestJson("/api/weekly-plan"),
+      ]);
       activities = result.activities;
+      weeklyPlan = entries;
+      unlockActivities();
+      unlockPlan();
       renderActivities(activityRows, activities);
       renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
-    })
-    .catch((error) => {
-      showMessage(
-        activityError,
-        error instanceof Error ? error.message : "Tätigkeiten konnten nicht geladen werden.",
-      );
-      showMessage(
-        weeklyPlanError,
-        "Der Trainingsplan kann erst geladen werden, wenn Tätigkeiten verfügbar sind.",
-      );
-    });
-
-  requestJson("/api/weekly-plan")
-    .then((entries) => {
-      weeklyPlan = entries;
-      if (activities.length > 0) {
-        renderWeeklyPlan(weeklyPlanDays, activities, weeklyPlan);
-      }
-    })
-    .catch((error) => {
-      showMessage(
-        weeklyPlanError,
-        error instanceof Error ? error.message : "Trainingsplan konnte nicht geladen werden.",
-      );
-    });
+    } catch (error) {
+      showMessage(activityError, error.message || "Einstellungen konnten nicht geladen werden.");
+      showMessage(weeklyPlanError, error.message || "Wochenplan konnte nicht geladen werden.");
+      retryActivities.hidden = false;
+      retryPlan.hidden = false;
+    }
+  }
+  const unlockOrganizationLoad = lockForm(organizationForm);
+  loadOrganizationSettings();
+  loadPlanSettings();
 
   loadInvoices();
 }

@@ -109,6 +109,7 @@ export function initializeInvoicePreview() {
     throw new Error("Elemente für die Rechnungsvorschau fehlen im HTML.");
   }
 
+  let requestVersion = 0;
   let previewPeriod = null;
   let creating = false;
   const createButtonLabel = createButton.textContent.trim();
@@ -116,6 +117,8 @@ export function initializeInvoicePreview() {
   monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   function invalidatePreview() {
+    requestVersion += 1;
+    loadingMessage.hidden = true;
     previewPeriod = null;
     errorMessage.hidden = true;
     preview.hidden = true;
@@ -127,6 +130,11 @@ export function initializeInvoicePreview() {
   }
   monthInput.addEventListener("input", invalidatePreview);
   document.addEventListener("activities-updated", invalidatePreview);
+  document.addEventListener("calendar-month-changed", (event) => {
+    const { year, month } = event.detail;
+    monthInput.value = `${year}-${String(month).padStart(2, "0")}`;
+    invalidatePreview();
+  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -141,6 +149,7 @@ export function initializeInvoicePreview() {
       return;
     }
 
+    const version = ++requestVersion;
     errorMessage.hidden = true;
     createError.hidden = true;
     loadingMessage.hidden = false;
@@ -174,6 +183,7 @@ export function initializeInvoicePreview() {
       }
 
       const data = await response.json();
+      if (version !== requestVersion) return;
       renderPreview(data, {
         preview,
         periodTitle,
@@ -188,6 +198,7 @@ export function initializeInvoicePreview() {
       createButton.disabled = data.items.length === 0;
       loadingMessage.hidden = true;
     } catch (error) {
+      if (version !== requestVersion) return;
       loadingMessage.hidden = true;
       errorMessage.textContent = error instanceof Error
         ? error.message
@@ -212,6 +223,8 @@ export function initializeInvoicePreview() {
     createButton.textContent = "Rechnung wird gespeichert …";
     monthInput.disabled = true;
     submitButton.disabled = true;
+    const version = requestVersion;
+    const period = { ...previewPeriod };
     let saved = false;
     try {
       const today = new Date();
@@ -223,7 +236,7 @@ export function initializeInvoicePreview() {
       const response = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...previewPeriod, invoice_date: invoiceDate }),
+        body: JSON.stringify({ ...period, invoice_date: invoiceDate }),
       });
       if (!response.ok) {
         let detail = `Rechnung konnte nicht erstellt werden (HTTP ${response.status}).`;
@@ -239,6 +252,8 @@ export function initializeInvoicePreview() {
       }
 
       const invoice = await response.json();
+      document.dispatchEvent(new Event("invoice-created"));
+      if (version !== requestVersion) return;
       const pdfUrl = `/api/invoices/${invoice.id}/pdf`;
       openPdfLink.href = pdfUrl;
       openPdfLink.hidden = false;
@@ -248,8 +263,8 @@ export function initializeInvoicePreview() {
       downloadPdfLink.download = `Rechnung_TTC_${year}-${month}.pdf`;
       downloadPdfLink.hidden = false;
       saved = true;
-      document.dispatchEvent(new Event("invoice-created"));
     } catch (error) {
+      if (version !== requestVersion) return;
       createError.textContent = error instanceof Error
         ? error.message
         : "Rechnung konnte nicht erstellt werden.";
@@ -260,7 +275,7 @@ export function initializeInvoicePreview() {
       createButton.textContent = saved ? "Rechnung gespeichert" : createButtonLabel;
       // A saved preview cannot be finalized twice. A fresh preview still uses
       // the backend's existing duplicate check for an already invoiced month.
-      createButton.disabled = saved;
+      createButton.disabled = saved || !previewPeriod;
       monthInput.disabled = false;
       submitButton.disabled = false;
     }

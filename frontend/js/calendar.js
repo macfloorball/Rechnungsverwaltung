@@ -167,6 +167,7 @@ export function initializeCalendar() {
       renderCalendar(calendar, data);
       visibleMonth = month;
       monthLabel.textContent = monthFormatter.format(month);
+      document.dispatchEvent(new CustomEvent("calendar-month-changed", { detail: { year, month: monthNumber } }));
     } catch (error) {
       errorMessage.textContent = error instanceof Error
         ? error.message
