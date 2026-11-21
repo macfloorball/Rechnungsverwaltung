@@ -25,6 +25,8 @@ TABLE_COLUMNS = {
         "postal_code",
         "city",
         "recipient_name",
+        "recipient_salutation",
+        "recipient_contact_name",
         "recipient_street",
         "recipient_postal_code",
         "recipient_city",
@@ -160,7 +162,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -368,6 +370,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_profiles,
             _migrate_recurrence,
             _migrate_invoice_numbering,
+            _migrate_recipient_contact,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -1671,3 +1674,17 @@ def create_profile(name, database_path):
 def rename_profile(identifier, name, database_path):
     with get_connection(database_path) as connection:
         return connection.execute('UPDATE organizations SET profile_name=? WHERE id=?', (name, identifier)).rowcount == 1
+
+
+def _migrate_recipient_contact(connection: sqlite3.Connection) -> None:
+    if get_schema_version(connection) >= 10:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        for column in ("recipient_salutation", "recipient_contact_name"):
+            connection.execute(f"ALTER TABLE organizations ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (10)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
