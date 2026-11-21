@@ -288,7 +288,7 @@ konservative Pfadvoraussetzungen: [Desktop_Linux_Update.md](Desktop_Linux_Update
   Sicherung ausschließlich mit dem bestehenden Offline-Wiederherstellungsweg in
   einen **neuen** Datenordner übernehmen; ursprüngliche DB und Dokumente behalten.
   Beide Speicherpfade bewusst konfigurieren. Konkrete Befehle und Grenzen stehen
-  in [README: Wiederherstellung bei beendeter App](../README.md#wiederherstellung-bei-beendeter-app).
+  in [README: Wiederherstellung bei beendeter App](Technische_Dokumentation.md#wiederherstellung-bei-beendeter-app).
 - Fehlgeschlagener Publisher: Entwurf nicht selbst stabil setzen. Assets/Logs und
   Ursache prüfen; vorhandene Entwürfe nur bewusst durch Verantwortliche bereinigen.
   Bei unklarer Publish-Netzantwort zuerst tatsächlichen GitHub-Status lesen.
