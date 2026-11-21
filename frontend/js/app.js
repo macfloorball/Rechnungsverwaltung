@@ -1,8 +1,10 @@
+import { initializeNavigation } from "./navigation.js";
 import { initializeCalendar } from "./calendar.js";
 import { initializeInvoicePreview } from "./invoice.js";
 import { initializeSettings } from "./settings.js";
 import { initializeDesktopUpdates } from "./updates.js";
 
+initializeNavigation();
 initializeCalendar();
 initializeInvoicePreview();
 initializeSettings();

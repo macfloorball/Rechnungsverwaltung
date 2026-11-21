@@ -1017,3 +1017,37 @@ dialog textarea {
     font-size: 0.58rem;
   }
 }
+
+/* Explicitly keep mounted inactive views out of layout and keyboard navigation. */
+[hidden] { display: none !important; }
+.app-navigation {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 0;
+  background: #f5f7fa;
+  border-bottom: 1px solid #ccd6e2;
+}
+.app-navigation a {
+  flex: 1 1 170px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #153c61;
+  text-align: center;
+  text-decoration: none;
+  border: 1px solid #ccd6e2;
+  background: white;
+}
+.app-navigation a[aria-current="page"] { background: #153c61; color: white; }
+:focus-visible { outline: 3px solid #b65d00; outline-offset: 3px; }
+.view-title { margin: 24px 0 8px; scroll-margin-top: 160px; }
+[data-view] > section:first-of-type { margin-top: 16px; }
+@media (max-width: 600px) {
+  .app-navigation { position: static; }
+  .app-navigation a { flex-basis: 130px; font-size: .9rem; }
+  .section-heading { flex-wrap: wrap; }
+  .month-navigation { flex-wrap: wrap; max-width: 100%; }
+}
