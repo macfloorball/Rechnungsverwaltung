@@ -279,7 +279,7 @@ verwaltet.
     gespeichert werden. Zielentscheidung: `documents/` im bestehenden
     Desktop-Datenverzeichnis außerhalb der Installation; Webbetrieb ohne
     Datenpfad-Override behält `rechnungen/`. Details und Abgrenzung zum noch
-    unveränderten Dateizugriff: [README.md](../README.md#dokumentenverzeichnis-phase-3-schritt-1).
+    unveränderten Dateizugriff: [README.md](Technische_Dokumentation.md#dokumentenverzeichnis-phase-3-schritt-1).
 -   [x] Einen zentralen Dienst für Dateiablage und Dateizugriff
     einrichten. `backend/document_storage.py` bündelt das exklusive Schreiben
     und Auffinden von Dokumenten. Die Rechnungs-API nutzt seit Schritt 4
@@ -767,7 +767,7 @@ geschützt.
 Die Wiederherstellung erfolgt bewusst offline in einen neuen Datenordner;
 eine vollständige Sicherheitskopie des aktuellen Bestands ist verpflichtend.
 Bedienung, Format, Wiederherstellung und Einschränkungen:
-[README.md](../README.md#vollständige-sicherungen-phase-5).
+[README.md](Technische_Dokumentation.md#vollständige-sicherungen-phase-5).
 Die automatisierten Linux-Prüfungen umfassen echte Electron-Fenster in
 Entwicklung/Produktion mit Standard- und eigener Dokumentenablage.
 **Abnahme weiterhin offen:** native Windows-Ausführung und manuelle
@@ -818,7 +818,7 @@ praktische Windows-Abnahmen zurückgestellt. Die vorhandene Windows-VM ist
 der nächste Schritt. Automatisierte Linux- und Wine-Prüfungen ersetzen diese
 Abnahmen nicht; **Phase 6 ist nach der allgemeinen Definition of Done noch
 nicht vollständig abgenommen**. Vorgehen und Plattformgrenzen stehen in der
-[README](../README.md#windows-installation-und-updates-phase-6), die native
+[README](Technische_Dokumentation.md#windows-installation-und-updates-phase-6), die native
 Prüfanleitung in [Windows_Installationspruefung.md](Windows_Installationspruefung.md).
 
 ## Entwicklungsschritte
