@@ -256,7 +256,7 @@ Automatische SQLite-Sicherungen vor Migrationen ersetzen dieses vollständige
 Backup nicht. Das Entwickler-Skript `backup_database.py` sichert keine PDFs.
 Eine Wiederherstellung ist derzeit ein technischer Offlinevorgang ohne eigenen
 Installationsassistenten; dafür Hilfe hinzuziehen und das
-[Wiederherstellungsverfahren](../README.md#wiederherstellung-bei-beendeter-app)
+[Wiederherstellungsverfahren](Technische_Dokumentation.md#wiederherstellung-bei-beendeter-app)
 verwenden. Originalprofil und Sicherungen behalten, keine Nutzerdaten löschen.
 
 ## 6. Kurze Fehlerhilfe und Prüfgrenzen
