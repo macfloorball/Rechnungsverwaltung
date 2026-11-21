@@ -1400,10 +1400,10 @@ def test_weekly_plan_persists_current_and_following_month_without_overwrites(
             """
             SELECT training_date, hours, status, unit_rate_cents
             FROM trainings
-            WHERE weekly_plan_id = ?
+            WHERE weekly_plan_id = ? OR id = ?
             ORDER BY training_date
             """,
-            (plan_entry["id"],),
+            (plan_entry["id"], manual.json()["id"]),
         ).fetchall()
     assert occurrences == [
         ("2026-11-05", 2.0, "planned", 2000),

@@ -243,3 +243,18 @@ def test_moved_occurrence_also_reserves_actual_date_after_weekday_change(store):
     plan, _ = save(path, {**plan, 'weekday': 4})
     db.ensure_weekly_plan_month(date(2026, 12, 1), path)
     assert len([r for r in rows(path) if r['weekly_plan_id'] == plan['id'] and r['training_date'] == '2026-12-11']) == 1
+
+
+def test_manual_collision_never_infers_origin_or_changes_manual_data(store):
+    path, entry = store
+    identifier = db.create_record('trainings', {'training_date': '2026-12-10',
+        'activity_type_id': entry['activity_type_id'], 'hours': 3,
+        'status': 'planned', 'note': 'Manual', 'unit_rate_cents': 1234}, path)
+    original = db.get_record('trainings', identifier, path)
+    plan, _ = save(path, entry)
+    assert db.get_record('trainings', identifier, path) == original
+    db.ensure_weekly_plan_month(date(2026, 12, 1), path)
+    assert db.get_record('trainings', identifier, path) == original
+    assert len([r for r in rows(path) if r['training_date'] == '2026-12-10']) == 1
+    save(path, {**plan, 'is_active': False})
+    assert db.get_record('trainings', identifier, path) == original

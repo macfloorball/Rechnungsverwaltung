@@ -1317,15 +1317,8 @@ def _ensure_weekly_plan_occurrences(
                 )
                 if existing is not None:
                     used_training_ids.add(existing[0])
-                    if existing[1] is None:
-                        connection.execute(
-                            """
-                            UPDATE trainings
-                            SET weekly_plan_id = ?, weekly_plan_date = ?
-                            WHERE id = ? AND weekly_plan_id IS NULL
-                            """,
-                            (plan_id, date_string, existing[0]),
-                        )
+                    # A collision is not evidence of origin. Leave manual rows
+                    # completely untouched, including provenance and edit proof.
                     continue
 
                 cursor = connection.execute(
