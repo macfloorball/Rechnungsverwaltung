@@ -104,6 +104,13 @@ async function run() {
   await until(() => js('!document.getElementById("desktop-updates").hidden'), 'desktop update controls');
   assert.equal(await js('document.getElementById("desktop-update-token").disabled'), true);
 
+  async function navigate(view) {
+    await js(`document.querySelector('[data-view-link="${view}"]').click()`);
+  }
+  async function selectInvoiceMonth(year, month) {
+    await until(() => js('document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), "calendar settled before test month selection");
+    await js(`document.dispatchEvent(new CustomEvent('calendar-month-changed', {detail:{year:${year},month:${month}}}))`);
+  }
   const origin = new URL('/', contents.getURL()).href;
   const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');
   const recipientValues = `Object.fromEntries(${JSON.stringify(Object.keys(recipient))}.map(name =>
@@ -141,6 +148,7 @@ async function run() {
       await fs.readFile(path.join(output, 'other-invoice.pdf')));
     const organization = await (await fetch(new URL('/api/organization/settings', origin))).json();
     assert.equal(organization.next_invoice_number, 4);
+    await selectInvoiceMonth(2020, 1);
     await js('document.querySelector("#reload-invoices").click()');
     await until(() => js(`Boolean(document.querySelector('#saved-invoices-rows a[href="/api/invoices/${january.id}/pdf"][target=_blank]'))`), 'archive after restart');
     await js(`document.querySelector('#saved-invoices-rows a[href="/api/invoices/${january.id}/pdf"][target=_blank]').click()`);
@@ -165,12 +173,14 @@ async function run() {
   console.log('DESKTOP_EMPTY_CHECK saved');
 
   await until(() => js('document.querySelector("#activity-capacity").textContent.includes("0 von 10")'), 'empty activities');
+  await navigate("activities");
   await js('document.querySelector("#add-activity").click()');
   assert.equal(await js('document.querySelector("#activity-settings-rows").rows.length'), 1);
   assert.equal(await js('document.activeElement.id.startsWith("activity-name-")'), true);
   await js('document.querySelector("#activity-settings-rows button").click()');
   assert.equal(await js('document.querySelector("#activity-settings-rows").rows.length'), 0);
 
+  await navigate('invoice');
   const originalSettings = await (await fetch(new URL('/api/organization/settings', origin))).json();
   await js(`const form = document.querySelector('#organization-settings-form');
     form.elements.namedItem('recipient_email').value = 'ungueltig';
@@ -213,6 +223,7 @@ async function run() {
   const [year, month] = firstDate.split('-').map(Number);
   const calendarURL = new URL(`/api/calendar/${year}/${month}`, origin);
   async function savePlan() {
+    await navigate("weekly");
     await js('document.querySelector("#weekly-plan-success").hidden = true; document.querySelector("#weekly-plan-form").requestSubmit()');
     await until(() => js('!document.querySelector("#weekly-plan-success").hidden && !document.querySelector("#save-weekly-plan").disabled && document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), 'weekly plan saved');
     assert.equal(await js('document.querySelector("#weekly-plan-error").hidden'), true);
@@ -241,6 +252,7 @@ async function run() {
   assert.deepEqual(retained.days.flatMap(day => day.trainings.map(training => training.id)), generatedIds);
 
   const openNew = async () => {
+    await navigate("calendar");
     await js(`document.querySelector('[data-new-date="${firstDate}"]').click()`);
     await until(() => js('document.querySelector("#training-dialog").open && !document.querySelector("#save-training-edit").disabled'), 'appointment dialog');
   };
@@ -346,6 +358,7 @@ async function run() {
 
   const previewReady = `!document.querySelector('#invoice-preview').hidden &&
     document.querySelector('#invoice-preview-form').getAttribute('aria-busy') === 'false'`;
+  await navigate('calendar');
   async function startPreview(period) {
     const loading = await js(`(() => {
       const month = document.querySelector('#invoice-month');
@@ -563,6 +576,7 @@ async function run() {
   contents.reload();
   await loaded;
   await until(() => js('Boolean(document.querySelector("#invoice-month")?.value)'), 'renderer reload');
+  await selectInvoiceMonth(2020, 1);
   await js('document.querySelector("#reload-invoices").click()');
   await until(() => js('Boolean(document.querySelector("#saved-invoices-rows a[target=_blank]"))'), 'invoice archive');
   await js('document.querySelector("#saved-invoices-rows a[target=_blank]").click()');
@@ -582,7 +596,7 @@ async function run() {
   const otherPDF = Buffer.from(await (await fetch(otherUrl)).arrayBuffer());
   await fs.writeFile(path.join(output, 'other-invoice.pdf'), otherPDF);
   await js('document.querySelector("#reload-invoices").click()');
-  await until(() => js('document.querySelectorAll("#saved-invoices-rows tr").length === 2'), 'two archived invoices');
+  await until(() => js('document.querySelectorAll("#saved-invoices-rows tr").length === 1'), 'selected month shows one of two archived invoices');
   // Controlled answers test both confirmation paths without opening native dialogs.
   await js(`window.__confirmCount = 0; window.confirm = () => { window.__confirmCount++; return false; };
     document.querySelector('[data-delete-invoice="${invoiceId}"]').click()`);
@@ -641,7 +655,7 @@ async function run() {
   assert.equal(await js('document.querySelector("#create-invoice").disabled && document.querySelector("#invoice-create-error").hidden'), true);
   assert.equal(await js('document.querySelector("#reload-invoices").disabled'), false);
   await js('document.querySelector("#reload-invoices").click()');
-  await until(() => js('document.querySelectorAll("#saved-invoices-rows tr").length === 2 && !document.querySelector("#reload-invoices").disabled'), 'archive retry after saving');
+  await until(() => js('document.querySelectorAll("#saved-invoices-rows tr").length === 1 && !document.querySelector("#reload-invoices").disabled'), 'archive retry after saving');
   assert.equal(await js('document.querySelector("#saved-invoices-error").hidden'), true);
   const recreatedUrl = await js('document.querySelector("#open-invoice-pdf").href');
   const recreated = Buffer.from(await (await fetch(recreatedUrl)).arrayBuffer());
@@ -663,6 +677,7 @@ async function run() {
   const priorActivities = (await (await fetch(new URL('/api/settings', origin))).json()).activities;
   await new Promise(resolve => { contents.once('did-finish-load', resolve); contents.reload(); });
   await until(() => js('document.querySelector("#activity-settings-rows").rows.length > 0'), 'saved activities loaded');
+  await navigate('activities');
   await js(`while (!document.querySelector('#add-activity').disabled) {
     document.querySelector('#add-activity').click();
     const row = document.querySelector('#activity-settings-rows').lastElementChild;
@@ -690,6 +705,7 @@ async function run() {
   assert.deepEqual((await (await fetch(new URL('/api/settings', origin))).json()).activities, tenSaved);
   expectedHTTPFailure = null;
   await fs.writeFile(path.join(output, 'activities.json'), JSON.stringify(tenSaved));
+  await navigate('management');
   expectedHTTPFailure = 503;
   await js(`document.querySelector('#backup-directory').value='relative'; document.querySelector('#create-backup').click()`);
   await until(() => js(`!document.querySelector('#create-backup').disabled && document.querySelector('#backup-message').textContent.includes('fehlgeschlagen')`), 'invalid backup target');

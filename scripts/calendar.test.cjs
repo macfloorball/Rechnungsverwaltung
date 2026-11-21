@@ -13,11 +13,12 @@ function calendar(fetch, lineEnding) {
     setAttribute(name,value){this.attributes[name]=value;},
     append(){},replaceChildren(...children){this.children=children;}};}
   const elements=new Map();
-  const document={querySelector(selector){if(!elements.has(selector))elements.set(selector,node());return elements.get(selector);},addEventListener(){},createElement:node};
+  const document={querySelector(selector){if(!elements.has(selector))elements.set(selector,node());return elements.get(selector);},addEventListener(){},dispatchEvent(){},createElement:node};
   const source=fs.readFileSync(path.join(__dirname,'../frontend/js/calendar.js'),'utf8')
     .replace(/\r?\n/g,lineEnding)
     .replace(/^import .*;\r?\n/,'').replace('export function initializeCalendar','function initializeCalendar');
   vm.runInNewContext(source+'\ninitializeCalendar();',{
+    CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
     document,fetch,bindTrainingEditor(){},window:{confirm:()=>false},Intl,Date,Error,
   });
   return elements;

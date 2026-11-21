@@ -10,13 +10,23 @@
   </head>
   <body>
     <div class="app-shell">
+      <!-- App-wide header remains outside views, leaving room for a future profile selector (#30). -->
       <header class="app-header">
         <p class="eyebrow">Tischtennisclub</p>
         <h1>Rechnungsverwaltung</h1>
       </header>
 
-      <main>
-        <section class="calendar-section" aria-labelledby="calendar-title">
+<nav class="app-navigation" aria-label="Hauptnavigation">
+<a href="#view-calendar" data-view-link="calendar" aria-current="page">Kalender / Übersicht</a>
+<a href="#view-invoice" data-view-link="invoice">Rechnung konfigurieren</a>
+<a href="#view-weekly" data-view-link="weekly">Wochenplan konfigurieren</a>
+<a href="#view-activities" data-view-link="activities">Tätigkeiten und Preise</a>
+<a href="#view-management" data-view-link="management">Verwaltung / App-Einstellungen</a>
+</nav>
+      <main id="main-content">
+<div id="view-calendar" data-view="calendar" aria-labelledby="view-calendar-title">
+<h2 id="view-calendar-title" class="view-title" tabindex="-1">Kalender / Übersicht</h2>
+<section class="calendar-section" aria-labelledby="calendar-title">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Trainingsübersicht</p>
@@ -44,102 +54,98 @@
           <p id="calendar-error" class="error-message" role="alert" hidden></p>
           <p id="calendar-success" class="success-message" role="status" hidden></p>
         </section>
+<section class="invoice-section" aria-labelledby="invoice-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Abrechnung</p>
+              <h2 id="invoice-title">Rechnungsvorschau</h2>
+            </div>
+          </div>
 
-        <section class="settings-section" aria-labelledby="backup-title">
-          <h2 id="backup-title">Datensicherung</h2>
-          <p>Vollständige lokale Sicherung von Datenbank, Einstellungen und Dokumenten.</p>
-          <p>Regelmäßig und vor App-Updates sichern. Eine zusätzliche Kopie auf einem getrennten Datenträger aufbewahren und die Wiederherstellung gelegentlich prüfen.</p>
-          <p>Wiederherstellung bei beendeter App in einen neuen Datenordner; die Anleitung steht in der README. CSV-Exporte dienen der Auswertung.</p>
-          <label for="backup-directory">Zielordner (absoluter Pfad; leer für den Sicherungsordner im Benutzerverzeichnis)</label>
-          <input id="backup-directory" type="text" placeholder="z. B. D:\Sicherungen oder /home/name/Sicherungen">
-          <button id="create-backup" class="primary-button" type="button">Sicherung erstellen</button>
-          <button id="export-data" class="secondary-button" type="button">CSV und Dokumente exportieren</button>
-          <p id="backup-message" role="status" aria-live="polite"></p>
-        </section>
-        <section id="desktop-updates" class="settings-section desktop-updates" aria-labelledby="desktop-updates-title" hidden>
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Desktop-App</p>
-              <h2 id="desktop-updates-title">App-Updates</h2>
-            </div>
-            <button id="check-desktop-updates" class="secondary-button" type="button">Nach Updates suchen</button>
-          </div>
-          <p>Installierte Version: <strong id="desktop-current-version">–</strong></p>
-          <p id="desktop-update-status" role="status" aria-live="polite">Update-Status wird geladen …</p>
-          <p id="desktop-update-error" class="error-message" role="alert" hidden></p>
-          <button id="cancel-desktop-download" class="secondary-button" type="button" hidden>Download abbrechen</button>
-          <button id="install-desktop-update" class="primary-button" type="button" hidden>Update installieren und App neu starten</button>
-          <button id="show-desktop-update" class="primary-button" type="button" hidden>Verfügbares Update ansehen</button>
-          <details id="desktop-update-access" class="update-access">
-            <summary>Persönlichen GitHub-Zugang verwalten</summary>
-            <p>Für private Downloads benötigt dein GitHub-Konto Zugriff auf <strong id="desktop-update-repository">das Release-Repository</strong>.</p>
-            <p>Erstelle in GitHub unter Settings → Developer settings → Personal access tokens → Fine-grained tokens einen zeitlich begrenzten Token nur für dieses Repository mit <strong>Contents: Read-only</strong>. Metadata-Leserechte werden von GitHub ergänzt.</p>
-            <p>Der Zugang wird im geschützten Betriebssystem-Speicher verwaltet und nicht an den lokalen Rechnungsserver geschickt.</p>
-            <form id="desktop-update-access-form" autocomplete="off">
-              <label for="desktop-update-token">Persönlicher GitHub-Token</label>
-              <input id="desktop-update-token" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="512" aria-describedby="desktop-update-access-hint">
-              <p id="desktop-update-access-hint" class="section-description"></p>
-              <div class="update-actions">
-                <button id="save-desktop-update-access" class="primary-button" type="submit">Zugang speichern und prüfen</button>
-                <button id="clear-desktop-update-access" class="secondary-button" type="button">Gespeicherten Zugang entfernen</button>
-              </div>
-            </form>
-            <p id="desktop-update-access-message" role="status" aria-live="polite"></p>
-          </details>
-        </section>
-        <section class="settings-section" aria-labelledby="settings-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Verwaltung</p>
-              <h2 id="settings-title">Tätigkeiten und Preise</h2>
-            </div>
-          </div>
-          <p class="section-description">
-            Verwalte bis zu zehn insgesamt angelegte Tätigkeiten einschließlich deaktivierter Einträge.
-            Gespeicherte Tätigkeiten bleiben erhalten; deaktiviere sie bei Bedarf.
+          <form id="invoice-preview-form" class="invoice-preview-form">
+            <label for="invoice-month">Abrechnungsmonat</label>
+            <input id="invoice-month" name="month" type="month" required readonly aria-describedby="invoice-month-hint">
+            <p id="invoice-month-hint" class="section-description">Der Abrechnungsmonat folgt dem Kalender. Wechsle den Monat über die Kalendernavigation.</p>
+            <button id="load-invoice-preview" class="primary-button" type="submit">
+              Vorschau erstellen/aktualisieren
+            </button>
+          </form>
+
+          <p id="invoice-preview-status" class="section-description" role="status" hidden>
+            Rechnungsvorschau wird geladen …
           </p>
-          <form id="activity-settings-form">
-            <div class="settings-table-wrapper">
-              <table class="settings-table">
+          <p id="invoice-preview-error" class="error-message" role="alert" hidden></p>
+          <div id="invoice-preview" class="invoice-preview" aria-live="polite" hidden>
+            <h3 id="invoice-period-title"></h3>
+            <p class="invoice-intro">Hiermit stelle ich folgenden Betrag in Rechnung:</p>
+            <div class="invoice-table-wrapper">
+              <table class="invoice-table">
                 <thead>
                   <tr>
-                    <th scope="col">Tätigkeit</th>
-                    <th scope="col">Stundenpreis (€)</th>
-                    <th scope="col">Aktiv</th>
-                    <th scope="col">Speicherstatus</th>
+                    <th scope="col">Trainingseinheit</th>
+                    <th scope="col">Datum</th>
+                    <th scope="col">Std.</th>
+                    <th scope="col">Betrag</th>
                   </tr>
                 </thead>
-                <tbody id="activity-settings-rows"></tbody>
+                <tbody id="invoice-items"></tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="3" scope="row">Endsumme:</th>
+                    <td id="invoice-total"></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
-            <p id="activity-empty">Noch keine Tätigkeiten. Füge die erste Tätigkeit hinzu.</p>
-            <p id="activity-capacity" role="status"></p>
-            <button id="add-activity" class="secondary-button" type="button" aria-describedby="activity-capacity">+ Tätigkeit hinzufügen</button>
-            <p id="activity-settings-error" class="error-message" role="alert" hidden></p>
-            <p id="activity-settings-success" class="success-message" role="status" hidden></p>
-            <button id="save-activity-settings" class="primary-button" type="submit">
-              Tätigkeiten speichern
-            </button>
-          </form>
-
-          <div class="section-subheading">
-            <h3>Wöchentlicher Trainingsplan</h3>
-            <p class="section-description">
-              Aktive Plantermine erscheinen im Kalender zunächst als geplant.
-              Gespeicherte Trainingstermine bleiben von Planänderungen unberührt.
+            <p id="invoice-empty" class="invoice-empty" hidden>
+              In diesem Monat gibt es keine durchgeführten Termine.
             </p>
+            <div class="invoice-actions">
+              <button id="create-invoice" class="primary-button" type="button" disabled>
+                Rechnung erstellen und speichern
+              </button>
+              <a id="open-invoice-pdf" target="_blank" rel="noopener" hidden>
+                Rechnung öffnen und drucken
+              </a>
+              <a id="download-invoice-pdf" download hidden>PDF herunterladen</a>
+            </div>
+            <p id="invoice-create-error" class="error-message" role="alert" hidden></p>
           </div>
-          <form id="weekly-plan-form">
-            <div id="weekly-plan-days" class="weekly-plan-days"></div>
-            <p id="weekly-plan-error" class="error-message" role="alert" hidden></p>
-            <p id="weekly-plan-success" class="success-message" role="status" hidden></p>
-            <button id="save-weekly-plan" class="primary-button" type="submit">
-              Wochenplan speichern
-            </button>
-          </form>
         </section>
-
-        <section class="organization-section" aria-labelledby="organization-settings-title">
+<section class="saved-invoices-section" aria-labelledby="saved-invoices-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Archiv</p>
+              <h2 id="saved-invoices-title">Endgültige Rechnungen des Monats</h2>
+            </div>
+            <button id="reload-invoices" class="secondary-button" type="button">
+              Liste aktualisieren
+            </button>
+          </div>
+          <p id="saved-invoices-error" class="error-message" role="alert" hidden></p>
+          <p id="saved-invoices-empty" class="invoice-empty" hidden>
+            Für diesen Monat wurde noch keine endgültige Rechnung gespeichert.
+          </p>
+          <div class="settings-table-wrapper">
+            <table class="settings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Abrechnungsmonat</th>
+                  <th scope="col">Rechnungsdatum</th>
+                  <th scope="col">Rechnungsnummer</th>
+                  <th scope="col">Gesamtbetrag</th>
+                  <th scope="col">Aktion</th>
+                </tr>
+              </thead>
+              <tbody id="saved-invoices-rows"></tbody>
+            </table>
+          </div>
+        </section>
+</div>
+<div id="view-invoice" data-view="invoice" aria-labelledby="view-invoice-title" hidden>
+<h2 id="view-invoice-title" class="view-title" tabindex="-1">Rechnung konfigurieren</h2>
+<p class="section-description">Eingaben bleiben beim Ansichtswechsel erhalten. Gespeichert wird nur über die jeweilige Aktion.</p>
+<section class="organization-section" aria-labelledby="organization-settings-title">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Verwaltung</p>
@@ -292,94 +298,114 @@
             </button>
           </form>
         </section>
-
-        <section class="saved-invoices-section" aria-labelledby="saved-invoices-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Archiv</p>
-              <h2 id="saved-invoices-title">Gespeicherte Rechnungen</h2>
-            </div>
-            <button id="reload-invoices" class="secondary-button" type="button">
-              Liste aktualisieren
+</div>
+<div id="view-weekly" data-view="weekly" aria-labelledby="view-weekly-title" hidden>
+<h2 id="view-weekly-title" class="view-title" tabindex="-1">Wochenplan konfigurieren</h2>
+<p class="section-description">Eingaben bleiben beim Ansichtswechsel erhalten. Gespeichert wird nur über die jeweilige Aktion.</p>
+<section class="settings-section" aria-labelledby="weekly-plan-title">
+          <div class="section-subheading">
+            <h2 id="weekly-plan-title">Wochenplan konfigurieren</h2>
+            <p class="section-description">
+              Aktive Plantermine erscheinen im Kalender zunächst als geplant.
+              Gespeicherte Trainingstermine bleiben von Planänderungen unberührt.
+            </p>
+          </div>
+          <form id="weekly-plan-form">
+            <div id="weekly-plan-days" class="weekly-plan-days"></div>
+            <p id="weekly-plan-error" class="error-message" role="alert" hidden></p>
+            <p id="weekly-plan-success" class="success-message" role="status" hidden></p>
+            <button id="save-weekly-plan" class="primary-button" type="submit">
+              Wochenplan speichern
             </button>
-          </div>
-          <p id="saved-invoices-error" class="error-message" role="alert" hidden></p>
-          <p id="saved-invoices-empty" class="invoice-empty" hidden>
-            Es wurden noch keine Rechnungen gespeichert.
-          </p>
-          <div class="settings-table-wrapper">
-            <table class="settings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Abrechnungsmonat</th>
-                  <th scope="col">Rechnungsdatum</th>
-                  <th scope="col">Rechnungsnummer</th>
-                  <th scope="col">Gesamtbetrag</th>
-                  <th scope="col">Aktion</th>
-                </tr>
-              </thead>
-              <tbody id="saved-invoices-rows"></tbody>
-            </table>
-          </div>
+          </form>
         </section>
-
-        <section class="invoice-section" aria-labelledby="invoice-title">
+</div>
+<div id="view-activities" data-view="activities" aria-labelledby="view-activities-title" hidden>
+<h2 id="view-activities-title" class="view-title" tabindex="-1">Tätigkeiten und Preise</h2>
+<p class="section-description">Eingaben bleiben beim Ansichtswechsel erhalten. Gespeichert wird nur über die jeweilige Aktion.</p>
+<section class="settings-section" aria-labelledby="settings-title">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Abrechnung</p>
-              <h2 id="invoice-title">Rechnungsvorschau</h2>
+              <p class="eyebrow">Verwaltung</p>
+              <h2 id="settings-title">Tätigkeiten und Preise</h2>
             </div>
           </div>
-
-          <form id="invoice-preview-form" class="invoice-preview-form">
-            <label for="invoice-month">Abrechnungsmonat</label>
-            <input id="invoice-month" name="month" type="month" required>
-            <button id="load-invoice-preview" class="primary-button" type="submit">
-              Vorschau erstellen/aktualisieren
+          <p class="section-description">
+            Verwalte bis zu zehn insgesamt angelegte Tätigkeiten einschließlich deaktivierter Einträge.
+            Gespeicherte Tätigkeiten bleiben erhalten; deaktiviere sie bei Bedarf.
+          </p>
+          <form id="activity-settings-form">
+            <div class="settings-table-wrapper">
+              <table class="settings-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Tätigkeit</th>
+                    <th scope="col">Stundenpreis (€)</th>
+                    <th scope="col">Aktiv</th>
+                    <th scope="col">Speicherstatus</th>
+                  </tr>
+                </thead>
+                <tbody id="activity-settings-rows"></tbody>
+              </table>
+            </div>
+            <p id="activity-empty">Noch keine Tätigkeiten. Füge die erste Tätigkeit hinzu.</p>
+            <p id="activity-capacity" role="status"></p>
+            <button id="add-activity" class="secondary-button" type="button" aria-describedby="activity-capacity">+ Tätigkeit hinzufügen</button>
+            <p id="activity-settings-error" class="error-message" role="alert" hidden></p>
+            <p id="activity-settings-success" class="success-message" role="status" hidden></p>
+            <button id="save-activity-settings" class="primary-button" type="submit">
+              Tätigkeiten speichern
             </button>
           </form>
 
-          <p id="invoice-preview-status" class="section-description" role="status" hidden>
-            Rechnungsvorschau wird geladen …
-          </p>
-          <p id="invoice-preview-error" class="error-message" role="alert" hidden></p>
-          <div id="invoice-preview" class="invoice-preview" aria-live="polite" hidden>
-            <h3 id="invoice-period-title"></h3>
-            <p class="invoice-intro">Hiermit stelle ich folgenden Betrag in Rechnung:</p>
-            <div class="invoice-table-wrapper">
-              <table class="invoice-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Trainingseinheit</th>
-                    <th scope="col">Datum</th>
-                    <th scope="col">Std.</th>
-                    <th scope="col">Betrag</th>
-                  </tr>
-                </thead>
-                <tbody id="invoice-items"></tbody>
-                <tfoot>
-                  <tr>
-                    <th colspan="3" scope="row">Endsumme:</th>
-                    <td id="invoice-total"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <p id="invoice-empty" class="invoice-empty" hidden>
-              In diesem Monat gibt es keine durchgeführten Termine.
-            </p>
-            <div class="invoice-actions">
-              <button id="create-invoice" class="primary-button" type="button" disabled>
-                Rechnung erstellen und speichern
-              </button>
-              <a id="open-invoice-pdf" target="_blank" rel="noopener" hidden>
-                Rechnung öffnen und drucken
-              </a>
-              <a id="download-invoice-pdf" download hidden>PDF herunterladen</a>
-            </div>
-            <p id="invoice-create-error" class="error-message" role="alert" hidden></p>
-          </div>
+</section>
+</div>
+<div id="view-management" data-view="management" aria-labelledby="view-management-title" hidden>
+<h2 id="view-management-title" class="view-title" tabindex="-1">Verwaltung / App-Einstellungen</h2>
+<p class="section-description">Eingaben bleiben beim Ansichtswechsel erhalten. Gespeichert wird nur über die jeweilige Aktion.</p>
+<section class="settings-section" aria-labelledby="backup-title">
+          <h2 id="backup-title">Datensicherung</h2>
+          <p>Vollständige lokale Sicherung von Datenbank, Einstellungen und Dokumenten.</p>
+          <p>Regelmäßig und vor App-Updates sichern. Eine zusätzliche Kopie auf einem getrennten Datenträger aufbewahren und die Wiederherstellung gelegentlich prüfen.</p>
+          <p>Wiederherstellung bei beendeter App in einen neuen Datenordner; die Anleitung steht in der README. CSV-Exporte dienen der Auswertung.</p>
+          <label for="backup-directory">Zielordner (absoluter Pfad; leer für den Sicherungsordner im Benutzerverzeichnis)</label>
+          <input id="backup-directory" type="text" placeholder="z. B. D:\Sicherungen oder /home/name/Sicherungen">
+          <button id="create-backup" class="primary-button" type="button">Sicherung erstellen</button>
+          <button id="export-data" class="secondary-button" type="button">CSV und Dokumente exportieren</button>
+          <p id="backup-message" role="status" aria-live="polite"></p>
         </section>
+<section id="desktop-updates" class="settings-section desktop-updates" aria-labelledby="desktop-updates-title" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Desktop-App</p>
+              <h2 id="desktop-updates-title">App-Updates</h2>
+            </div>
+            <button id="check-desktop-updates" class="secondary-button" type="button">Nach Updates suchen</button>
+          </div>
+          <p>Installierte Version: <strong id="desktop-current-version">–</strong></p>
+          <p id="desktop-update-status" role="status" aria-live="polite">Update-Status wird geladen …</p>
+          <p id="desktop-update-error" class="error-message" role="alert" hidden></p>
+          <button id="cancel-desktop-download" class="secondary-button" type="button" hidden>Download abbrechen</button>
+          <button id="install-desktop-update" class="primary-button" type="button" hidden>Update installieren und App neu starten</button>
+          <button id="show-desktop-update" class="primary-button" type="button" hidden>Verfügbares Update ansehen</button>
+          <details id="desktop-update-access" class="update-access">
+            <summary>Persönlichen GitHub-Zugang verwalten</summary>
+            <p>Für private Downloads benötigt dein GitHub-Konto Zugriff auf <strong id="desktop-update-repository">das Release-Repository</strong>.</p>
+            <p>Erstelle in GitHub unter Settings → Developer settings → Personal access tokens → Fine-grained tokens einen zeitlich begrenzten Token nur für dieses Repository mit <strong>Contents: Read-only</strong>. Metadata-Leserechte werden von GitHub ergänzt.</p>
+            <p>Der Zugang wird im geschützten Betriebssystem-Speicher verwaltet und nicht an den lokalen Rechnungsserver geschickt.</p>
+            <form id="desktop-update-access-form" autocomplete="off">
+              <label for="desktop-update-token">Persönlicher GitHub-Token</label>
+              <input id="desktop-update-token" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="512" aria-describedby="desktop-update-access-hint">
+              <p id="desktop-update-access-hint" class="section-description"></p>
+              <div class="update-actions">
+                <button id="save-desktop-update-access" class="primary-button" type="submit">Zugang speichern und prüfen</button>
+                <button id="clear-desktop-update-access" class="secondary-button" type="button">Gespeicherten Zugang entfernen</button>
+              </div>
+            </form>
+            <p id="desktop-update-access-message" role="status" aria-live="polite"></p>
+          </details>
+        </section>
+</div>
       </main>
     </div>
 
