@@ -33,11 +33,65 @@ async function run() {
     console.log('PROFILES_RESTART_OK');return;
   }
   assert.equal(await selected(),'1');
+  const originalName = await js(`document.querySelector('#active-profile').selectedOptions[0].textContent`);
+  const originalInvoices = await js(`fetch('/api/invoices',{headers:{'X-Profile-ID':'1'}}).then(r=>r.json())`);
   // Actual UI creation and keyboard focus; creation never silently switches drafts.
-  await js(`window.prompt=()=> 'Firma XY'; document.querySelector('#create-profile').click();`);
+  const click = async selector => {
+    const rect = await js(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`);
+    contents.sendInputEvent({type:'mouseDown',...rect,button:'left',clickCount:1});
+    contents.sendInputEvent({type:'mouseUp',...rect,button:'left',clickCount:1});
+    await pause();
+  };
+  const key = async keyCode => {
+    contents.sendInputEvent({type:'keyDown',keyCode});
+    if (keyCode === 'Return') contents.sendInputEvent({type:'char',keyCode:'\r'});
+    contents.sendInputEvent({type:'keyUp',keyCode});
+    await pause();
+  };
+  const isOpen = () => js(`document.querySelector('#profile-name-dialog').open`);
+  const setName = value => js(`document.querySelector('#profile-name').value=${JSON.stringify(value)}`);
+  await js(`document.querySelector('[data-view-link="invoice"]').click();document.querySelector('[name="issuer_first_name"]').value='Entwurf bleibt';`);
+  await click('#create-profile');
+  assert.equal(await isOpen(),true);
+  assert.equal(await js('document.activeElement.id'),'profile-name');
+  assert.equal(await js(`document.querySelector('#profile-name').value`),'');
+  await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,'profile-create-dialog.png'),(await contents.capturePage()).toPNG());
+  await click('#cancel-profile-name');
+  assert.equal(await isOpen(),false);
+  assert.equal(await js('document.activeElement.id'),'create-profile');
+  await click('#create-profile'); await key('Escape');
+  assert.equal(await isOpen(),false);
+  await click('#create-profile');
+  for (const invalid of ['   ', 'x'.repeat(101)]) {
+    await setName(invalid); await click('#save-profile-name');
+    assert.equal(await isOpen(),true);
+    assert.equal(await js(`document.querySelector('#profile-name-error').hidden`),false);
+  }
+  // Real dialog, injected transport failures only: preserve input and retry.
+  await setName('');
+  await click('#profile-name');
+  contents.insertText('Firma XY');
+  await until(()=>js(`document.querySelector('#profile-name').value==='Firma XY'`),'typed name');
+  for (const failure of ["Promise.reject(new TypeError('offline'))", "Promise.resolve(new Response('',{status:422}))"]) {
+    await js(`window.__fetch=window.fetch;window.fetch=(url,options)=>url==='/api/profiles' && options?.method==='POST' ? ${failure} : window.__fetch(url,options);void 0;`);
+    await click('#save-profile-name');
+    await until(()=>js(`!document.querySelector('#profile-name-error').hidden`),'visible save failure');
+    assert.equal(await isOpen(),true);
+    assert.equal(await js(`document.querySelector('#profile-name').value`),'Firma XY');
+    await js(`window.fetch=window.__fetch;void 0;`);
+  }
+  await js(`window.__writes=0;window.__fetch=window.fetch;window.fetch=(url,options)=>url==='/api/profiles' && options?.method==='POST' ? (window.__writes++,new Promise(resolve=>setTimeout(()=>resolve(window.__fetch(url,options)),300))) : window.__fetch(url,options);void 0;`);
+  await click('#save-profile-name');
+  await js(`document.querySelector('#profile-name-form').requestSubmit();document.querySelector('#cancel-profile-name').click()`);
+  await key('Escape');
+  assert.equal(await isOpen(),true);
+  assert.equal(await js(`document.querySelector('#active-profile').disabled`),true);
   await until(()=>js(`document.querySelector('#active-profile').options.length===2`),'profile created');
   assert.equal(await selected(),'1');
-  assert.equal(await js('document.activeElement.id'),'active-profile');
+  assert.equal(await js('document.activeElement.id'),'create-profile');
+  assert.equal(await js('window.__writes'),1);
+  assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'Entwurf bleibt');
+  await js(`window.fetch=window.__fetch;void 0;`);
   await js(`document.querySelector('#next-month').click()`);
   await until(()=>js(`document.querySelector('#calendar').getAttribute('aria-busy')==='false'`),'month loaded');
   const month=await js(`document.querySelector('#invoice-month').value`);
@@ -62,9 +116,19 @@ async function run() {
   assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'');
   await js(`document.querySelector('[name="issuer_first_name"]').value='B gespeichert';document.querySelector('#organization-settings-form').requestSubmit();`);
   await until(()=>js(`!document.querySelector('#organization-settings-success').hidden`),'B save');
-  await js(`window.prompt=()=> 'Firma neu';document.querySelector('#rename-profile').click();`);
+  await click('#rename-profile');
+  assert.equal(await js(`document.querySelector('#profile-name').value`),'Firma XY');
+  assert.equal(await js(`document.querySelector('#profile-name').selectionEnd-document.querySelector('#profile-name').selectionStart`),8);
+  win.setMinimumSize(0,0); win.setSize(520,740); await pause();
+  await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,'profile-dialog.png'),(await contents.capturePage()).toPNG());
+  assert.equal(await js('document.documentElement.scrollWidth <= innerWidth'),true);
+  await setName('Firma neu'); await click('#profile-name'); await key('Return');
   await until(()=>js(`document.querySelector('#active-profile').selectedOptions[0].textContent==='Firma neu'`),'rename');
+  assert.equal(await js('document.activeElement.id'),'rename-profile');
+  await click('#rename-profile'); await click('#cancel-profile-name');
   await switchTo(1);
+  assert.equal(await js(`document.querySelector('#active-profile').selectedOptions[0].textContent`),originalName);
+  assert.deepEqual(await js(`fetch('/api/invoices',{headers:{'X-Profile-ID':'1'}}).then(r=>r.json())`),originalInvoices);
   assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'A gespeichert');
   // Unknown remembered profile resets predictably after restore/restart.
   await reload(()=>js(`localStorage.setItem('ttc.activeProfile','9999');location.reload();`));
