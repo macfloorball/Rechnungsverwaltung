@@ -815,8 +815,7 @@ def _migrate_recurrence(connection):
                   "weekly_plan_generated", "organization_id")
         changed = " OR ".join(f"NEW.{field} IS NOT OLD.{field}" for field in fields)
         connection.execute(f"""CREATE TRIGGER training_manual_change AFTER UPDATE ON trainings
-            WHEN {changed} OR (OLD.manually_modified IS NOT NULL
-                AND NEW.manually_modified IS NOT OLD.manually_modified)
+            WHEN {changed} OR NEW.manually_modified IS NOT OLD.manually_modified
             BEGIN UPDATE trainings SET manually_modified = 1 WHERE id = NEW.id; END""")
         connection.execute("INSERT INTO schema_migrations(version) VALUES (8)")
         connection.commit()
@@ -1299,9 +1298,10 @@ def _ensure_weekly_plan_occurrences(
                     """
                     SELECT id
                     FROM trainings
-                    WHERE organization_id = current_profile() AND weekly_plan_id = ? AND weekly_plan_date = ?
+                    WHERE organization_id = current_profile() AND weekly_plan_id = ?
+                      AND (weekly_plan_date = ? OR training_date = ?)
                     """,
-                    (plan_id, date_string),
+                    (plan_id, date_string, date_string),
                 ).fetchone()
                 if occurrence is not None:
                     used_training_ids.add(occurrence[0])

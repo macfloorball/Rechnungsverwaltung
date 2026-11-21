@@ -3273,3 +3273,17 @@ def test_ten_activities_preserve_plan_training_and_final_invoice(client):
     assert {t["id"] for t in loaded} == set(training_ids)
     assert get_invoice(invoice_id, client.app.state.test_database_path) == before
     assert client.get(f"/api/invoices/{invoice_id}/pdf").content == pdf
+
+
+def test_weekly_recurrence_api_validation_and_result_header(client, calendar_activities):
+    activity = calendar_activities[0]['id']
+    entry = {'weekday': 3, 'activity_type_id': activity, 'hours': 1, 'repeat_weeks': 2}
+    for change in ({}, {'start_date': '2032-12-03'}, {'start_date': 'invalid'}, {'repeat_weeks': 3}, {'repeat_weeks': True}, {'repeat_weeks': 2.0}):
+        response = client.put('/api/weekly-plan', json=[{**entry, **change}])
+        assert response.status_code == 422
+        assert client.get('/api/weekly-plan').json() == []
+    response = client.put('/api/weekly-plan', json=[{**entry, 'start_date': '2032-12-02'}])
+    assert response.status_code == 200
+    assert set(json.loads(response.headers['X-Weekly-Plan-Sync'])) == {'added', 'removed', 'updated', 'preserved'}
+    assert response.json()[0]['start_date'] == '2032-12-02'
+    assert response.json()[0]['repeat_weeks'] == 2

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.database import create_record, get_record, initialize_database
+from backend.database import SCHEMA_VERSION, create_record, get_record, initialize_database
 from backend.storage_import import import_database, prepare_database
 
 
@@ -51,7 +51,7 @@ def test_failed_import_never_publishes_or_changes_source(tmp_path, kind):
         legacy_database(source)
         with sqlite3.connect(source) as connection:
             if kind == "future":
-                connection.execute("INSERT INTO schema_migrations (version) VALUES (8)")
+                connection.execute("INSERT INTO schema_migrations (version) VALUES (?)", (SCHEMA_VERSION + 1,))
             else:
                 connection.execute("DELETE FROM schema_migrations WHERE version >= 6")
                 connection.execute("DROP INDEX idx_invoices_unique_preview_period")

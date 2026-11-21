@@ -216,6 +216,8 @@ def test_v7_migration_unknown_history_and_idempotence(tmp_path, monkeypatch):
     assert rows(path) == before
     assert len(list(tmp_path.glob('*.before-migration-*.sqlite3'))) == 1
     assert save(path, {**plan, 'repeat_weeks': 2, 'start_date': '2026-12-03'})[1]['preserved'] == 1
+    db.update_record('trainings', t, {'manually_modified': 0}, path)
+    assert db.get_record('trainings', t, path)['manually_modified'] == 1
 
 
 @pytest.mark.parametrize('field,value', [('note', 'edited'), ('activity_type_id', None), ('hours', 4), ('unit_rate_cents', 999), ('training_date', '2026-12-11'), ('status', 'cancelled')])
@@ -231,3 +233,13 @@ def test_all_business_update_paths_leave_sticky_mark(store, field, value):
         c.execute(f'UPDATE trainings SET {field}=? WHERE id=?', (target[field], target['id']))
         c.execute('UPDATE trainings SET manually_modified=0 WHERE id=?', (target['id'],))
     assert db.get_record('trainings', target['id'], path)['manually_modified'] == 1
+
+
+def test_moved_occurrence_also_reserves_actual_date_after_weekday_change(store):
+    path, entry = store
+    plan, _ = save(path, entry)
+    target = december(path)['2026-12-10']
+    db.update_record('trainings', target['id'], {'training_date': '2026-12-11'}, path)
+    plan, _ = save(path, {**plan, 'weekday': 4})
+    db.ensure_weekly_plan_month(date(2026, 12, 1), path)
+    assert len([r for r in rows(path) if r['weekly_plan_id'] == plan['id'] and r['training_date'] == '2026-12-11']) == 1

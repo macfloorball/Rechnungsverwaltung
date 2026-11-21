@@ -147,6 +147,23 @@ class WeeklyPlanEntry(APIModel):
     repeat_weeks: Literal[1, 2] = 1
     start_date: date | None = None
 
+    @field_validator("repeat_weeks", mode="before")
+    @classmethod
+    def validate_repeat_weeks(cls, value):
+        if type(value) is not int or value not in (1, 2):
+            raise ValueError("Wiederholung muss Jede Woche (1) oder Alle 2 Wochen (2) sein")
+        return value
+
+    @field_validator("start_date", mode="before")
+    @classmethod
+    def validate_start_date(cls, value):
+        if isinstance(value, str):
+            try:
+                return date.fromisoformat(value)
+            except ValueError:
+                raise ValueError("Erster Termin muss ein gültiges Kalenderdatum sein") from None
+        return value
+
     @model_validator(mode="after")
     def validate_recurrence(self):
         if self.repeat_weeks == 2:
