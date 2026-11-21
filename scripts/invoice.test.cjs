@@ -128,3 +128,18 @@ for (const [name, create, message] of [
     assert.equal(ui.events(), 1);
   });
 }
+
+test('manual local invoice date survives preview and save; editing invalidates preview', async () => {
+  let saved;
+  const ui = invoiceUI(options => { saved = JSON.parse(options.body); return success(); });
+  const today = new Date();
+  assert.equal(ui.get('#invoice-date').value, `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`);
+  ui.get('#invoice-date').value = '2027-01-01';
+  await ui.preview('2026-11');
+  await ui.click();
+  assert.equal(saved.invoice_date, '2027-01-01');
+  await ui.preview();
+  ui.get('#invoice-date').events.input();
+  assert.equal(ui.button.disabled, true);
+  assert.equal(ui.get('#invoice-preview').hidden, true);
+});

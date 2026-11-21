@@ -94,6 +94,7 @@ function renderPreview(data, elements) {
 
 export function initializeInvoicePreview() {
   const form = document.querySelector("#invoice-preview-form");
+  const dateInput = document.querySelector("#invoice-date");
   const monthInput = document.querySelector("#invoice-month");
   const submitButton = document.querySelector("#load-invoice-preview");
   const preview = document.querySelector("#invoice-preview");
@@ -110,6 +111,7 @@ export function initializeInvoicePreview() {
 
   if (
     !(form instanceof HTMLFormElement)
+    || !(dateInput instanceof HTMLInputElement)
     || !(monthInput instanceof HTMLInputElement)
     || !(submitButton instanceof HTMLButtonElement)
     || !(preview instanceof HTMLElement)
@@ -134,6 +136,8 @@ export function initializeInvoicePreview() {
   const now = new Date();
   monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  dateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
   function invalidatePreview() {
     requestVersion += 1;
     loadingMessage.hidden = true;
@@ -147,6 +151,7 @@ export function initializeInvoicePreview() {
     downloadPdfLink.hidden = true;
   }
   monthInput.addEventListener("input", invalidatePreview);
+  dateInput.addEventListener("input", invalidatePreview);
   document.addEventListener("activities-updated", invalidatePreview);
   document.addEventListener("calendar-month-changed", (event) => {
     const { year, month } = event.detail;
@@ -177,6 +182,7 @@ export function initializeInvoicePreview() {
     previewPeriod = null;
     submitButton.disabled = true;
     monthInput.disabled = true;
+    dateInput.disabled = true;
     createButton.disabled = true;
     createButton.textContent = createButtonLabel;
     form.setAttribute("aria-busy", "true");
@@ -187,6 +193,7 @@ export function initializeInvoicePreview() {
         body: JSON.stringify({
           year: Number(match[1]),
           month: Number(match[2]),
+          invoice_date: dateInput.value,
         }),
       });
       if (!response.ok) {
@@ -226,6 +233,7 @@ export function initializeInvoicePreview() {
     } finally {
       submitButton.disabled = false;
       monthInput.disabled = false;
+      dateInput.disabled = false;
       form.setAttribute("aria-busy", "false");
     }
   });
@@ -241,6 +249,7 @@ export function initializeInvoicePreview() {
     createButton.setAttribute("aria-busy", "true");
     createButton.textContent = "Rechnung wird gespeichert …";
     monthInput.disabled = true;
+    dateInput.disabled = true;
     submitButton.disabled = true;
     const version = requestVersion;
     const period = { ...previewPeriod };
@@ -290,6 +299,7 @@ export function initializeInvoicePreview() {
       // the backend's existing duplicate check for an already invoiced month.
       createButton.disabled = saved || !previewPeriod;
       monthInput.disabled = false;
+      dateInput.disabled = false;
       submitButton.disabled = false;
     }
   });

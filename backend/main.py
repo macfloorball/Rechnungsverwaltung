@@ -731,6 +731,8 @@ def post_invoice(
         line
         for line in (
             organization["recipient_name"],
+            " ".join(filter(None, (organization.get("recipient_salutation"),
+                                       organization.get("recipient_contact_name")))),
             organization["recipient_street"],
             organization["recipient_postal_code"] + (
                 f" {organization['recipient_city']}"

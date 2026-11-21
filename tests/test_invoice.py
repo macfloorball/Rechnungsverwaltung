@@ -344,3 +344,15 @@ def test_invoice_without_optional_details_and_with_logo_renders() -> None:
     assert with_logo.startswith(b"%PDF-")
     assert b"/Subtype /Image" not in without_optional
     assert b"/Subtype /Image" in with_logo
+
+
+def test_total_rules_have_equal_clearance_from_font_bounds():
+    from reportlab.pdfbase.pdfmetrics import getAscentDescent
+    from backend.invoice_generator import BODY_FONT_SIZE, FOOTER_LINE_GAP
+    pdf = RecordingCanvas()
+    draw_invoice_footer(pdf, 3000, 430)
+    baseline = next(y for _, y, text in pdf.left_aligned if text == 'Endsumme:')
+    ascent, _ = getAscentDescent(BODY_FONT_BOLD, BODY_FONT_SIZE)
+    top, bottom = (line[1] for line in pdf.lines)
+    assert abs(top - (baseline + ascent) - FOOTER_LINE_GAP) < 0.001
+    assert abs(baseline - bottom - FOOTER_LINE_GAP) < 0.001

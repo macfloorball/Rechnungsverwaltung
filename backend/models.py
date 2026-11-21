@@ -34,6 +34,8 @@ class OrganizationSettingsUpdate(APIModel):
     street: str = Field(default="", max_length=200)
     postal_code: str = Field(default="", max_length=20)
     city: str = Field(default="", max_length=100)
+    recipient_salutation: str = Field(default="", max_length=50)
+    recipient_contact_name: str = Field(default="", max_length=200)
     recipient_name: str = Field(default="", max_length=200)
     recipient_street: str = Field(default="", max_length=200)
     recipient_postal_code: str = Field(default="", max_length=20)
@@ -66,6 +68,8 @@ class OrganizationSettingsUpdate(APIModel):
         "postal_code",
         "city",
         "recipient_name",
+        "recipient_salutation",
+        "recipient_contact_name",
         "recipient_street",
         "recipient_postal_code",
         "recipient_city",

@@ -124,7 +124,9 @@ def test_migration_is_idempotent_and_preserves_legacy(environment):
         'invoice_snapshot_json': '{"tax_number":"Old"}', 'total_amount_cents': 0}, [], database)
     before = db.get_invoice(original, database)
     with sqlite3.connect(database) as connection:
-        connection.execute('DELETE FROM schema_migrations WHERE version = 9')
+        connection.execute('DELETE FROM schema_migrations WHERE version >= 9')
+        connection.execute('ALTER TABLE organizations DROP COLUMN recipient_salutation')
+        connection.execute('ALTER TABLE organizations DROP COLUMN recipient_contact_name')
         connection.execute('DROP TABLE invoice_counters')
         connection.execute('DROP TABLE invoice_number_legacy_floors')
         connection.execute('ALTER TABLE organizations DROP COLUMN tax_id')
@@ -150,3 +152,14 @@ def test_manual_counter_rejects_imported_number_collision(environment):
 def test_iban_invalid_types_return_validation_errors(environment, iban):
     client, _, _ = environment
     request(client, 'PUT', '/api/organization/settings', body={'iban': iban}, expected=422)
+
+
+def test_skipped_months_do_not_consume_numbers(environment):
+    client, database, _ = environment
+    identifier = activity(client, 1)
+    for month, expected in ((1, '2026-01'), (3, '2026-02')):
+        add_training(client, 1, identifier, month)
+        invoice = request(client, 'POST', '/api/invoices', body={
+            'year': 2025, 'month': month, 'invoice_date': '2026-01-02'}, expected=201)
+        assert invoice['invoice_number'] == expected
+    assert db.get_invoice_counter(2026, database)['next_number'] == 3
