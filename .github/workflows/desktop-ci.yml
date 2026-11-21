@@ -58,7 +58,9 @@ jobs:
         run: python -m pytest -q --basetemp "${{ runner.temp }}/ttc-pytest"
       - name: Real Electron profile dialog and restart (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a env TTC_RUN_ELECTRON_TESTS=1 python -m pytest tests/test_navigation.py -k profiles -q --basetemp "${{ runner.temp }}/ttc-profile-dialog"
+        run: |
+          node node_modules/electron/install.js
+          xvfb-run -a env TTC_RUN_ELECTRON_TESTS=1 python -m pytest tests/test_navigation.py -k profiles -q --basetemp "${{ runner.temp }}/ttc-profile-dialog"
       - name: Preserve lifecycle diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
