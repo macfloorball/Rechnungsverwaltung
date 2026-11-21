@@ -48,6 +48,23 @@ function renderPreview(data, elements) {
   period.setUTCFullYear(data.year, data.month - 1, 1);
   elements.periodTitle.textContent =
     `Rechnung für die Übungsleitung im Zeitraum ${monthFormatter.format(period)}`;
+  let details = document.querySelector("#invoice-preview-details");
+  if (!details) {
+    details = document.createElement("p");
+    details.id = "invoice-preview-details";
+    details.style.whiteSpace = "pre-line";
+    details.style.overflowWrap = "anywhere";
+    elements.periodTitle.after(details);
+  }
+  details.textContent = [
+    `Voraussichtliche Rechnungsnummer: ${data.invoice_number} (Vergabe beim Speichern)`,
+    `Rechnungsdatum: ${data.invoice_date}`,
+    data.tax_id ? `Steuer ID: ${data.tax_id}` : "",
+    data.account_holder ? `Kontoinhaber: ${data.account_holder}` : "",
+    data.iban ? `IBAN: ${data.iban}` : "",
+    data.bic ? `BIC: ${data.bic}` : "",
+    data.bank_name ? `Bank: ${data.bank_name}` : "",
+  ].filter(Boolean).join("\n");
   elements.items.replaceChildren();
 
   for (const item of data.items) {
@@ -195,6 +212,7 @@ export function initializeInvoicePreview() {
       previewPeriod = {
         year: Number(match[1]),
         month: Number(match[2]),
+        invoice_date: data.invoice_date,
       };
       createButton.disabled = data.items.length === 0;
       loadingMessage.hidden = true;
@@ -228,16 +246,10 @@ export function initializeInvoicePreview() {
     const period = { ...previewPeriod };
     let saved = false;
     try {
-      const today = new Date();
-      const invoiceDate = [
-        today.getFullYear(),
-        String(today.getMonth() + 1).padStart(2, "0"),
-        String(today.getDate()).padStart(2, "0"),
-      ].join("-");
       const response = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...period, invoice_date: invoiceDate }),
+        body: JSON.stringify(period),
       });
       if (!response.ok) {
         let detail = `Rechnung konnte nicht erstellt werden (HTTP ${response.status}).`;

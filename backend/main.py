@@ -33,6 +33,7 @@ from backend.storage_import import prepare_database
 from backend.storage_errors import MESSAGES, error_code
 
 from backend.database import (
+    get_invoice_counter, set_invoice_counter,
     ProfileDatabasePath, profile_id, list_profiles, create_profile, rename_profile,
     save_activities,
     save_weekly_plan,
@@ -67,6 +68,7 @@ from backend.invoice_generator import (
     render_invoice_pdf,
 )
 from backend.models import (
+    InvoiceCounterUpdate,
     ProfileInput,
     BackupRequest,
     InvoiceCreate,
@@ -314,6 +316,21 @@ def put_organization_settings(
             detail="Organisationseinstellungen wurden nicht gefunden",
         )
     return _public_organization_settings(get_organization(database_path))
+
+
+@app.get("/api/organization/invoice-counter/{year}")
+def read_invoice_counter(year: int, database_path: DatabasePath):
+    if not 1 <= year <= 9999:
+        raise HTTPException(status_code=422, detail="Ungültiges Rechnungsjahr")
+    return get_invoice_counter(year, database_path)
+
+
+@app.put("/api/organization/invoice-counter/{year}")
+def write_invoice_counter(year: int, payload: InvoiceCounterUpdate, database_path: DatabasePath):
+    try:
+        return set_invoice_counter(year, payload.next_number, database_path)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/api/organization/logo")
@@ -595,7 +612,7 @@ def _build_invoice_items(
 
 @app.post("/api/invoices/preview")
 def preview_invoice(
-    payload: InvoicePeriod,
+    payload: InvoiceCreate,
     database_path: DatabasePath,
 ) -> dict[str, Any]:
     items, total_amount_cents = _build_invoice_items(
@@ -603,15 +620,25 @@ def preview_invoice(
         payload.month,
         database_path,
     )
+    invoice_date = payload.invoice_date or date.today()
     save_invoice_preview(
         payload.year,
         payload.month,
-        date.today().isoformat(),
+        invoice_date.isoformat(),
         total_amount_cents,
         items,
         database_path,
     )
+    organization = get_organization(database_path)
+    sequence = get_invoice_counter(invoice_date.year, database_path)["next_number"]
     return {
+        "invoice_date": invoice_date.isoformat(),
+        "invoice_number": f"{invoice_date.year:04d}-{sequence:02d}",
+        "tax_id": organization.get("tax_id"),
+        "iban": " ".join(organization["iban"][i:i+4] for i in range(0, len(organization["iban"]), 4)),
+        "bic": organization["bic"],
+        "account_holder": organization["account_holder"],
+        "bank_name": organization["bank_name"],
         "year": payload.year,
         "month": payload.month,
         "items": items,
@@ -682,30 +709,14 @@ def post_invoice(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organisationseinstellungen wurden nicht gefunden",
         )
-    sequence = organization["next_invoice_number"]
-    prefix = organization["invoice_number_prefix"].strip()
-    existing_numbers = (
-        invoice["invoice_number"]
-        for invoice in list_records("invoices", database_path=database_path)
-        if invoice["invoice_number"]
-    )
-    previous_sequence = 0
-    for existing_number in existing_numbers:
-        parts = existing_number.split("-")
-        if (
-            len(parts) >= 3
-            and "-".join(parts[:-2]) == prefix
-            and parts[-2].isdigit()
-            and parts[-1].isdigit()
-        ):
-            previous_sequence = max(previous_sequence, int(parts[-1]))
-    sequence = max(sequence, previous_sequence + 1)
-    invoice_number = f"{prefix}-{payload.year}-{sequence:04d}"
-    invoice_date = date.today()
+    invoice_date = payload.invoice_date or date.today()
+    sequence = get_invoice_counter(invoice_date.year, database_path)["next_number"]
+    invoice_number = f"{invoice_date.year:04d}-{sequence:02d}"
     invoice_snapshot = {
         key: value
         for key, value in organization.items()
-        if key not in {"id", "logo_data", "logo_path", "created_at", "updated_at"}
+        if key not in {"id", "logo_data", "logo_path", "created_at", "updated_at",
+                       "payment_due_days", "invoice_number_prefix", "next_invoice_number"}
     }
     invoice_snapshot.update(
         {
@@ -755,6 +766,7 @@ def post_invoice(
     tax_lines = tuple(
         line
         for line in (
+            f"Steuer ID: {organization['tax_id']}" if organization.get("tax_id") else "",
             f"Steuernummer: {organization['tax_number']}"
             if organization["tax_number"]
             else "",
@@ -778,7 +790,6 @@ def post_invoice(
             bank_name=organization["bank_name"] or "",
             payment_notice=organization["payment_notice"],
             invoice_footer=organization["invoice_footer"],
-            due_date=invoice_date + timedelta(days=organization["payment_due_days"]),
         ),
         invoice_number=invoice_number,
         city=organization["city"],
@@ -854,7 +865,7 @@ def post_invoice(
                 for item in items
             ],
             database_path,
-            expected_next_invoice_number=organization["next_invoice_number"],
+            expected_next_invoice_number=sequence,
             updated_next_invoice_number=sequence + 1,
         )
     except InvoiceAlreadyExistsError as error:

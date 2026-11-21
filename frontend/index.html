@@ -162,6 +162,19 @@
             Diese Angaben werden für künftig erstellte Rechnungen verwendet.
             Bereits gespeicherte Rechnungen bleiben unverändert.
           </p>
+          <form id="invoice-counter-form" class="organization-settings-group">
+            <h3>Jährlicher Rechnungsnummernkreis</h3>
+            <p>Das Rechnungsdatum bestimmt das Jahr, unabhängig vom Leistungsmonat. Die Vorschau reserviert keine Nummer.</p>
+            <div class="organization-fields">
+            <label>Rechnungsjahr <input id="counter-year" type="number" min="1" max="9999" required></label>
+            <label>Nächste laufende Nummer <input id="counter-next" type="number" min="1" max="999999999" required></label>
+            </div>
+            <div class="organization-logo-actions">
+            <button class="secondary-button" type="button" id="counter-load">Nummernkreis laden</button>
+            <button class="primary-button" type="submit" id="counter-save" disabled>Nummernkreis speichern</button>
+            </div>
+            <p id="counter-message" role="status"></p>
+          </form>
           <form id="organization-settings-form">
             <fieldset class="organization-settings-group">
               <legend>Absenderdaten</legend>
@@ -227,7 +240,7 @@
                   <input name="account_holder" type="text" maxlength="200" autocomplete="name">
                 </label>
                 <label>IBAN
-                  <input name="iban" type="text" maxlength="34" autocomplete="off" spellcheck="false">
+                  <input name="iban" type="text" maxlength="42" autocomplete="off" spellcheck="false">
                 </label>
                 <label>BIC <span class="optional-label">(optional)</span>
                   <input name="bic" type="text" maxlength="11" autocomplete="off" spellcheck="false">
@@ -241,6 +254,9 @@
             <fieldset class="organization-settings-group">
               <legend>Steuerliche Angaben</legend>
               <div class="organization-fields">
+                <label>Steuer ID <span class="optional-label">(optional)</span>
+                  <input name="tax_id" type="text" maxlength="100">
+                </label>
                 <label>Steuernummer <span class="optional-label">(optional)</span>
                   <input name="tax_number" type="text" maxlength="100">
                 </label>
@@ -256,12 +272,6 @@
             <fieldset class="organization-settings-group">
               <legend>Rechnungseinstellungen</legend>
               <div class="organization-fields">
-                <label>Rechnungsnummern-Präfix
-                  <input name="invoice_number_prefix" type="text" maxlength="30" required>
-                </label>
-                <label>Zahlungsziel in Tagen
-                  <input name="payment_due_days" type="number" min="0" max="3650" step="1" required>
-                </label>
                 <label class="organization-field-wide">Individueller Rechnungstext
                   <textarea name="invoice_text" rows="3" maxlength="2000"></textarea>
                 </label>

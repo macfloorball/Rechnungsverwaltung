@@ -115,7 +115,7 @@ async function run() {
   const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');
   const recipientValues = `Object.fromEntries(${JSON.stringify(Object.keys(recipient))}.map(name =>
     [name, document.querySelector('#organization-settings-form').elements.namedItem(name).value]))`;
-  await until(() => js('Boolean(document.querySelector(\'#organization-settings-form input[name="invoice_number_prefix"]\').value)'), 'organization settings loaded');
+  await until(() => js('!document.querySelector("#save-organization-settings").disabled'), 'organization settings loaded');
   if (process.env.TTC_TEST_RESUME === '1') {
     assert.deepEqual(await js(recipientValues), recipient);
     const settings = await (await fetch(new URL('/api/organization/settings', origin))).json();
@@ -249,7 +249,13 @@ async function run() {
   assert.equal(plan[0].is_active, 0);
   assert.equal(plan[0].hours, 3);
   const retained = await (await fetch(calendarURL)).json();
-  assert.deepEqual(retained.days.flatMap(day => day.trainings.map(training => training.id)), generatedIds);
+  // The merged recurrence feature removes untouched future occurrences when
+  // a plan is disabled; historical appointments remain unchanged.
+  const todayForPlan = new Date();
+  const planCutoff = `${todayForPlan.getFullYear()}-${String(todayForPlan.getMonth()+1).padStart(2,'0')}-${String(todayForPlan.getDate()).padStart(2,'0')}`;
+  const historicalIds = generatedCalendar.days.filter(day => day.date <= planCutoff)
+    .flatMap(day => day.trainings.map(training => training.id));
+  assert.deepEqual(retained.days.flatMap(day => day.trainings.map(training => training.id)), historicalIds);
 
   const openNew = async () => {
     await navigate("calendar");
@@ -350,7 +356,7 @@ async function run() {
   const eligibleIds = new Set(eligible.map(training => training.id));
   for (const training of finalCalendar.days.flatMap(day => day.trainings)) {
     const before = beforeCompletion.days.flatMap(day => day.trainings).find(item => item.id === training.id);
-    assert.deepEqual(training, {...before, status:eligibleIds.has(training.id) ? 'completed' : before.status});
+    assert.deepEqual(training, {...before, status:eligibleIds.has(training.id) ? 'completed' : before.status, manually_modified:eligibleIds.has(training.id) ? 1 : before.manually_modified});
   }
   console.log('DESKTOP_STATUS_CHECK saved');
   await fs.writeFile(path.join(output, 'calendar-state.json'), JSON.stringify({year,month,plan,calendar:finalCalendar}));

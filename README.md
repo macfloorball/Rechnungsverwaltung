@@ -1600,3 +1600,61 @@ und SQLite-Imports werden Profil 1 / TTC zugeordnet. Bestehende Ziele werden nic
 überschrieben oder mit Importdaten zusammengeführt. Archivpfad-, Prüfsummen- und
 Fremdschlüsselprüfungen bleiben erhalten; zusätzlich werden Profilbeziehungen und
 profilübergreifende Dokumentreferenzen geprüft. Die App arbeitet weiterhin offline.
+
+### Rechnungsnummern und Rechnungsangaben
+
+Neue finale Rechnungen erhalten `JAHR-LAUFNUMMER`, zum Beispiel `2026-01`
+oder `2026-100`. Maßgeblich ist das **Rechnungsdatum**, nicht der Leistungsmonat:
+Eine am 2. Januar 2027 erstellte Dezemberrechnung für 2026 gehört zum Nummernkreis
+2027. Die Vorschau liefert ihr Rechnungsdatum zurück; die Oberfläche verwendet
+es auch beim anschließenden Speichern. API-Aufrufe können ein explizites
+Rechnungsdatum setzen, andernfalls gilt das lokale Tagesdatum des Backends.
+Die laufende Nummer wird erst beim endgültigen Speichern vergeben. Vorschauen
+zeigen eine unverbindliche nächste Nummer und verbrauchen keine Nummern.
+
+Jedes Rechnungsprofil besitzt eigene Jahresnummernkreise. Unter „Rechnung
+konfigurieren“ lässt sich ein Jahr laden und dessen nächste positive ganze
+Nummer einstellen (bis 999999999). Die angezeigte Untergrenze schützt bereits
+vergebene Nummern, auch nach dem Löschen ihrer Rechnung. Nicht vergebene manuelle
+Sprünge lassen sich bis zu dieser Untergrenze korrigieren. Andere Profile und
+Jahre bleiben unberührt. Finale Rechnungsnummern sind weiterhin unveränderlich.
+Gleiche Nummern in unterschiedlichen Profilen sind zulässig; die bestehenden
+profilbezogenen PDF-Dateinamen und Dokumentzuordnungen bleiben eindeutig.
+
+Die Vergabe prüft den zuvor gelesenen Zähler innerhalb derselben SQLite-
+`BEGIN IMMEDIATE`-Transaktion wie Rechnung, Positionen und Snapshot. Bei einer
+parallelen Änderung wird der konkurrierende Versuch mit HTTP 409 abgelehnt;
+eine erneute Vorschau und Speicherung verwendet den neuen Zähler. Ein Fehler
+rollt die Vergabe zurück und entfernt nur die eigene neu veröffentlichte PDF.
+Die bereits bestehende Begrenzung auf eine finale Rechnung je Leistungsmonat
+und Profil bleibt bestehen.
+
+Schema-Migration 9 ergänzt transaktional die optionale `tax_id` sowie die
+Tabellen `invoice_counters` und `invoice_number_legacy_floors`. Die vorhandene
+Migrationssicherung wird vorab angelegt. Historische Rechnungen, Snapshots und
+PDF-Dateien werden nicht verändert. Eindeutige alte `JAHR-ZAHL`-Nummern bilden
+Untergrenzen für ihr bezeichnetes Jahr. Andere Schemata werden nicht als
+Jahresnummern interpretiert: Der größte numerische Endbestandteil und der alte
+nächste Zähler bilden konservativ eine Untergrenze für die durch gespeicherte
+Rechnungsdaten belegten Jahre des Profils. Ist kein Jahr belegbar oder fehlt
+ein gültiges Rechnungsdatum, gilt die Untergrenze vorsichtshalber für alle
+noch nicht angelegten Jahresnummernkreise dieses Profils. Dadurch können bei
+unklaren Altbeständen Lücken entstehen. Neue Jahre ohne solche Unsicherheit
+beginnen bei 1. Ein Neustart initialisiert keine Zähler erneut. Die alten
+Organisationsfelder bleiben lesbar; `next_invoice_number` ist nur noch ein
+Kompatibilitätswert der letzten Vergabe, keine Quelle der Jahresnummerierung.
+Präfix und Zahlungsziel sind für neue Rechnungen ohne Wirkung.
+
+„Steuer ID“ ist ein eigenständiges optionales Profilfeld (maximal 100 Zeichen),
+getrennt von Steuernummer und Umsatzsteuer-ID. Neue Rechnungen übernehmen den
+Wert in ihren unveränderlichen Snapshot und zeigen `Steuer ID: …` nur bei
+vorhandenem Wert. Es erfolgt keine externe Prüfung. Neue Rechnungen erzeugen
+kein Fälligkeitsdatum aus dem alten Zahlungsziel; freie Rechnungstexte und
+Zahlungshinweise bleiben erhalten. IBAN-Eingaben mit oder ohne Leerzeichen
+werden vor der bestehenden internationalen Validierung normalisiert und zur
+Anzeige in Vierergruppen gegliedert. Gespeichert bleibt der kompakte Kontowert.
+
+Vollständige Backups enthalten Einstellungen und Nummernkreise zusammen mit
+allen PDFs in der SQLite-Sicherung; die Wiederherstellung migriert alte
+Einzel- und Mehrprofilbestände ausschließlich in einer temporären Kopie.
+Der CSV-Datenexport enthält beide neuen Nummernkreistabellen ebenfalls.
