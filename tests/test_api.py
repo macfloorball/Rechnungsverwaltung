@@ -1160,12 +1160,16 @@ def test_weekly_plan_covers_all_weekdays_and_leap_year_without_duplicates(client
         assert client.get(f"/api/calendar/{year}/{month}").json() == calendar
 
 
-def test_plan_changes_deactivation_and_removal_preserve_existing_trainings(client, calendar_activities):
+def test_plan_changes_deactivation_and_removal_preserve_legacy_trainings(client, calendar_activities):
     from backend.database import list_records
 
     plan = client.put("/api/weekly-plan", json=[
         {"weekday": 0, "activity_type_id": calendar_activities[0]["id"], "hours": 1},
     ]).json()[0]
+    # Legacy records have no reliable proof that they have never been edited.
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        connection.execute("DROP TRIGGER training_manual_change")
+        connection.execute("UPDATE trainings SET manually_modified=NULL")
     before = list_records("trainings", database_path=client.app.state.test_database_path)
     changed = {"id": plan["id"], "weekday": 6, "activity_type_id": calendar_activities[1]["id"], "hours": 3}
     assert client.put("/api/weekly-plan", json=[changed]).status_code == 200
@@ -1175,6 +1179,8 @@ def test_plan_changes_deactivation_and_removal_preserve_existing_trainings(clien
     generated = [training for day in february["days"] for training in day["trainings"]]
     assert len(generated) == 5  # February 2032 has five Sundays.
     assert all(training["hours"] == 3 and training["activity_type_id"] == calendar_activities[1]["id"] for training in generated)
+    with sqlite3.connect(client.app.state.test_database_path) as connection:
+        connection.execute("UPDATE trainings SET manually_modified=NULL")
     assert client.put("/api/weekly-plan", json=[{**changed, "is_active": False}]).status_code == 200
     assert all(not day["trainings"] for day in client.get("/api/calendar/2032/3").json()["days"])
     assert client.put("/api/weekly-plan", json=[]).json() == []
@@ -1563,8 +1569,8 @@ def test_month_completion_is_repeatable_and_excludes_moved_and_manual_appointmen
     after = {training["id"]: training for training in list_records("trainings", database_path=client.app.state.test_database_path)}
     assert set(after) == {training["id"] for training in before}
     for training in before:
-        assert {key: value for key, value in after[training["id"]].items() if key != "status"} == {
-            key: value for key, value in training.items() if key != "status"
+        assert {key: value for key, value in after[training["id"]].items() if key not in {"status", "manually_modified"}} == {
+            key: value for key, value in training.items() if key not in {"status", "manually_modified"}
         }
     assert client.post("/api/calendar/2032/2/complete").json() == {"updated_count": 0}
 
