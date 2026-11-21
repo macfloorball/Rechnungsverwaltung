@@ -33,8 +33,8 @@ def create_export(database: Path, documents: Path, destination: Path) -> Path:
             with source.open('database/ttc.db') as reader, database_copy.open('xb') as writer:
                 shutil.copyfileobj(reader, writer)
             with closing(sqlite3.connect(database_copy)) as connection:
-                for table in TABLE_COLUMNS:
-                    cursor = connection.execute(f'SELECT * FROM {table} ORDER BY id')
+                for table in (*TABLE_COLUMNS, "invoice_counters", "invoice_number_legacy_floors"):
+                    cursor = connection.execute(f'SELECT * FROM {table} ORDER BY rowid')
                     text = io.StringIO(newline='')
                     writer = csv.writer(text, delimiter=';')
                     writer.writerow(column[0] for column in cursor.description)

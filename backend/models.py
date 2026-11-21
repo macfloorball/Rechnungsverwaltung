@@ -47,6 +47,7 @@ class OrganizationSettingsUpdate(APIModel):
     bic: str | None = Field(default=None, max_length=11)
     account_holder: str = Field(default="", max_length=200)
     bank_name: str | None = Field(default=None, max_length=200)
+    tax_id: str | None = Field(default=None, max_length=100)
     tax_number: str | None = Field(default=None, max_length=100)
     vat_id: str | None = Field(default=None, max_length=100)
     additional_tax_info: str | None = Field(default=None, max_length=1000)
@@ -85,7 +86,7 @@ class OrganizationSettingsUpdate(APIModel):
     def strip_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
-    @field_validator("phone", "bic", "bank_name", "tax_number", "vat_id", "additional_tax_info")
+    @field_validator("phone", "bic", "bank_name", "tax_id", "tax_number", "vat_id", "additional_tax_info")
     @classmethod
     def strip_optional_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -100,7 +101,7 @@ class OrganizationSettingsUpdate(APIModel):
             raise ValueError("Bitte gib eine gültige E-Mail-Adresse ein")
         return value
 
-    @field_validator("iban")
+    @field_validator("iban", mode="before")
     @classmethod
     def validate_iban(cls, value: str) -> str:
         value = "".join(value.upper().split())
@@ -131,6 +132,10 @@ class OrganizationSettingsUpdate(APIModel):
         if not value or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", value):
             raise ValueError("Das Rechnungsnummern-Präfix enthält ungültige Zeichen")
         return value
+
+
+class InvoiceCounterUpdate(APIModel):
+    next_number: int = Field(gt=0, le=999999999, strict=True)
 
 
 class LogoUpload(APIModel):

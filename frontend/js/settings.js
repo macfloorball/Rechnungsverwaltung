@@ -371,6 +371,45 @@ export function initializeSettings() {
     throw new Error("Einstellungen oder Rechnungsarchiv fehlen im HTML.");
   }
 
+  const counterForm = document.querySelector("#invoice-counter-form");
+  const counterYear = document.querySelector("#counter-year");
+  const counterNext = document.querySelector("#counter-next");
+  const counterSave = document.querySelector("#counter-save");
+  const counterMessage = document.querySelector("#counter-message");
+  counterYear.value = new Date().getFullYear();
+  let loadedYear = null;
+  counterYear.addEventListener("input", () => { loadedYear = null; counterSave.disabled = true; });
+  async function loadCounter() {
+    if (!counterYear.reportValidity()) return;
+    const year = Number(counterYear.value);
+    counterSave.disabled = true;
+    try {
+      const data = await requestJson(`/api/organization/invoice-counter/${year}`);
+      if (Number(counterYear.value) !== year) return;
+      counterNext.value = data.next_number;
+      counterNext.min = data.minimum_number;
+      loadedYear = year;
+      counterSave.disabled = false;
+      counterMessage.textContent = `Format: ${year}-${String(data.next_number).padStart(2, "0")}. Kleinste zulässige Nummer: ${data.minimum_number}.`;
+    } catch (error) { counterMessage.textContent = error.message; }
+  }
+  document.querySelector("#counter-load").addEventListener("click", loadCounter);
+  counterForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!counterForm.reportValidity() || loadedYear !== Number(counterYear.value)) return;
+    const year = loadedYear;
+    counterSave.disabled = true;
+    try {
+      await requestJson(`/api/organization/invoice-counter/${year}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ next_number: Number(counterNext.value) }),
+      });
+      counterMessage.textContent = "Nummernkreis gespeichert.";
+    } catch (error) { counterMessage.textContent = error.message; }
+    finally { counterSave.disabled = loadedYear !== Number(counterYear.value); }
+  });
+  loadCounter();
+
   let activities = [];
   let weeklyPlan = [];
 
@@ -412,6 +451,7 @@ export function initializeSettings() {
         control.checked = settings[control.name] === true || settings[control.name] === 1;
       } else {
         control.value = settings[control.name] ?? "";
+        if (control.name === "iban") control.value = control.value.replace(/\s/g, "").match(/.{1,4}/g)?.join(" ") || "";
       }
     }
 

@@ -38,6 +38,7 @@ TABLE_COLUMNS = {
         "account_holder",
         "bank_name",
         "tax_number",
+        "tax_id",
         "vat_id",
         "additional_tax_info",
         "logo_path",
@@ -159,7 +160,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -366,6 +367,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_invoice_previews,
             _migrate_profiles,
             _migrate_recurrence,
+            _migrate_invoice_numbering,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -824,6 +826,95 @@ def _migrate_recurrence(connection):
         raise
 
 
+def _migrate_invoice_numbering(connection):
+    if get_schema_version(connection) != 8:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute("ALTER TABLE organizations ADD COLUMN tax_id TEXT")
+        connection.execute("""CREATE TABLE invoice_counters (
+            organization_id INTEGER NOT NULL REFERENCES organizations(id),
+            year INTEGER NOT NULL CHECK(year BETWEEN 1 AND 9999),
+            next_number INTEGER NOT NULL CHECK(next_number > 0),
+            minimum_number INTEGER NOT NULL CHECK(minimum_number > 0),
+            PRIMARY KEY(organization_id, year))""")
+        connection.execute("""CREATE TABLE invoice_number_legacy_floors (
+            organization_id INTEGER PRIMARY KEY REFERENCES organizations(id),
+            minimum_number INTEGER NOT NULL CHECK(minimum_number > 0))""")
+        # Legacy prefixes and months are not interpreted. Preserve a conservative
+        # profile-wide floor for uncertain numbering, including deleted invoices.
+        for identifier, legacy_next in connection.execute(
+            "SELECT id, next_invoice_number FROM organizations"
+        ).fetchall():
+            floor = legacy_next
+            years = {}
+            unknown_year = False
+            for number, invoice_date in connection.execute(
+                "SELECT invoice_number, invoice_date FROM invoices "
+                "WHERE organization_id = ? AND is_preview = 0", (identifier,)
+            ):
+                match = re.fullmatch(r"([0-9]{4})-([0-9]+)", number or "")
+                if match and 1 <= int(match[1]) <= 9999:
+                    year, serial = map(int, match.groups())
+                    years[year] = max(years.get(year, 1), serial + 1)
+                else:
+                    try:
+                        legacy_year = date.fromisoformat(invoice_date).year
+                        years.setdefault(legacy_year, 1)
+                    except (TypeError, ValueError):
+                        unknown_year = True
+                    # A trailing integer is only an upper bound, never a guessed
+                    # assignment to a year or a new label for an old invoice.
+                    tail = re.search(r"([0-9]+)$", number or "")
+                    if tail:
+                        floor = max(floor, int(tail[1]) + 1)
+            connection.execute("INSERT INTO invoice_number_legacy_floors VALUES (?, ?)", (identifier, floor if unknown_year or not years else 1))
+            for year, minimum in years.items():
+                minimum = max(minimum, floor)
+                connection.execute("INSERT INTO invoice_counters VALUES (?, ?, ?, ?)",
+                                   (identifier, year, minimum, minimum))
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (9)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def _invoice_counter(connection, identifier, year):
+    row = connection.execute(
+        "SELECT next_number, minimum_number FROM invoice_counters WHERE organization_id = ? AND year = ?",
+        (identifier, year),
+    ).fetchone()
+    if row:
+        return row
+    legacy = connection.execute(
+        "SELECT minimum_number FROM invoice_number_legacy_floors WHERE organization_id = ?", (identifier,)
+    ).fetchone()
+    floor = legacy[0] if legacy else 1
+    return floor, floor
+
+
+def get_invoice_counter(year, database_path=None):
+    with get_connection(database_path) as connection:
+        next_number, minimum = _invoice_counter(connection, profile_id(database_path), year)
+        return {"year": year, "next_number": next_number, "minimum_number": minimum}
+
+
+def set_invoice_counter(year, next_number, database_path=None):
+    if type(year) is not int or not 1 <= year <= 9999 or type(next_number) is not int or not 1 <= next_number <= 999999999:
+        raise ValueError("Jahr und nächste Nummer müssen gültige positive Ganzzahlen sein")
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        identifier = profile_id(database_path)
+        _, minimum = _invoice_counter(connection, identifier, year)
+        if next_number < minimum:
+            raise ValueError(f"Der Rechnungsnummernkreis beginnt frühestens bei {minimum}; vergebene Nummern bleiben gesperrt")
+        connection.execute("""INSERT INTO invoice_counters VALUES (?, ?, ?, ?)
+            ON CONFLICT(organization_id, year) DO UPDATE SET next_number = excluded.next_number""",
+            (identifier, year, next_number, minimum))
+    return get_invoice_counter(year, database_path)
+
+
 def _plan_matches(weekday, repeat_weeks, start_date, day):
     if day.weekday() != weekday:
         return False
@@ -958,21 +1049,23 @@ def create_invoice_with_items(
 
         if expected_next_invoice_number is not None:
             organization_id = invoice.get("organization_id", profile_id(database_path))
-            cursor = connection.execute(
-                """
-                UPDATE organizations
-                SET next_invoice_number = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND next_invoice_number = ?
-                """,
-                (
-                    updated_next_invoice_number or expected_next_invoice_number + 1,
-                    organization_id,
-                    expected_next_invoice_number,
-                ),
-            )
-            if cursor.rowcount != 1:
+            numbering_year = date.fromisoformat(invoice["invoice_date"]).year
+            actual, minimum = _invoice_counter(connection, organization_id, numbering_year)
+            if actual != expected_next_invoice_number:
                 raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert")
+            number = invoice.get("invoice_number")
+            if number != f"{numbering_year:04d}-{actual:02d}":
+                raise ValueError("Ungültiger Rechnungsnummernkreis")
+            if connection.execute("SELECT 1 FROM invoices WHERE organization_id = ? AND invoice_number = ? AND is_preview = 0",
+                                  (organization_id, number)).fetchone():
+                raise ValueError("Der Rechnungsnummernkreis enthält eine bereits vergebene Nummer")
+            # Retain the deprecated single counter as a compatibility mirror only.
+            connection.execute("UPDATE organizations SET next_invoice_number = ? WHERE id = ?",
+                               (actual + 1, organization_id))
+            connection.execute("""INSERT INTO invoice_counters VALUES (?, ?, ?, ?)
+                ON CONFLICT(organization_id, year) DO UPDATE SET
+                next_number = excluded.next_number, minimum_number = excluded.minimum_number""",
+                (organization_id, numbering_year, actual + 1, max(minimum, actual + 1)))
 
         if preview_ids:
             invoice_id = int(preview_ids[0])

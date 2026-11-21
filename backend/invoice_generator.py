@@ -421,11 +421,12 @@ def draw_invoice_footer(
     if details.account_holder:
         lines.append(f"Kontoinhaber: {details.account_holder}")
     if details.iban:
-        lines.append(f"IBAN: {details.iban}")
+        iban = "".join(details.iban.split())
+        lines.append("IBAN: " + " ".join(iban[i:i+4] for i in range(0, len(iban), 4)))
     if details.bic:
         lines.append(f"BIC: {details.bic}")
     if details.bank_name:
-        lines.append(details.bank_name)
+        lines.append(f"Bank: {details.bank_name}")
     if details.due_date:
         lines.append(f"Zahlbar bis: {details.due_date:%d.%m.%Y}")
     if details.payment_notice:
