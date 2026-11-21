@@ -134,7 +134,7 @@ def get_profile_database_path(request: Request, database_path: Annotated[Path, D
     if header is not None and query is not None and header != query:
         raise HTTPException(status_code=422, detail="Widersprüchlicher Profilkontext")
     raw = header if header is not None else query if query is not None else "1"
-    if not raw.isascii() or not raw.isdigit() or int(raw) < 1:
+    if len(raw) > 19 or not raw.isascii() or not raw.isdigit() or not 1 <= int(raw) <= 9223372036854775807:
         raise HTTPException(status_code=422, detail="Ungültige Profil-ID")
     identifier = int(raw)
     if get_organization(database_path, identifier) is None:

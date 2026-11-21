@@ -1420,7 +1420,7 @@ def validate_profile_relationships(connection):
         if reference != f"profile-{identifier}-{build_invoice_filename(year, month)}":
             raise ValueError("Ungültige profilbezogene Dokumentreferenz")
     for table, column, parent in PROFILE_RELATIONSHIPS:
-        if connection.execute(f"SELECT 1 FROM {table} t JOIN {parent} p ON p.id=t.{column} WHERE t.organization_id != p.organization_id LIMIT 1").fetchone():
+        if connection.execute(f"SELECT 1 FROM {table} t LEFT JOIN {parent} p ON p.id=t.{column} WHERE t.{column} IS NOT NULL AND (p.id IS NULL OR t.organization_id != p.organization_id) LIMIT 1").fetchone():
             raise ValueError("Profilübergreifende Beziehung")
 
 

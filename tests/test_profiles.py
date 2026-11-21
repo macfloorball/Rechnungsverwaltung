@@ -93,8 +93,14 @@ def test_two_profiles_invoices_documents_and_full_restore(environment, tmp_path)
         assert db.get_invoice(invoice['id'], restored / 'ttc.db') == before[index]
         assert hashlib.sha256((restored / 'documents' / invoice['pdf_path']).read_bytes()).hexdigest() == digests[index]
 
+    request(client, 'DELETE', f'/api/invoices/{invoices[1]["id"]}', second, expected=204)
+    assert hashlib.sha256(request(client, 'GET', f'/api/invoices/{invoices[0]["id"]}/pdf')).hexdigest() == digests[0]
+    replacement = request(client, 'POST', '/api/invoices', second, {'year': 2025, 'month': 1}, 201)
+    assert replacement['invoice_number'] == 'XY-2025-0002'
+    assert request(client, 'GET', '/api/organization/settings')['next_invoice_number'] == 2
 
-@pytest.mark.parametrize('identifier', ['', '0', '-1', '9999', 'abc', '1.0', '١'])
+
+@pytest.mark.parametrize('identifier', ['', '0', '-1', '9999', 'abc', '1.0', '١', '9' * 100])
 def test_invalid_profile_never_falls_back(environment, identifier):
     client, _, _ = environment
     # Non-ASCII cannot be encoded as an HTTP header; exercise the query contract.
@@ -151,3 +157,63 @@ def test_v6_migration_rollback_restart_snapshots_and_legacy_import(tmp_path, mon
     new_id = db.create_record('activity_types', {'name': 'Alt', 'hourly_rate_cents': 1}, db.ProfileDatabasePath(database, second))
     assert new_id != a
     assert len(db.list_records('activity_types', database_path=db.ProfileDatabasePath(database, second))) == 1
+
+
+def test_profile_validation_logo_and_management(environment):
+    import base64
+    import struct
+    import zlib
+    client, database, _ = environment
+    for name in (' ', '', 'x' * 101):
+        request(client, 'POST', '/api/profiles', body={'name': name}, expected=422)
+    second = request(client, 'POST', '/api/profiles', body={'name': '  B  '}, expected=201)['id']
+    assert request(client, 'GET', '/api/profiles')[1]['name'] == 'B'
+    request(client, 'DELETE', f'/api/profiles/{second}', expected=405)
+    request(client, 'PUT', '/api/profiles/9999', body={'name': 'Missing'}, expected=404)
+    assert client.get('/api/settings?profile_id=2', headers={'X-Profile-ID': '1'}).status_code == 422
+    def chunk(kind, content):
+        return struct.pack('>I', len(content)) + kind + content + struct.pack('>I', zlib.crc32(kind + content) & 0xffffffff)
+    png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND', b'')
+    request(client, 'POST', '/api/organization/logo', second, {'media_type': 'image/png', 'data_base64': base64.b64encode(png).decode()})
+    assert request(client, 'GET', '/api/organization/logo', second) == png
+    request(client, 'GET', '/api/organization/logo', expected=404)
+    request(client, 'DELETE', '/api/organization/logo')
+    assert request(client, 'GET', '/api/organization/logo', second) == png
+    identifier = activity(client, second)
+    own_plan = request(client, 'PUT', '/api/weekly-plan', second, [{'weekday': 0, 'activity_type_id': identifier, 'hours': 1}])[0]['id']
+    request(client, 'PUT', '/api/weekly-plan', 1, [{'id': own_plan, 'weekday': 0, 'activity_type_id': identifier, 'hours': 1}], 404)
+    # Reject malicious document references even if archive SQL bypassed triggers.
+    with sqlite3.connect(database) as connection:
+        connection.execute("INSERT INTO invoices(organization_id,year,month,invoice_date,total_amount_cents,pdf_path) VALUES (?,2025,1,'2025-02-01',1,'../foreign.pdf')", (second,))
+        with pytest.raises(ValueError, match='Dokumentreferenz'):
+            validate_database(connection, current=True)
+
+
+def test_legacy_single_profile_archive_restore(environment, tmp_path, monkeypatch):
+    import zipfile
+    from backend.backup_service import _digest
+    _, current_database, current_documents = environment
+    legacy = tmp_path / 'v6.db'
+    original = db._migrate_profiles
+    monkeypatch.setattr(db, '_migrate_profiles', lambda connection: None)
+    db.initialize_database(legacy)
+    monkeypatch.setattr(db, '_migrate_profiles', original)
+    db.update_organization({'next_invoice_number': 42, 'recipient_name': 'Legacy recipient'}, legacy)
+    pdf = tmp_path / 'Rechnung_TTC_2025-01.pdf'
+    pdf.write_bytes(b'%PDF-legacy-exact-bytes')
+    with sqlite3.connect(legacy) as connection:
+        connection.execute("INSERT INTO invoices(year,month,invoice_date,invoice_number,total_amount_cents,pdf_path,invoice_snapshot_json) VALUES (2025,1,'2025-02-01','ALT-0041',50,?,?)", (pdf.name, '{"name":"Old snapshot"}'))
+    archive = tmp_path / 'v6.zip'
+    files = {'database/ttc.db': _digest(legacy), 'documents/' + pdf.name: _digest(pdf)}
+    before = legacy.read_bytes()
+    with zipfile.ZipFile(archive, 'x') as output:
+        output.write(legacy, 'database/ttc.db')
+        output.write(pdf, 'documents/' + pdf.name)
+        output.writestr('manifest.json', json.dumps({'format': 1, 'files': files}))
+    restored = restore_backup(archive, tmp_path / 'legacy-restored', current_database=current_database, current_documents=current_documents, safety_directory=tmp_path / 'safety', confirmed=True)
+    assert db.list_profiles(restored / 'ttc.db') == [{'id': 1, 'name': 'TTC'}]
+    assert db.get_organization(restored / 'ttc.db')['next_invoice_number'] == 42
+    invoice = db.list_records('invoices', database_path=restored / 'ttc.db')[0]
+    assert invoice['invoice_snapshot_json'] == '{"name":"Old snapshot"}'
+    assert (restored / 'documents' / pdf.name).read_bytes() == pdf.read_bytes()
+    assert legacy.read_bytes() == before
