@@ -60,6 +60,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           node node_modules/electron/install.js
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
           xvfb-run -a env TTC_RUN_ELECTRON_TESTS=1 python -m pytest tests/test_navigation.py -k profiles -q --basetemp "${{ runner.temp }}/ttc-profile-dialog"
       - name: Preserve lifecycle diagnostics on failure
         if: failure()
