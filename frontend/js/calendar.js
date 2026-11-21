@@ -1,3 +1,4 @@
+import { profileFetch as fetch, profileUrl } from "./profiles.js";
 import { bindTrainingEditor } from "./trainings.js";
 
 const monthFormatter = new Intl.DateTimeFormat("de-DE", {
@@ -140,6 +141,10 @@ export function initializeCalendar() {
   }
 
   let visibleMonth = new Date();
+  try {
+    const remembered = sessionStorage.getItem("ttc.calendarMonth");
+    if (/^\d{4}-\d{2}$/.test(remembered)) visibleMonth = new Date(`${remembered}-01T12:00:00`);
+  } catch { /* current month fallback */ }
   visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
   let loading = false;
   let reloadPending = false;
@@ -166,6 +171,7 @@ export function initializeCalendar() {
       const data = await response.json();
       renderCalendar(calendar, data);
       visibleMonth = month;
+      try { sessionStorage.setItem("ttc.calendarMonth", `${year.toString().padStart(4, "0")}-${String(monthNumber).padStart(2, "0")}`); } catch { /* optional view persistence */ }
       monthLabel.textContent = monthFormatter.format(month);
       document.dispatchEvent(new CustomEvent("calendar-month-changed", { detail: { year, month: monthNumber } }));
     } catch (error) {

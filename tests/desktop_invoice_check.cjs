@@ -138,7 +138,7 @@ async function run() {
     assert.equal(invoices.length, 2);
     const january = invoices.find(invoice => invoice.year === 2020 && invoice.month === 1);
     assert.equal(january.total_amount_cents, 6000);
-    const url = new URL(`/api/invoices/${january.id}/pdf`, origin).href;
+    const url = new URL(`/api/invoices/${january.id}/pdf?profile_id=1`, origin).href;
     const pdf = Buffer.from(await (await fetch(url)).arrayBuffer());
     assert.deepEqual(pdf, await fs.readFile(path.join(output, 'recreated.pdf')));
     assert.deepEqual(pdf, await fs.readFile(path.join(directory, 'Rechnung_TTC_2020-01.pdf')));
@@ -150,8 +150,8 @@ async function run() {
     assert.equal(organization.next_invoice_number, 4);
     await selectInvoiceMonth(2020, 1);
     await js('document.querySelector("#reload-invoices").click()');
-    await until(() => js(`Boolean(document.querySelector('#saved-invoices-rows a[href="/api/invoices/${january.id}/pdf"][target=_blank]'))`), 'archive after restart');
-    await js(`document.querySelector('#saved-invoices-rows a[href="/api/invoices/${january.id}/pdf"][target=_blank]').click()`);
+    await until(() => js(`Boolean(document.querySelector('#saved-invoices-rows a[href="/api/invoices/${january.id}/pdf?profile_id=1"][target=_blank]'))`), 'archive after restart');
+    await js(`document.querySelector('#saved-invoices-rows a[href="/api/invoices/${january.id}/pdf?profile_id=1"][target=_blank]').click()`);
     await until(() => handoffs.length === 1, 'PDF handoff after restart');
     assert.deepEqual(handoffs, [url]);
     console.log('DESKTOP_FINAL_CHECK restart');
@@ -508,10 +508,10 @@ async function run() {
   })()`);
   await until(() => js('!document.querySelector("#open-invoice-pdf").hidden'), 'finalization');
   const url = await js('document.querySelector("#open-invoice-pdf").href');
-  assert.match(url, /\/api\/invoices\/[1-9]\d*\/pdf$/);
+  assert.match(url, /\/api\/invoices\/[1-9]\d*\/pdf\?profile_id=1$/);
   const invoiceId = Number(new URL(url).pathname.split('/')[3]);
   // The archive must update in the same renderer, without reload or restart.
-  await until(() => js(`Boolean(document.querySelector('#saved-invoices-rows a[href="/api/invoices/${invoiceId}/pdf"][target=_blank]'))`), 'archive immediately after finalization');
+  await until(() => js(`Boolean(document.querySelector('#saved-invoices-rows a[href="/api/invoices/${invoiceId}/pdf?profile_id=1"][target=_blank]'))`), 'archive immediately after finalization');
   assert.equal(await js('document.querySelector("#create-invoice").getAttribute("aria-busy")'), 'false');
   assert.equal(await js('document.querySelector("#create-invoice").textContent'), 'Rechnung gespeichert');
   assert.equal(await js('getComputedStyle(document.querySelector("#create-invoice")).cursor'), 'default');

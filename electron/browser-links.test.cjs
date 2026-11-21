@@ -26,3 +26,11 @@ test('browser handoff is limited to validated URLs and reports sanitized failure
   openInvoicePDF(origin+'api/invoices/1/pdf',origin,shell,()=>errors++);
   await new Promise(setImmediate);assert.equal(errors,1);
 });
+
+
+test('profile PDF handoff accepts only one explicit positive profile ID',()=>{
+  assert.equal(invoicePDFURL(origin+'api/invoices/12/pdf?profile_id=2',origin),origin+'api/invoices/12/pdf?profile_id=2');
+  for (const query of ['?profile_id=0', '?profile_id=-1', '?profile_id=abc', '?profile_id=2&profile_id=1', '?profile_id=2&redirect=evil', '?profile_id=2/../1']) {
+    assert.equal(invoicePDFURL(origin+'api/invoices/12/pdf'+query,origin),null);
+  }
+});

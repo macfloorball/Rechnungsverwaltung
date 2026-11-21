@@ -13,6 +13,8 @@ class InvoiceDocumentAssociationError(ValueError):
 
 def invoice_document_name(invoice: dict[str, Any]) -> str:
     expected = build_invoice_filename(invoice["year"], invoice["month"])
+    if invoice.get("organization_id", 1) != 1:
+        expected = f"profile-{invoice['organization_id']}-{expected}"
     if invoice["is_preview"] or invoice["pdf_path"] != expected:
         raise InvoiceDocumentAssociationError
     return expected

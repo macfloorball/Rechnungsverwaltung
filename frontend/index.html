@@ -10,9 +10,15 @@
   </head>
   <body>
     <div class="app-shell">
-      <!-- App-wide header remains outside views, leaving room for a future profile selector (#30). -->
+      <!-- Active billing profile is visible across all views. -->
       <header class="app-header">
-        <p class="eyebrow">Tischtennisclub</p>
+        <div class="profile-controls">
+          <label for="active-profile">Aktives Rechnungsprofil</label>
+          <select id="active-profile" disabled aria-describedby="profile-message"><option>Profile werden geladen …</option></select>
+          <button id="create-profile" type="button" disabled>Neues Profil</button>
+          <button id="rename-profile" type="button" disabled>Profil umbenennen</button>
+          <p id="profile-message" role="status" aria-live="polite"></p>
+        </div>
         <h1>Rechnungsverwaltung</h1>
       </header>
 

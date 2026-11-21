@@ -15,6 +15,7 @@ from backend.backup_service import MAX_ENTRIES, MAX_TOTAL_BYTES, _digest, create
 from backend.paths import get_database_path, get_document_directory
 from backend.document_storage import DocumentStore
 from backend.storage_import import validate_database
+from backend.database import initialize_database
 
 
 def stage_backup(archive_path: Path, stage: Path) -> None:
@@ -61,6 +62,8 @@ def stage_backup(archive_path: Path, stage: Path) -> None:
             if _digest(target) != metadata:
                 raise ValueError('Prüfsumme der Sicherung stimmt nicht überein.')
     database = stage / 'database/ttc.db'
+    # Migrate the disposable staged copy; never the archive or live database.
+    initialize_database(database)
     with closing(sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True)) as connection:
         validate_database(connection, current=True)
         for (reference,) in connection.execute("SELECT pdf_path FROM invoices WHERE pdf_path IS NOT NULL AND pdf_path != ''"):

@@ -1473,3 +1473,71 @@ Bestehende Zuordnungen zu deaktivierten Tätigkeiten bleiben erhalten. Änderung
 an Tätigkeiten ändern keine historischen Rechnungssnapshots oder fertigen PDFs.
 Die Speicherung bleibt lokal und verwendet die vorhandene Einzelkonfiguration;
 eine Datenbankmigration ist dafür nicht erforderlich.
+
+## Mehrere Rechnungsprofile
+
+Der Umschalter **Aktives Rechnungsprofil** steht dauerhaft oberhalb der Navigation.
+**Neues Profil** legt einen leeren Arbeitsbereich mit eigenen Standardwerten an;
+Tätigkeiten, Wochenplan oder Kontaktdaten werden nicht aus dem bisherigen Profil kopiert.
+**Profil umbenennen** ändert nur den Anzeigenamen. Profillöschung ist in dieser
+Erstversion bewusst nicht vorgesehen, damit historische Belege erhalten bleiben.
+
+Jedes Profil hat eigene Absender-/Empfängerdaten, Zahlungseinstellungen, Logo,
+Tätigkeiten (höchstens zehn einschließlich deaktivierter Einträge), Wochenplanung,
+Kalenderstatus, Vorschauen, Rechnungen und PDFs. Updateeinstellungen und vollständige
+Sicherungen/Datenexporte gelten weiterhin für die gesamte lokale App.
+
+Beim Profilwechsel erscheint eine Warnung: Ungespeicherte Eingaben und offene
+Dialoge werden nach Bestätigung verworfen. Eine laufende Speicherung muss zunächst
+abgeschlossen werden. Ein vollständiger Neuladevorgang trennt die Oberflächen und
+Caches; der betrachtete Kalendermonat und die Funktionsansicht bleiben innerhalb
+des Browser-/App-Fensters erhalten. Der zuletzt ausgewählte gültige Profilkontext
+wird lokal gespeichert. Nach Neustart oder Restore mit unbekannter Profil-ID wird
+das erste vorhandene Profil gewählt. Ohne verfügbaren Browserspeicher gilt derselbe
+Fallback. Fehler beim Laden der Profile sperren die Fachansichten sichtbar.
+
+### Technischer Profilvertrag und Migration
+
+Fachliche Profile verwenden die bestehenden `organizations.id` als stabile positive
+Integer-IDs; `profile_name` ist ausschließlich der Anzeigename. Diese Profile sind
+unabhängig von Electron-`userData` und Betriebssystemkonten. Eine gemeinsame SQLite-
+Datenbank enthält alle Profile. Jede API-Anfrage führt ihren eigenen Kontext über
+`X-Profile-ID`; PDF-/Logo-Links verwenden `?profile_id=…`. Beide Angaben müssen bei
+gleichzeitiger Verwendung übereinstimmen. Ohne Angabe bleibt der Legacy-Vertrag
+explizit Profil **1**, niemals das zuletzt in einer Oberfläche ausgewählte Profil.
+Ungültige IDs ergeben 422, unbekannte Profile 404. Detail-/Schreibzugriffe auf fremde
+IDs werden abgewiesen. Profilverwaltung und vollständige Exporte sind app-weit.
+
+`ProfileDatabasePath` transportiert die Request-ID durch die vorhandenen Dienste;
+Datenbankfunktionen begrenzen CRUD und Fachoperationen anhand dieser ID. Die pro
+Verbindung gebundene SQLite-Funktion `current_profile()` besitzt keinen globalen
+veränderlichen Zustand. Rohe Datenbankpfade bleiben für app-weite Sicherungen und
+Dokumentinitialisierung nutzbar. Fachliche API-Abhängigkeiten liefern stets einen
+Profilkontext. Datenbanktrigger verhindern fremde Beziehungen und nachträgliche
+Profilverschiebungen; Import-/Startvalidierung prüft auch bereits vorhandene Zeilen.
+
+Schemamigration **7** ergänzt den Anzeigenamen (Altbestand: **TTC**) und ersetzt die
+globale Tätigkeitsnamens-/Vorschau-Eindeutigkeit durch profilbezogene Indizes.
+Vor der Migration wird der vorhandene SQLite-Sicherungsmechanismus verwendet.
+Der neue Migrationsschritt läuft transaktional; Fehler rollen Schema, Trigger und
+Migrationsmarker zurück. Ein Neustart versucht die Migration erneut. IDs, Zähler,
+Snapshots und Dokumentreferenzen bleiben erhalten; historische PDFs werden weder
+verschoben noch umbenannt. Fehler erzeugen keine leere Ersatzdatenbank.
+
+Die bisherige fortlaufende Nummerierungslogik bleibt pro Profil erhalten (kein
+jährlicher Zählerreset). Gleiche sichtbare Rechnungsnummern sind zwischen Profilen
+zulässig. Neue PDFs außerhalb des Standardprofils heißen
+`profile-<ID>-Rechnung_TTC_<Jahr>-<Monat>.pdf`; Namen der Profile sind keine Pfade.
+Die gemeinsame Dokumentenablage bleibt dadurch mit dem bestehenden portablen
+Backupformat kompatibel. Dokumentzugriffe verlangen eine passende Rechnungs-ID,
+Profilzugehörigkeit und eindeutige gespeicherte Referenz; es gibt keine globale
+Dateisuche als Ersatz für eine fehlende Zuordnung.
+
+Vollständige ZIP-Sicherungen und CSV-Exporte enthalten **alle** Profile. Das ZIP-
+Containerformat bleibt Version 1; die SQLite-Schemaversion schützt vor Verwendung
+mit älteren Apps. Restore migriert ausschließlich die temporär geprüfte Kopie und
+publiziert sie wie bisher in einen neuen Datenordner. Auch alte Einzelprofilarchive
+und SQLite-Imports werden Profil 1 / TTC zugeordnet. Bestehende Ziele werden nicht
+überschrieben oder mit Importdaten zusammengeführt. Archivpfad-, Prüfsummen- und
+Fremdschlüsselprüfungen bleiben erhalten; zusätzlich werden Profilbeziehungen und
+profilübergreifende Dokumentreferenzen geprüft. Die App arbeitet weiterhin offline.

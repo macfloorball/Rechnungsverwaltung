@@ -1,3 +1,4 @@
+import { profileFetch as fetch, profileUrl } from "./profiles.js";
 const weekdays = [
   "Montag",
   "Dienstag",
@@ -268,7 +269,7 @@ function renderInvoices(rows, emptyMessage, invoices) {
     const actions = element("td");
     actions.className = "invoice-history-actions";
     if (invoice.pdf_path) {
-      const pdfUrl = `/api/invoices/${invoice.id}/pdf`;
+      const pdfUrl = profileUrl(`/api/invoices/${invoice.id}/pdf`);
       const openLink = element("a", "Rechnung öffnen");
       openLink.href = pdfUrl;
       openLink.target = "_blank";
@@ -399,7 +400,7 @@ export function initializeSettings() {
     }
     logoPreview.hidden = !logoAvailable;
     if (logoAvailable) {
-      logoPreview.src = `/api/organization/logo?updated=${Date.now()}`;
+      logoPreview.src = profileUrl(`/api/organization/logo?updated=${Date.now()}`);
     } else {
       logoPreview.removeAttribute("src");
     }

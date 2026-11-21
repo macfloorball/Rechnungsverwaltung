@@ -1,14 +1,18 @@
+import { initializeProfiles } from "./profiles.js";
+import { profileFetch as fetch, profileUrl } from "./profiles.js";
 import { initializeNavigation } from "./navigation.js";
 import { initializeCalendar } from "./calendar.js";
 import { initializeInvoicePreview } from "./invoice.js";
 import { initializeSettings } from "./settings.js";
 import { initializeDesktopUpdates } from "./updates.js";
 
+if (await initializeProfiles()) {
 initializeNavigation();
 initializeCalendar();
 initializeInvoicePreview();
 initializeSettings();
 initializeDesktopUpdates();
+}
 
 const backupButton = document.getElementById("create-backup");
 backupButton.addEventListener("click", async () => {

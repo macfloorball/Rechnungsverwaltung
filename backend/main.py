@@ -13,7 +13,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Response, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +33,7 @@ from backend.storage_import import prepare_database
 from backend.storage_errors import MESSAGES, error_code
 
 from backend.database import (
+    ProfileDatabasePath, profile_id, list_profiles, create_profile, rename_profile,
     save_activities,
     save_weekly_plan,
     ensure_weekly_plan_month,
@@ -66,6 +67,7 @@ from backend.invoice_generator import (
     render_invoice_pdf,
 )
 from backend.models import (
+    ProfileInput,
     BackupRequest,
     InvoiceCreate,
     InvoicePeriod,
@@ -126,7 +128,21 @@ def _cleanup_invoice_pdf(documents: DocumentStore, name: str, identity: Document
         documents.delete(name, expected=identity, missing_ok=True)
 
 
-DatabasePath = Annotated[Path, Depends(get_database_path)]
+def get_profile_database_path(request: Request, database_path: Annotated[Path, Depends(get_database_path)]) -> Path:
+    header = request.headers.get("X-Profile-ID")
+    query = request.query_params.get("profile_id")
+    if header is not None and query is not None and header != query:
+        raise HTTPException(status_code=422, detail="Widersprüchlicher Profilkontext")
+    raw = header if header is not None else query if query is not None else "1"
+    if len(raw) > 19 or not raw.isascii() or not raw.isdigit() or not 1 <= int(raw) <= 9223372036854775807:
+        raise HTTPException(status_code=422, detail="Ungültige Profil-ID")
+    identifier = int(raw)
+    if get_organization(database_path, identifier) is None:
+        raise HTTPException(status_code=404, detail="Profil wurde nicht gefunden")
+    return ProfileDatabasePath(database_path, identifier)
+
+
+DatabasePath = Annotated[Path, Depends(get_profile_database_path)]
 InvoiceDirectory = Annotated[Path, Depends(get_invoice_directory)]
 MAX_LOGO_BYTES = 2_000_000
 MAX_LOGO_DIMENSION = 4000
@@ -250,6 +266,23 @@ async def handle_record_not_found(_, error: RecordNotFoundError) -> JSONResponse
 @app.exception_handler(InvalidRecordError)
 async def handle_invalid_record(_, error: InvalidRecordError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(error)})
+
+
+@app.get("/api/profiles")
+def profiles(database_path: Annotated[Path, Depends(get_database_path)]):
+    return list_profiles(database_path)
+
+
+@app.post("/api/profiles", status_code=201)
+def post_profile(payload: ProfileInput, database_path: Annotated[Path, Depends(get_database_path)]):
+    return create_profile(payload.name, database_path)
+
+
+@app.put("/api/profiles/{identifier}")
+def put_profile(identifier: int, payload: ProfileInput, database_path: Annotated[Path, Depends(get_database_path)]):
+    if not rename_profile(identifier, payload.name, database_path):
+        raise HTTPException(status_code=404, detail="Profil wurde nicht gefunden")
+    return {"id": identifier, "name": payload.name}
 
 
 @app.get("/api/health")
@@ -760,6 +793,8 @@ def post_invoice(
     )
 
     filename = build_invoice_filename(payload.year, payload.month)
+    if profile_id(database_path) != 1:
+        filename = f"profile-{profile_id(database_path)}-{filename}"
     with document_operation("write"):
         documents = DocumentStore(invoice_directory)
     pdf_content = render_invoice_pdf(
