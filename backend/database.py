@@ -1677,7 +1677,7 @@ def rename_profile(identifier, name, database_path):
 
 
 def _migrate_recipient_contact(connection: sqlite3.Connection) -> None:
-    if get_schema_version(connection) >= 10:
+    if get_schema_version(connection) != 9:
         return
     connection.execute("BEGIN IMMEDIATE")
     try:
