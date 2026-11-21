@@ -349,17 +349,29 @@ export function initializeSettings() {
   let activities = [];
   let weeklyPlan = [];
 
+  function setFormBusy(form, busy) {
+    form.setAttribute("aria-busy", String(busy));
+    let status = form.previousElementSibling;
+    if (!status?.hasAttribute("data-settings-loading")) {
+      status = element("p", "Anfrage läuft …");
+      status.setAttribute("data-settings-loading", "");
+      status.setAttribute("role", "status");
+      form.before(status);
+    }
+    status.hidden = !busy;
+  }
+
   function lockForm(form) {
     const controls = [...form.querySelectorAll("input, textarea, select, button")];
     const disabled = controls.map((control) => control.disabled);
     controls.forEach((control) => { control.disabled = true; });
-    form.setAttribute("aria-busy", "true");
+    setFormBusy(form, true);
     let locked = true;
     return () => {
       if (!locked) return;
       locked = false;
       controls.forEach((control, index) => { control.disabled = disabled[index]; });
-      form.setAttribute("aria-busy", "false");
+      setFormBusy(form, false);
     };
   }
 
@@ -396,6 +408,7 @@ export function initializeSettings() {
   async function loadOrganizationSettings() {
     organizationError.hidden = true;
     const unlock = unlockOrganizationLoad;
+    setFormBusy(organizationForm, true);
     try {
       const settings = await requestJson("/api/organization/settings");
       unlock();
@@ -406,6 +419,7 @@ export function initializeSettings() {
         error instanceof Error ? error.message : "Rechnungseinstellungen konnten nicht geladen werden.",
       );
       // Keep unloaded fields locked: a partial form must never overwrite saved data.
+      setFormBusy(organizationForm, false);
       retryOrganization.hidden = false;
     }
   }
@@ -574,8 +588,7 @@ export function initializeSettings() {
       return;
     }
 
-    const activityFields = [...activityForm.querySelectorAll("input, button")];
-    activityFields.forEach((field) => { field.disabled = true; });
+    const unlock = lockForm(activityForm);
     try {
       const result = await requestJson("/api/settings", {
         method: "PUT",
@@ -600,7 +613,7 @@ export function initializeSettings() {
         error instanceof Error ? error.message : "Einstellungen konnten nicht gespeichert werden.",
       );
     } finally {
-      activityFields.forEach((field) => { field.disabled = false; });
+      unlock();
       updateActivityCapacity();
     }
   });
@@ -770,6 +783,8 @@ export function initializeSettings() {
   async function loadPlanSettings() {
     retryActivities.hidden = true;
     retryPlan.hidden = true;
+    setFormBusy(activityForm, true);
+    setFormBusy(weeklyPlanForm, true);
     activityError.hidden = true;
     weeklyPlanError.hidden = true;
     try {
@@ -785,6 +800,8 @@ export function initializeSettings() {
     } catch (error) {
       showMessage(activityError, error.message || "Einstellungen konnten nicht geladen werden.");
       showMessage(weeklyPlanError, error.message || "Wochenplan konnte nicht geladen werden.");
+      setFormBusy(activityForm, false);
+      setFormBusy(weeklyPlanForm, false);
       retryActivities.hidden = false;
       retryPlan.hidden = false;
     }
