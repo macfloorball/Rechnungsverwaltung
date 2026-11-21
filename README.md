@@ -63,6 +63,56 @@ offene Punkte vor einer Binärveröffentlichung stehen in der
   Einstellungssnapshots anzeigen.
 - SQLite-Datenbank migrieren und mit dem optionalen systemd-Timer sichern.
 
+## Ansichten und Navigation
+
+Die App startet mit **Kalender / Übersicht**. Die Hauptnavigation wechselt im
+selben Fenster zwischen fünf Ansichten; ein Seitenneustart ist dafür nicht nötig.
+
+| Ansicht | Aktionen |
+| --- | --- |
+| Kalender / Übersicht | Monat wechseln, Termine erfassen/bearbeiten, Status und Sammelaktion; direkt darunter Monatsvorschau erstellen/aktualisieren und endgültige Monatsrechnung mit PDF öffnen/herunterladen oder nach Bestätigung löschen |
+| Rechnung konfigurieren | Absender, Empfänger, Bankverbindung, Steuerangaben, Rechnungstexte und Logo |
+| Wochenplan konfigurieren | Wochentage, Tätigkeiten, Stunden und Aktivierung der Planeinträge |
+| Tätigkeiten und Preise | Bis zu zehn Tätigkeiten mit Stundenpreis und Aktivstatus (auch deaktivierte Einträge zählen) |
+| Verwaltung / App-Einstellungen | Vollständige Datensicherung, CSV-/Dokumentenexport und Desktop-Updates; Wiederherstellung gemäß Anleitung bei beendeter App |
+
+**Eingaben bleiben beim Hin- und Herwechseln erhalten**, einschließlich neuer
+Tätigkeitszeilen und noch nicht gespeicherter Wochenplaneinträge. Der Kalender
+behält seinen Monat; der Rechnungsbereich folgt diesem Monat. Zum Wechseln der
+Abrechnung den Monat im Kalender auswählen. Vorhandene endgültige PDFs bleiben
+von einer erneuten Vorschau unverändert. Andere Rechnungsmonate sind über die
+Kalendernavigation erreichbar.
+
+Jeder Konfigurationsbereich wird über seinen eigenen Speichern-Button gespeichert.
+Das Speichern von Tätigkeiten speichert keinen Wochenplan und keine
+Rechnungseinstellungen. Logoaktionen erhalten andere noch nicht gespeicherte
+Rechnungseingaben. Bei API-Fehlern bleiben Eingaben und Fehlermeldungen in der
+betroffenen Ansicht erhalten. Solange Daten erstmals geladen werden, sind die
+zugehörigen Formulare gesperrt; bei Ladefehlern steht „erneut laden“ bereit.
+Während eines Speichervorgangs sind die betroffenen Felder kurz gesperrt.
+Es gibt keine automatische Speicherung. Vor Schließen oder Neuladen der App
+müssen Änderungen ausdrücklich gespeichert werden.
+
+Die Navigation ist mit Tab und Eingabetaste bedienbar. Beim Ansichtswechsel
+wandert der Fokus auf die Überschrift; versteckte Bereiche bleiben außerhalb der
+Tab-Reihenfolge. In kleinen Webfenstern bricht die Navigation um; breite Tabellen
+sind innerhalb ihres Bereichs horizontal scrollbar. Alle UI-Ressourcen bleiben
+lokal. Windows und AppImage verwenden weiterhin ihre vorhandenen Updateabläufe;
+bei RPM-Installationen verwaltet DNF die Updates. Im reinen Webbetrieb entfällt
+der Desktop-Updatebereich.
+
+Für Änderungen an der Navigation gibt es zusätzlich zu `scripts/navigation.test.cjs`
+einen gezielten Test mit echtem Electron-Renderer und temporärem Profil:
+
+```bash
+TTC_RUN_ELECTRON_TESTS=1 .venv/bin/python -m pytest -q tests/test_navigation.py
+```
+
+Dieser prüft Entwicklung und Produktionsfrontend, getrennte Speicheraktionen,
+Entwürfe und API-Fehler, Tastatur/Fokus, Monatswechsel und verspätete Antworten,
+sowie Persistenz nach einem vollständigen App-/Backend-Neustart. Er benötigt
+eine grafische Sitzung und verändert keine vorhandenen Nutzerdaten.
+
 ## Technologien und Architektur
 
 - **Backend:** Python, FastAPI und Pydantic für REST-Endpunkte und

@@ -201,6 +201,21 @@ Die Befehle entsprechen dem [Repository-Leitfaden](Linux_RPM_Repository.md)
 und der [offiziellen DNF5-Syntax](https://dnf5.readthedocs.io/en/latest/dnf5_plugins/config-manager.8.html).
 Andere Fedora-Versionen oder RPM-Distributionen sind damit nicht als geprüft erklärt.
 
+## Bedienung über getrennte Ansichten
+
+Beim Start öffnet sich „Kalender / Übersicht“. Unter dem Kalender stehen Vorschau
+und endgültige Rechnung für den gewählten Monat einschließlich PDF-Aktionen.
+Den Monat über die Pfeile im Kalender wechseln. Weitere Bereiche erreichst du
+über „Rechnung konfigurieren“, „Wochenplan konfigurieren“, „Tätigkeiten und Preise“
+und „Verwaltung / App-Einstellungen“. Letztere enthält Sicherung, Export und die
+plattformabhängigen Desktop-Updates; bei RPM bleibt DNF zuständig.
+
+Eingaben bleiben bei Ansichtswechseln erhalten. Gespeichert wird ausschließlich
+über den jeweiligen Speichern-Button. Auch bei einer fehlgeschlagenen Anfrage
+bleiben die Eingaben erhalten; die Fehlermeldung steht im betroffenen Bereich.
+Vor Schließen oder Neuladen der App alle gewünschten Änderungen speichern.
+Tab und Eingabetaste bedienen die Navigation; der Fokus folgt der neuen Ansicht.
+
 ## 5. Daten und Sicherungen
 
 | Inhalt | Standardort |
@@ -216,7 +231,7 @@ Andere Fedora-Versionen oder RPM-Distributionen sind damit nicht als geprüft er
 Anpassungen auch diese tatsächlichen Orte berücksichtigen. Datenbank nicht
 parallel über synchronisierte oder gemeinsam geöffnete Ordner betreiben.
 
-1. In der App unter „Datensicherung“ auf „Sicherung erstellen“ klicken.
+1. In der App unter „Verwaltung / App-Einstellungen“ → „Datensicherung“ auf „Sicherung erstellen“ klicken.
    Ein leerer Zielpfad verwendet den oben genannten Sicherungsordner; alternativ
    einen absoluten Zielpfad außerhalb der Dokumentenablage eingeben.
 2. Erfolgsmeldung und den angezeigten ZIP-Pfad prüfen. Die Sicherung enthält
