@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.2"><img src="https://img.shields.io/badge/Desktop-0.2.2-173e60?style=flat-square" alt="Desktop-Version 0.2.2"></a>
+  <a href="https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.3"><img src="https://img.shields.io/badge/Desktop-0.2.3-173e60?style=flat-square" alt="Desktop-Version 0.2.3"></a>
   <img src="https://img.shields.io/badge/Windows%20%7C%20Linux-Desktop-426b87?style=flat-square" alt="Desktop-App für Windows und Linux">
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-3a3a3a?style=flat-square" alt="MIT-Lizenz"></a>
 </p>
@@ -42,8 +42,8 @@ Die fertige Desktop-App benötigt **kein separat installiertes Python, Node.js, 
 
 | System | Download / Installation |
 | --- | --- |
-| **Windows x64** | [Setup-EXE im Desktop-Release 0.2.2](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.2) |
-| **Linux x86_64** | [AppImage im Desktop-Release 0.2.2](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.2) |
+| **Windows x64** | [Setup-EXE im Desktop-Release 0.2.3](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.3) |
+| **Linux x86_64** | [AppImage im Desktop-Release 0.2.3](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.3) |
 | **Fedora 45 x86_64** | [Signiertes DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/) |
 
 Download, Installation, Start und Updates sind in der **[deutschsprachigen Installationsanleitung](Planung/Installation.md)** beschrieben.
