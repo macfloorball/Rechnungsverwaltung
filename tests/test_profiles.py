@@ -95,8 +95,10 @@ def test_two_profiles_invoices_documents_and_full_restore(environment, tmp_path)
 
     request(client, 'DELETE', f'/api/invoices/{invoices[1]["id"]}', second, expected=204)
     assert hashlib.sha256(request(client, 'GET', f'/api/invoices/{invoices[0]["id"]}/pdf')).hexdigest() == digests[0]
+    from datetime import date
+    request(client, 'PUT', f'/api/organization/invoice-counter/{date.today().year}', second, {'next_number': 1, 'confirm_reuse': True})
     replacement = request(client, 'POST', '/api/invoices', second, {'year': 2025, 'month': 1}, 201)
-    assert replacement['invoice_number'] == invoices[1]['invoice_number'][:5] + '02'
+    assert replacement['invoice_number'] == invoices[1]['invoice_number']
     assert request(client, 'GET', '/api/organization/settings')['next_invoice_number'] == 2
 
 

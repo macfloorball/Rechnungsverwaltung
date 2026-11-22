@@ -80,6 +80,11 @@
               <input id="invoice-date" name="invoice_date" type="date" required aria-describedby="invoice-date-hint">
               <p id="invoice-date-hint" class="section-description">Datum auf der Rechnung und vorgesehenes Versanddatum. Das Jahr bestimmt den Nummernkreis.</p>
             </div>
+            <div class="invoice-period-field">
+              <label for="manual-invoice-number">Manuelle Rechnungsnummer (optional)</label>
+              <input id="manual-invoice-number" type="text" maxlength="50" autocomplete="off" aria-describedby="invoice-number-mode">
+              <p id="invoice-number-mode" role="status">Automatische Vergabe beim Speichern. Format: JAHR-01 bis JAHR-12, optional mit konfiguriertem Präfix.</p>
+            </div>
             <button id="load-invoice-preview" class="primary-button" type="submit">
               Vorschau erstellen/aktualisieren
             </button>
@@ -175,15 +180,21 @@
             <p>Das Rechnungsdatum bestimmt das Jahr, unabhängig vom Leistungsmonat. Die Vorschau reserviert keine Nummer.</p>
             <div class="organization-fields">
             <label>Rechnungsjahr <input id="counter-year" type="number" min="1" max="9999" required></label>
-            <label>Nächste laufende Nummer <input id="counter-next" type="number" min="1" max="999999999" required></label>
+            <label>Nächste laufende Nummer laut Bestand <input id="counter-next" type="number" min="1" max="13" readonly required></label>
             </div>
             <div class="organization-logo-actions">
             <button class="secondary-button" type="button" id="counter-load">Nummernkreis laden</button>
-            <button class="primary-button" type="submit" id="counter-save" disabled>Nummernkreis speichern</button>
+            <button class="primary-button" type="submit" id="counter-save" disabled>Wiederverwendung ausdrücklich freigeben</button>
             </div>
             <p id="counter-message" role="status"></p>
+            <label><input id="counter-confirm-reuse" type="checkbox"> Ich bestätige ausdrücklich die Wiederverwendung der angezeigten gelöschten oder früher gesperrten nächsten Nummer.</label>
+            <p>Lücken und ungültige Nummern werden nicht automatisch korrigiert. Wähle unten die betroffene Rechnung und korrigiere ihre Nummer ausdrücklich.</p>
+            <ul id="counter-records"></ul>
           </form>
           <form id="organization-settings-form">
+            <label>Optionales Präfix für manuelle Rechnungsnummern
+              <input name="invoice_number_prefix" type="text" maxlength="30" required>
+            </label>
             <fieldset class="organization-settings-group">
               <legend>Absenderdaten</legend>
               <div class="organization-fields">
@@ -471,6 +482,20 @@
       </div>
     </dialog>
 
+    <dialog id="invoice-number-dialog" aria-labelledby="invoice-number-title">
+      <form id="invoice-number-form">
+        <h2 id="invoice-number-title">Rechnungsnummer korrigieren</h2>
+        <p id="invoice-number-context"></p>
+        <label>Neue Rechnungsnummer <input id="corrected-invoice-number" type="text" maxlength="50" required></label>
+        <p>Nur die Rechnungsnummer wird geändert. Das PDF wird aus den gespeicherten historischen Rechnungsangaben neu erzeugt. Inhalt, Betrag und Rechnungsdatum bleiben erhalten. Andere Dokumente und externe Sicherungen bleiben unverändert.</p>
+        <label class="number-correction-confirmation"><input id="confirm-number-correction" type="checkbox" required> Ich bestätige die Nummernkorrektur und PDF-Neuerzeugung ausdrücklich.</label>
+        <p id="invoice-number-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-number-correction" class="secondary-button" type="button">Abbrechen</button>
+          <button id="save-number-correction" class="primary-button" type="submit">Nummer und PDF korrigieren</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="profile-delete-dialog" aria-labelledby="profile-delete-title">
       <form id="profile-delete-form">
         <h2 id="profile-delete-title">Profil löschen</h2>

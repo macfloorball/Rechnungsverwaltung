@@ -1098,3 +1098,16 @@ dialog textarea {
 @media (max-width: 700px) {
   .weekly-plan-row { grid-template-columns: minmax(80px, 1fr) 60px auto 32px; }
 }
+
+
+.number-correction-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+dialog .number-correction-confirmation input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 3px;
+}

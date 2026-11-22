@@ -57,7 +57,9 @@ function renderPreview(data, elements) {
     elements.periodTitle.after(details);
   }
   details.textContent = [
-    `Voraussichtliche Rechnungsnummer: ${data.invoice_number} (Vergabe beim Speichern)`,
+    data.numbering_mode === "manual" ? `Manuelle Rechnungsnummer: ${data.invoice_number}` :
+      `Automatischer Vorschlag: ${data.invoice_number || "Vergabe gesperrt"} (Vergabe beim Speichern)`,
+    data.numbering?.message || "",
     `Rechnungsdatum: ${data.invoice_date}`,
     data.tax_id ? `Steuer ID: ${data.tax_id}` : "",
     data.account_holder ? `Kontoinhaber: ${data.account_holder}` : "",
@@ -95,6 +97,13 @@ function renderPreview(data, elements) {
 export function initializeInvoicePreview() {
   const form = document.querySelector("#invoice-preview-form");
   const dateInput = document.querySelector("#invoice-date");
+  const manualNumber = document.querySelector("#manual-invoice-number");
+  manualNumber.addEventListener("input", () => {
+    document.querySelector("#invoice-number-mode").textContent = manualNumber.value.trim()
+      ? "Manuelle Vergabe: Dein Wert hat Vorrang und wird im Backend geprüft."
+      : "Automatische Vergabe: Das Backend bestimmt die nächste zulässige Nummer beim Speichern.";
+    invalidatePreview();
+  });
   const monthInput = document.querySelector("#invoice-month");
   const submitButton = document.querySelector("#load-invoice-preview");
   const preview = document.querySelector("#invoice-preview");
@@ -153,6 +162,7 @@ export function initializeInvoicePreview() {
   monthInput.addEventListener("input", invalidatePreview);
   dateInput.addEventListener("input", invalidatePreview);
   document.addEventListener("activities-updated", invalidatePreview);
+  document.addEventListener("invoice-numbering-changed", invalidatePreview);
   document.addEventListener("calendar-month-changed", (event) => {
     const { year, month } = event.detail;
     monthInput.value = `${year}-${String(month).padStart(2, "0")}`;
@@ -183,6 +193,7 @@ export function initializeInvoicePreview() {
     submitButton.disabled = true;
     monthInput.disabled = true;
     dateInput.disabled = true;
+    manualNumber.disabled = true;
     createButton.disabled = true;
     createButton.textContent = createButtonLabel;
     form.setAttribute("aria-busy", "true");
@@ -194,6 +205,7 @@ export function initializeInvoicePreview() {
           year: Number(match[1]),
           month: Number(match[2]),
           invoice_date: dateInput.value,
+          invoice_number: manualNumber.value.trim() || null,
         }),
       });
       if (!response.ok) {
@@ -220,8 +232,9 @@ export function initializeInvoicePreview() {
         year: Number(match[1]),
         month: Number(match[2]),
         invoice_date: data.invoice_date,
+        invoice_number: manualNumber.value.trim() || null,
       };
-      createButton.disabled = data.items.length === 0;
+      createButton.disabled = data.items.length === 0 || !data.invoice_number;
       loadingMessage.hidden = true;
     } catch (error) {
       if (version !== requestVersion) return;
@@ -234,6 +247,7 @@ export function initializeInvoicePreview() {
       submitButton.disabled = false;
       monthInput.disabled = false;
       dateInput.disabled = false;
+      manualNumber.disabled = false;
       form.setAttribute("aria-busy", "false");
     }
   });
@@ -250,6 +264,7 @@ export function initializeInvoicePreview() {
     createButton.textContent = "Rechnung wird gespeichert …";
     monthInput.disabled = true;
     dateInput.disabled = true;
+    manualNumber.disabled = true;
     submitButton.disabled = true;
     const version = requestVersion;
     const period = { ...previewPeriod };
@@ -284,6 +299,8 @@ export function initializeInvoicePreview() {
       const month = String(invoice.month).padStart(2, "0");
       downloadPdfLink.download = `Rechnung_TTC_${year}-${month}.pdf`;
       downloadPdfLink.hidden = false;
+      const details = document.querySelector("#invoice-preview-details");
+      if (details) details.textContent = `Gespeicherte Rechnungsnummer: ${invoice.invoice_number}\nRechnungsdatum: ${invoice.invoice_date}`;
       saved = true;
     } catch (error) {
       if (version !== requestVersion) return;
@@ -300,6 +317,7 @@ export function initializeInvoicePreview() {
       createButton.disabled = saved || !previewPeriod;
       monthInput.disabled = false;
       dateInput.disabled = false;
+      manualNumber.disabled = false;
       submitButton.disabled = false;
     }
   });

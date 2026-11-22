@@ -1602,9 +1602,8 @@ Migrationsmarker zurück. Ein Neustart versucht die Migration erneut. IDs, Zähl
 Snapshots und Dokumentreferenzen bleiben erhalten; historische PDFs werden weder
 verschoben noch umbenannt. Fehler erzeugen keine leere Ersatzdatenbank.
 
-Die bisherige fortlaufende Nummerierungslogik bleibt pro Profil erhalten (kein
-jährlicher Zählerreset). Gleiche sichtbare Rechnungsnummern sind zwischen Profilen
-zulässig. Neue PDFs außerhalb des Standardprofils heißen
+Die Nummerierung wird pro Profil und Rechnungsjahr geführt (Details unten).
+Gleiche sichtbare Rechnungsnummern sind zwischen Profilen zulässig. Neue PDFs außerhalb des Standardprofils heißen
 `profile-<ID>-Rechnung_TTC_<Jahr>-<Monat>.pdf`; Namen der Profile sind keine Pfade.
 Die gemeinsame Dokumentenablage bleibt dadurch mit dem bestehenden portablen
 Backupformat kompatibel. Dokumentzugriffe verlangen eine passende Rechnungs-ID,
@@ -1622,47 +1621,71 @@ profilübergreifende Dokumentreferenzen geprüft. Die App arbeitet weiterhin off
 
 ### Rechnungsnummern und Rechnungsangaben
 
-Neue finale Rechnungen erhalten `JAHR-LAUFNUMMER`, zum Beispiel `2026-01`
-oder `2026-100`. Maßgeblich ist das **Rechnungsdatum**, nicht der Leistungsmonat:
-Eine am 2. Januar 2027 erstellte Dezemberrechnung für 2026 gehört zum Nummernkreis
-2027. Die Vorschau liefert ihr Rechnungsdatum zurück; die Oberfläche verwendet
-es auch beim anschließenden Speichern. API-Aufrufe können ein explizites
-Rechnungsdatum setzen, andernfalls gilt das lokale Tagesdatum des Backends.
-Die laufende Nummer wird erst beim endgültigen Speichern vergeben. Vorschauen
-zeigen eine unverbindliche nächste Nummer und verbrauchen keine Nummern.
+Neue finale Rechnungen erhalten automatisch `JAHR-01` bis `JAHR-12`.
+Maßgeblich ist das **Rechnungsdatum**, unabhängig vom Leistungsmonat und
+Systemdatum. Eine Dezemberrechnung mit Rechnungsdatum 2. Januar 2027 gehört
+zum Nummernkreis 2027; eine im Januar erstellte Rechnung mit ausdrücklich
+rückdatiertem Rechnungsdatum 31. Dezember 2026 gehört zu 2026.
+Vorschauen verbrauchen keine Nummer. Das Backend prüft den tatsächlichen
+Rechnungsbestand bei der endgültigen Speicherung erneut in derselben
+`BEGIN IMMEDIATE`-Transaktion wie Rechnung, Positionen und Snapshot. Parallele
+Anfragen erhalten unterschiedliche Nummern oder einen verständlichen HTTP-409-
+Konflikt mit Aufforderung zum erneuten Laden. Fehler verbrauchen keine Nummer.
 
-Jedes Rechnungsprofil besitzt eigene Jahresnummernkreise. Unter „Rechnung
-konfigurieren“ lässt sich ein Jahr laden und dessen nächste positive ganze
-Nummer einstellen (bis 999999999). Die angezeigte Untergrenze schützt bereits
-vergebene Nummern, auch nach dem Löschen ihrer Rechnung. Nicht vergebene manuelle
-Sprünge lassen sich bis zu dieser Untergrenze korrigieren. Andere Profile und
-Jahre bleiben unberührt. Finale Rechnungsnummern sind weiterhin unveränderlich.
-Gleiche Nummern in unterschiedlichen Profilen sind zulässig; die bestehenden
-profilbezogenen PDF-Dateinamen und Dokumentzuordnungen bleiben eindeutig.
+Das optionale Feld „Manuelle Rechnungsnummer“ hat Vorrang. Zulässig sind
+`JAHR-01` bis `JAHR-12`, wahlweise mit dem konfigurierten Präfix vor dem Jahr,
+beispielsweise `TTC-2026-03`. Beide Schreibweisen belegen dieselbe laufende
+Nummer im selben Profil und Jahr. Ein leerer Wert bedeutet automatische Vergabe.
+Präfixwechsel erzeugen keinen neuen Nummernkreis. Die automatische Schreibweise
+bleibt ohne Präfix. Ausgelassene Leistungsmonate verbrauchen keine Nummern.
 
-Die Vergabe prüft den zuvor gelesenen Zähler innerhalb derselben SQLite-
-`BEGIN IMMEDIATE`-Transaktion wie Rechnung, Positionen und Snapshot. Bei einer
-parallelen Änderung wird der konkurrierende Versuch mit HTTP 409 abgelehnt;
-eine erneute Vorschau und Speicherung verwendet den neuen Zähler. Ein Fehler
-rollt die Vergabe zurück und entfernt nur die eigene neu veröffentlichte PDF.
-Die bereits bestehende Begrenzung auf eine finale Rechnung je Leistungsmonat
-und Profil bleibt bestehen.
+Die zentrale Backend-Logik `invoice_numbering.py` erkennt ungültige Nummern,
+Duplikate (auch mit unterschiedlichen Präfixen) und Lücken. Eine manuelle Eingabe
+kann eine Lücke erzeugen; sie wird sofort im Jahresbestand erkannt. Die automatische
+Vergabe bleibt dann gesperrt. Unter „Rechnung konfigurieren“ → „Jährlicher
+Rechnungsnummernkreis“ werden die betroffenen Rechnungen mit einer direkten
+Korrekturaktion angezeigt. Beispiel: `01, 02, 04` → ausdrücklich `04` auf `03`
+korrigieren → nächster automatischer Vorschlag `04`. Es erfolgt niemals eine
+selbstständige Umnummerierung. Ein frei einstellbarer Zählersprung ist nicht mehr
+zulässig. Nach laufender Nummer 12 wird keine automatische 13 vergeben.
 
-Schema-Migration 9 ergänzt transaktional die optionale `tax_id` sowie die
-Tabellen `invoice_counters` und `invoice_number_legacy_floors`. Die vorhandene
-Migrationssicherung wird vorab angelegt. Historische Rechnungen, Snapshots und
-PDF-Dateien werden nicht verändert. Eindeutige alte `JAHR-ZAHL`-Nummern bilden
-Untergrenzen für ihr bezeichnetes Jahr. Andere Schemata werden nicht als
-Jahresnummern interpretiert: Der größte numerische Endbestandteil und der alte
-nächste Zähler bilden konservativ eine Untergrenze für die durch gespeicherte
-Rechnungsdaten belegten Jahre des Profils. Ist kein Jahr belegbar oder fehlt
-ein gültiges Rechnungsdatum, gilt die Untergrenze vorsichtshalber für alle
-noch nicht angelegten Jahresnummernkreise dieses Profils. Dadurch können bei
-unklaren Altbeständen Lücken entstehen. Neue Jahre ohne solche Unsicherheit
-beginnen bei 1. Ein Neustart initialisiert keine Zähler erneut. Die alten
-Organisationsfelder bleiben lesbar; `next_invoice_number` ist nur noch ein
-Kompatibilitätswert der letzten Vergabe, keine Quelle der Jahresnummerierung.
-Präfix und Zahlungsziel sind für neue Rechnungen ohne Wirkung.
+„Nummer korrigieren“ im Archiv oder Jahresbestand öffnet einen echten modalen
+HTML-Dialog. Die ausdrückliche Bestätigung ist auch im Backend erforderlich.
+Rechnungsdatum, Betrag, Positionen und historische Einstellungen bleiben erhalten;
+nur Nummer und zugehöriges PDF ändern sich. Das neue PDF wird aus dem gespeicherten
+Snapshot einschließlich gespeichertem Logo erzeugt, zuerst unter einem eindeutigen
+profilbezogenen `-revision-<UUID>.pdf`-Dateinamen veröffentlicht und dann gemeinsam
+mit Nummer und Snapshot transaktional zugeordnet. Veraltete Anfragen, Duplikate
+und geänderte Dateizuordnungen werden abgelehnt. Die alte Datei wird erst nach
+Commit bei weiterhin fehlender Referenz und unveränderter Dateiidentität entfernt.
+Dateifehler können unreferenzierte Kopien mit sichtbarem Hinweis hinterlassen,
+keine ungültigen Datenbankreferenzen. Bereits extern geöffnete oder exportierte
+PDFs und externe Sicherungen werden nicht geändert. Downloads erhalten
+`Cache-Control: no-store`, damit ein erneuter Abruf die korrigierte Fassung zeigt.
+
+Alle gespeicherten finalen Rechnungen mit vollständigem, passendem historischen
+Snapshot können ausdrücklich korrigiert werden. Fehlt dieser bei alten oder
+inkonsistenten Importdaten, lehnt die App die Korrektur verständlich ab und erhält
+Originalnummer und Originaldatei. Historische Inhalte werden nicht aus heutigen
+Einstellungen erraten. Die später ergänzten optionalen Felder Steuer ID und
+Empfängeransprache bleiben bei fehlenden historischen Werten leer.
+
+Schema-Migration 9 führte Jahreszähler und konservative Bestandsgrenzen ein.
+Migration **12** ergänzt transaktional `invoice_number_retired` für ausdrücklich
+gelöschte laufende Nummern; vorhandene Rechnungsdaten, Nummern, Snapshots und PDFs
+bleiben unverändert. Vor der Migration entsteht die bestehende SQLite-Sicherung.
+Der neue Bestandsabgleich ignoriert alte Zählersprünge nicht stillschweigend:
+Bei früher gesperrten oder gelöschten letzten Nummern muss die Wiederverwendung
+der angezeigten nächsten Nummer ausdrücklich per Checkbox und Schaltfläche
+freigegeben werden. Die API benötigt `confirm_reuse: true` und prüft die Nummer
+nochmals. Gelöschte mittlere Nummern bleiben Lücken; vorhandene nachfolgende
+Rechnungen können ausdrücklich korrigiert werden. Korrekturen aktualisieren den
+abgeleiteten Jahreszähler, behalten aber separate Löschvermerke bis zur Freigabe.
+Neue, unbelastete Jahre beginnen bei 1. Bestandsnummern außerhalb 1–12 bleiben
+lesbar und sperren die automatische Vergabe bis zur ausdrücklichen Korrektur.
+Vollständige Sicherungen und Wiederherstellungen enthalten die Löschvermerke;
+der CSV-Export enthält sie ebenfalls. `next_invoice_number` bleibt lediglich
+ein Kompatibilitätswert, keine Berechnungsquelle der Jahresnummerierung.
 
 „Steuer ID“ ist ein eigenständiges optionales Profilfeld (maximal 100 Zeichen),
 getrennt von Steuernummer und Umsatzsteuer-ID. Neue Rechnungen übernehmen den
@@ -1683,7 +1706,7 @@ Der CSV-Datenexport enthält beide neuen Nummernkreistabellen ebenfalls.
 
 Die Profilverwaltung öffnet einen modalen HTML-Dialog mit Profilname und aktuellen
 Anzahlen für Rechnungen/Vorschauen, Positionen, Termine, Wochenplaneinträge,
-Monatsmarker, Tätigkeiten sowie Nummernkreise und Bestandsgrenzen. Einstellungen
+Monatsmarker, Tätigkeiten sowie Nummernkreise, Bestandsgrenzen und Nummern-Löschvermerke. Einstellungen
 und eingebettete Logos gehören zum Profil. Ein weiteres Profil muss erhalten
 bleiben; das letzte Profil kann weder über die Oberfläche noch die API gelöscht
 werden. Nach bestätigter Löschung des aktiven Profils lädt die Oberfläche mit dem

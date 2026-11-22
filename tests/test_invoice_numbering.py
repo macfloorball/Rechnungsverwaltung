@@ -32,19 +32,20 @@ def test_dates_preview_years_manual_profiles_and_deletion(environment):
     assert first['invoice_number'] == '2026-01'
     request(client, 'DELETE', f'/api/invoices/{first["id"]}', expected=204)
     request(client, 'PUT', '/api/organization/invoice-counter/2026', body={'next_number': 1}, expected=422)
-    request(client, 'PUT', '/api/organization/invoice-counter/2026', body={'next_number': 100})
+    request(client, 'PUT', '/api/organization/invoice-counter/2026', body={'next_number': 100}, expected=422)
+    request(client, 'PUT', '/api/organization/invoice-counter/2026', body={'next_number': 1, 'confirm_reuse': True})
     replacement = request(client, 'POST', '/api/invoices', body=period, expected=201)
-    assert replacement['invoice_number'] == '2026-100'
+    assert replacement['invoice_number'] == '2026-01'
     for value in (0, -1, 1.5, True, '3'):
         request(client, 'PUT', '/api/organization/invoice-counter/2026', body={'next_number': value}, expected=422)
-    for month, when, number in ((2, '2027-01-01', '2027-01'), (3, '2026-12-31', '2026-101'), (4, '2024-01-01', '2024-01')):
+    for month, when, number in ((2, '2027-01-01', '2027-01'), (3, '2026-12-31', '2026-02'), (4, '2024-01-01', '2024-01')):
         invoice = request(client, 'POST', '/api/invoices', body={'year': 2025, 'month': month, 'invoice_date': when}, expected=201)
         assert invoice['invoice_number'] == number
     second = request(client, 'POST', '/api/profiles', body={'name': 'Second'}, expected=201)['id']
     assert request(client, 'GET', '/api/organization/invoice-counter/2026', second)['next_number'] == 1
-    assert request(client, 'GET', '/api/organization/invoice-counter/2026')['next_number'] == 102
+    assert request(client, 'GET', '/api/organization/invoice-counter/2026')['next_number'] == 3
     db.initialize_database(database)
-    assert db.get_invoice_counter(2026, database)['next_number'] == 102
+    assert db.get_invoice_counter(2026, database)['next_number'] == 3
 
 
 def test_concurrent_different_months_and_rollback(environment):
@@ -124,6 +125,7 @@ def test_migration_is_idempotent_and_preserves_legacy(environment):
         'invoice_snapshot_json': '{"tax_number":"Old"}', 'total_amount_cents': 0}, [], database)
     before = db.get_invoice(original, database)
     with sqlite3.connect(database) as connection:
+        connection.execute('DROP TABLE invoice_number_retired')
         connection.execute('DROP TABLE profile_identifiers')
         connection.execute('DELETE FROM schema_migrations WHERE version >= 9')
         connection.execute('ALTER TABLE organizations DROP COLUMN recipient_salutation')
@@ -133,11 +135,11 @@ def test_migration_is_idempotent_and_preserves_legacy(environment):
         connection.execute('ALTER TABLE organizations DROP COLUMN tax_id')
         connection.execute('UPDATE organizations SET next_invoice_number = 43')
     db.initialize_database(database)
-    assert db.get_invoice_counter(2026, database)['next_number'] == 43
+    assert not db.get_invoice_counter(2026, database)['automatic_allowed']
     assert db.get_invoice_counter(2027, database)['next_number'] == 1
     db.initialize_database(database)
     assert db.get_invoice(original, database) == before
-    assert db.get_invoice_counter(2026, database)['next_number'] == 43
+    assert not db.get_invoice_counter(2026, database)['automatic_allowed']
 
 
 def test_manual_counter_rejects_imported_number_collision(environment):
@@ -146,7 +148,7 @@ def test_manual_counter_rejects_imported_number_collision(environment):
         'invoice_date': '2026-01-02', 'invoice_number': '2026-42',
         'total_amount_cents': 0}, [], database)
     request(client, 'PUT', '/api/organization/invoice-counter/2026', body={'next_number': 42}, expected=422)
-    assert request(client, 'GET', '/api/organization/invoice-counter/2026')['next_number'] == 43
+    assert not request(client, 'GET', '/api/organization/invoice-counter/2026')['automatic_allowed']
 
 
 @pytest.mark.parametrize('iban', [None, 123, [], {}])

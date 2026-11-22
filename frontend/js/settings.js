@@ -306,6 +306,11 @@ function renderInvoices(rows, emptyMessage, invoices) {
     } else {
       actions.append(element("span", "Kein gespeichertes PDF vorhanden"));
     }
+    const correctionButton = element("button", "Nummer korrigieren");
+    correctionButton.type = "button";
+    correctionButton.className = "secondary-button";
+    correctionButton.dataset.correctInvoice = String(invoice.id);
+    actions.append(correctionButton);
     const deleteButton = element("button", "Rechnung löschen");
     deleteButton.type = "button";
     deleteButton.className = "secondary-button";
@@ -378,19 +383,31 @@ export function initializeSettings() {
   const counterMessage = document.querySelector("#counter-message");
   counterYear.value = new Date().getFullYear();
   let loadedYear = null;
+  let counterVersion = 0;
   counterYear.addEventListener("input", () => { loadedYear = null; counterSave.disabled = true; });
   async function loadCounter() {
     if (!counterYear.reportValidity()) return;
     const year = Number(counterYear.value);
+    const version = ++counterVersion;
     counterSave.disabled = true;
+    document.querySelector("#counter-confirm-reuse").checked = false;
     try {
       const data = await requestJson(`/api/organization/invoice-counter/${year}`);
-      if (Number(counterYear.value) !== year) return;
+      if (version !== counterVersion || Number(counterYear.value) !== year) return;
       counterNext.value = data.next_number;
       counterNext.min = data.minimum_number;
       loadedYear = year;
-      counterSave.disabled = false;
-      counterMessage.textContent = `Format: ${year}-${String(data.next_number).padStart(2, "0")}. Kleinste zulässige Nummer: ${data.minimum_number}.`;
+      counterSave.disabled = !data.release_required || data.next_number > 12 || data.gaps.length > 0 || data.records.some(record => !record.serial) || data.issues.some(issue => issue.startsWith("Doppelte"));
+      counterMessage.textContent = data.message;
+      const records = document.querySelector("#counter-records");
+      records.replaceChildren(...data.records.map(record => {
+        const row = element("li");
+        const button = element("button", `Rechnung ${record.invoice_number || "ohne Nummer"} korrigieren`);
+        button.type = "button";
+        button.dataset.correctInvoice = String(record.id);
+        row.append(button);
+        return row;
+      }));
     } catch (error) { counterMessage.textContent = error.message; }
   }
   document.querySelector("#counter-load").addEventListener("click", loadCounter);
@@ -398,15 +415,20 @@ export function initializeSettings() {
     event.preventDefault();
     if (!counterForm.reportValidity() || loadedYear !== Number(counterYear.value)) return;
     const year = loadedYear;
+    if (!document.querySelector("#counter-confirm-reuse").checked) {
+      counterMessage.textContent = "Bitte die Wiederverwendung ausdrücklich bestätigen.";
+      return;
+    }
     const unlock = lockForm(counterForm);
     try {
       await requestJson(`/api/organization/invoice-counter/${year}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ next_number: Number(counterNext.value) }),
+        body: JSON.stringify({ next_number: Number(counterNext.value), confirm_reuse: true }),
       });
-      counterMessage.textContent = "Nummernkreis gespeichert.";
+      await loadCounter();
+      document.dispatchEvent(new Event("invoice-numbering-changed"));
     } catch (error) { counterMessage.textContent = error.message; }
-    finally { unlock(); counterSave.disabled = loadedYear !== Number(counterYear.value); }
+    finally { unlock(); await loadCounter(); }
   });
   loadCounter();
 
@@ -792,6 +814,51 @@ export function initializeSettings() {
     }
   }
 
+  const numberDialog = document.querySelector("#invoice-number-dialog");
+  const numberForm = document.querySelector("#invoice-number-form");
+  const numberInput = document.querySelector("#corrected-invoice-number");
+  const numberError = document.querySelector("#invoice-number-error");
+  const numberCancel = document.querySelector("#cancel-number-correction");
+  let correcting = null;
+  let correctionSaving = false;
+  function openCorrection(event) {
+    const button = event.target.closest?.("[data-correct-invoice]");
+    if (!button || correcting) return;
+    const invoice = invoices.find(invoice => invoice.id === Number(button.dataset.correctInvoice));
+    if (!invoice) { counterMessage.textContent = "Bitte zuerst die gespeicherten Rechnungen neu laden."; return; }
+    correcting = { invoice, button };
+    numberForm.reset();
+    numberError.textContent = "";
+    numberInput.value = invoice.invoice_number || "";
+    document.querySelector("#invoice-number-context").textContent = `Rechnung ${invoice.invoice_number || "ohne Nummer"}, Rechnungsdatum ${invoice.invoice_date}, Leistungsmonat ${invoice.year}-${String(invoice.month).padStart(2, "0")}. Zulässig: Jahr des Rechnungsdatums, laufende Nummer 01–12, optional mit konfiguriertem Präfix.`;
+    numberDialog.showModal();
+    numberInput.focus();
+  }
+  invoiceRows.addEventListener("click", openCorrection);
+  document.querySelector("#counter-records").addEventListener("click", openCorrection);
+  numberCancel.addEventListener("click", () => { if (!correctionSaving) numberDialog.close(); });
+  numberDialog.addEventListener("cancel", event => { if (correctionSaving) event.preventDefault(); });
+  numberDialog.addEventListener("close", () => { const button = correcting?.button; correcting = null; button?.focus(); });
+  numberForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!correcting || correctionSaving || !numberForm.reportValidity()) return;
+    correctionSaving = true;
+    const target = correcting.invoice;
+    const unlock = lockForm(numberForm);
+    try {
+      const result = await requestJson(`/api/invoices/${target.id}/number`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_number: numberInput.value.trim(), expected_invoice_number: target.invoice_number, confirmed: true }),
+      });
+      numberDialog.close();
+      await loadInvoices();
+      await loadCounter();
+      if (result.retained_previous_document) counterMessage.textContent += " Die vorherige PDF konnte nicht sicher entfernt werden und bleibt erhalten.";
+      document.dispatchEvent(new Event("invoice-numbering-changed"));
+    } catch (error) { numberError.textContent = error.message; }
+    finally { correctionSaving = false; unlock(); }
+  });
+
   invoiceRows.addEventListener("click", async (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -823,6 +890,8 @@ export function initializeSettings() {
         throw new Error(detail);
       }
       await loadInvoices();
+      await loadCounter();
+      document.dispatchEvent(new Event("invoice-numbering-changed"));
     } catch (error) {
       showMessage(
         invoiceError,
@@ -834,7 +903,7 @@ export function initializeSettings() {
   });
 
   reloadInvoicesButton.addEventListener("click", loadInvoices);
-  document.addEventListener("invoice-created", loadInvoices);
+  document.addEventListener("invoice-created", () => { loadInvoices(); loadCounter(); });
   function retryButton(after, label, action) {
     const button = element("button", label);
     button.type = "button";

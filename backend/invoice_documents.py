@@ -1,4 +1,5 @@
 """Validate the existing invoice-to-PDF association without changing data."""
+import re
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +16,10 @@ def invoice_document_name(invoice: dict[str, Any]) -> str:
     expected = build_invoice_filename(invoice["year"], invoice["month"])
     if invoice.get("organization_id", 1) != 1:
         expected = f"profile-{invoice['organization_id']}-{expected}"
-    if invoice["is_preview"] or invoice["pdf_path"] != expected:
+    revision = re.fullmatch(re.escape(expected[:-4]) + r"-revision-[0-9a-f]{32}\.pdf", invoice["pdf_path"] or "")
+    if invoice["is_preview"] or (invoice["pdf_path"] != expected and not revision):
         raise InvoiceDocumentAssociationError
-    return expected
+    return invoice["pdf_path"]
 
 
 def get_owned_invoice_document(

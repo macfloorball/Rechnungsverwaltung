@@ -29,6 +29,9 @@ def validate_database(connection: sqlite3.Connection, *, current: bool = False) 
         columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
         if not fields <= columns:
             raise ValueError("Die Datei enthält keine unterstützte Rechnungsdatenbank")
+    if get_schema_version(connection) >= 12:
+        if {row[1] for row in connection.execute("PRAGMA table_info(invoice_number_retired)")} != {"organization_id", "year", "serial"}:
+            raise ValueError("Die Historie gelöschter Rechnungsnummern fehlt")
     if get_schema_version(connection) >= 11:
         if not connection.execute("SELECT name FROM sqlite_master WHERE name='profile_identifiers'").fetchone():
             raise ValueError("Die Profil-ID-Historie fehlt")

@@ -1096,6 +1096,13 @@ def test_final_invoice_can_be_deleted_before_finalizing_current_preview(
         other_training["id"],
     }
 
+    assert client.post("/api/invoices", json={"year": 2026, "month": 11}).status_code == 409
+    corrected = client.put(f"/api/invoices/{other_invoice['id']}/number", json={
+        "invoice_number": old_invoice["invoice_number"],
+        "expected_invoice_number": other_invoice["invoice_number"], "confirmed": True})
+    assert corrected.status_code == 200, corrected.text
+    other_pdf = client.app.state.test_invoice_directory / corrected.json()["pdf_path"]
+    other_pdf_content = other_pdf.read_bytes()
     finalized = client.post(
         "/api/invoices",
         json={"year": 2026, "month": 11},
@@ -2128,6 +2135,14 @@ def test_deletion_and_refinalization_preserve_copies_draft_other_month_and_numbe
     assert get_organization(database)["next_invoice_number"] == sequence
     assert client.delete(f"/api/invoices/{original['id']}").status_code == 404
     assert client.delete(f"/api/invoices/{preview['id']}").status_code == 409
+    assert client.post("/api/invoices", json=period).status_code == 409
+    corrected = client.put(f"/api/invoices/{other['id']}/number", json={
+        "invoice_number": original["invoice_number"],
+        "expected_invoice_number": other["invoice_number"], "confirmed": True})
+    assert corrected.status_code == 200, corrected.text
+    other["pdf_path"] = corrected.json()["pdf_path"]
+    other_pdf = (directory / other["pdf_path"]).read_bytes()
+    sequence = get_organization(database)["next_invoice_number"]
     response = client.post("/api/invoices", json=period)
     assert response.status_code == 201
     recreated = response.json()

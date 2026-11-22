@@ -162,7 +162,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -371,6 +371,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_invoice_numbering,
             _migrate_recipient_contact,
             _migrate_profile_identifiers,
+            _migrate_invoice_number_retired,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -884,43 +885,33 @@ def _migrate_invoice_numbering(connection):
 
 
 def _invoice_counter(connection, identifier, year):
-    row = connection.execute(
-        "SELECT next_number, minimum_number FROM invoice_counters WHERE organization_id = ? AND year = ?",
-        (identifier, year),
-    ).fetchone()
-    legacy = connection.execute(
-        "SELECT minimum_number FROM invoice_number_legacy_floors WHERE organization_id = ?", (identifier,)
-    ).fetchone()
-    floor = row[1] if row else (legacy[0] if legacy else 1)
-    # Also reject collisions in imported records created without the allocator.
-    for (number,) in connection.execute(
-        "SELECT invoice_number FROM invoices WHERE organization_id = ? AND is_preview = 0",
-        (identifier,),
-    ):
-        match = re.fullmatch(r"([0-9]{4})-([0-9]+)", number or "")
-        if match and int(match[1]) == year:
-            floor = max(floor, int(match[2]) + 1)
-    return max(row[0], floor) if row else floor, floor
+    from backend.invoice_numbering import numbering_state
+    state = numbering_state(connection, identifier, year)
+    return state["next_number"], state["minimum_number"]
 
 
 def get_invoice_counter(year, database_path=None):
+    from backend.invoice_numbering import numbering_state
     with get_connection(database_path) as connection:
-        next_number, minimum = _invoice_counter(connection, profile_id(database_path), year)
-        return {"year": year, "next_number": next_number, "minimum_number": minimum}
+        return numbering_state(connection, profile_id(database_path), year)
 
 
-def set_invoice_counter(year, next_number, database_path=None):
-    if type(year) is not int or not 1 <= year <= 9999 or type(next_number) is not int or not 1 <= next_number <= 999999999:
-        raise ValueError("Jahr und nächste Nummer müssen gültige positive Ganzzahlen sein")
+def set_invoice_counter(year, next_number, database_path=None, *, confirm_reuse=False):
+    from backend.invoice_numbering import numbering_state, remember_next
+    if type(year) is not int or not 1 <= year <= 9999 or type(next_number) is not int or not 1 <= next_number <= 12:
+        raise ValueError("Jahr und laufende Nummer (1–12) müssen gültig sein")
     with get_connection(database_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
         identifier = profile_id(database_path)
-        _, minimum = _invoice_counter(connection, identifier, year)
-        if next_number < minimum:
-            raise ValueError(f"Der Rechnungsnummernkreis beginnt frühestens bei {minimum}; vergebene Nummern bleiben gesperrt")
-        connection.execute("""INSERT INTO invoice_counters VALUES (?, ?, ?, ?)
-            ON CONFLICT(organization_id, year) DO UPDATE SET next_number = excluded.next_number""",
-            (identifier, year, next_number, minimum))
+        state = numbering_state(connection, identifier, year)
+        if next_number != state["next_number"]:
+            raise ValueError("Die nächste Nummer folgt dem Rechnungsbestand. Bitte vorhandene Rechnungen ausdrücklich korrigieren; ein freier Zählersprung ist nicht zulässig.")
+        if state["release_required"] and not confirm_reuse:
+            raise ValueError("Bitte die Wiederverwendung gelöschter oder früher gesperrter Nummern ausdrücklich bestätigen.")
+        if any("Ungültige" in issue or "Doppelte" in issue or "Lücken" in issue for issue in state["issues"]):
+            raise ValueError(state["message"])
+        connection.execute("DELETE FROM invoice_number_retired WHERE organization_id=? AND year=? AND serial=?", (identifier, year, next_number))
+        remember_next(connection, identifier, year, next_number)
     return get_invoice_counter(year, database_path)
 
 
@@ -1016,6 +1007,7 @@ def create_invoice_with_items(
     database_path: Path | None = None,
     expected_next_invoice_number: int | None = None,
     updated_next_invoice_number: int | None = None,
+    manual_invoice_number: bool = False,
 ) -> int:
     invoice = {**invoice, "organization_id": profile_id(database_path)}
     _validate_fields("invoices", invoice)
@@ -1057,24 +1049,15 @@ def create_invoice_with_items(
             raise InvoiceDocumentConflictError
 
         if expected_next_invoice_number is not None:
-            organization_id = invoice.get("organization_id", profile_id(database_path))
+            from backend.invoice_numbering import select_number, remember_next, numbering_state
+            organization_id = invoice["organization_id"]
             numbering_year = date.fromisoformat(invoice["invoice_date"]).year
-            actual, minimum = _invoice_counter(connection, organization_id, numbering_year)
-            if actual != expected_next_invoice_number:
-                raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert")
-            number = invoice.get("invoice_number")
-            if number != f"{numbering_year:04d}-{actual:02d}":
-                raise ValueError("Ungültiger Rechnungsnummernkreis")
-            if connection.execute("SELECT 1 FROM invoices WHERE organization_id = ? AND invoice_number = ? AND is_preview = 0",
-                                  (organization_id, number)).fetchone():
-                raise ValueError("Der Rechnungsnummernkreis enthält eine bereits vergebene Nummer")
-            # Retain the deprecated single counter as a compatibility mirror only.
-            connection.execute("UPDATE organizations SET next_invoice_number = ? WHERE id = ?",
-                               (actual + 1, organization_id))
-            connection.execute("""INSERT INTO invoice_counters VALUES (?, ?, ?, ?)
-                ON CONFLICT(organization_id, year) DO UPDATE SET
-                next_number = excluded.next_number, minimum_number = excluded.minimum_number""",
-                (organization_id, numbering_year, actual + 1, max(minimum, actual + 1)))
+            chosen, serial = select_number(connection, organization_id, numbering_year,
+                                           invoice["invoice_number"] if manual_invoice_number else None)
+            if chosen != invoice["invoice_number"] or serial != expected_next_invoice_number:
+                raise ValueError("Der Rechnungsnummernkreis wurde parallel geändert. Bitte Vorschau erneut laden.")
+            state = numbering_state(connection, organization_id, numbering_year)
+            remember_next(connection, organization_id, numbering_year, max(state["next_number"], serial + 1))
 
         if preview_ids:
             invoice_id = int(preview_ids[0])
@@ -1186,6 +1169,15 @@ def delete_final_invoice(
         ).fetchone():
             raise InvoiceDeletionConflictError
 
+        from backend.invoice_numbering import parse_number
+        try:
+            numbering_year = date.fromisoformat(invoice["invoice_date"]).year
+            serial = parse_number(invoice["invoice_number"], numbering_year)
+        except (ValueError, TypeError):
+            pass
+        else:
+            connection.execute("INSERT OR IGNORE INTO invoice_number_retired VALUES (?, ?, ?)",
+                               (invoice["organization_id"], numbering_year, serial))
         cursor = connection.execute(
             "DELETE FROM invoices WHERE id = ? AND is_preview = 0",
             (invoice_id,),
@@ -1598,10 +1590,12 @@ def validate_profile_relationships(connection):
             raise ValueError("Ungültige Profilzuordnung")
     if connection.execute("SELECT 1 FROM invoices WHERE pdf_path IS NOT NULL AND pdf_path != '' GROUP BY pdf_path COLLATE NOCASE HAVING COUNT(DISTINCT organization_id) > 1 LIMIT 1").fetchone():
         raise ValueError("Profilübergreifende Dokumentreferenz")
-    from backend.invoice_generator import build_invoice_filename
+    from backend.invoice_documents import invoice_document_name
     for identifier, year, month, reference in connection.execute("SELECT organization_id, year, month, pdf_path FROM invoices WHERE organization_id != 1 AND pdf_path IS NOT NULL AND pdf_path != ''"):
-        if reference != f"profile-{identifier}-{build_invoice_filename(year, month)}":
-            raise ValueError("Ungültige profilbezogene Dokumentreferenz")
+        try:
+            invoice_document_name({"organization_id": identifier, "year": year, "month": month, "pdf_path": reference, "is_preview": 0})
+        except ValueError:
+            raise ValueError("Ungültige profilbezogene Dokumentreferenz") from None
     for table, column, parent in PROFILE_RELATIONSHIPS:
         if connection.execute(f"SELECT 1 FROM {table} t LEFT JOIN {parent} p ON p.id=t.{column} WHERE t.{column} IS NOT NULL AND (p.id IS NULL OR t.organization_id != p.organization_id) LIMIT 1").fetchone():
             raise ValueError("Profilübergreifende Beziehung")
@@ -1705,7 +1699,7 @@ def _migrate_profile_identifiers(connection):
 
 PROFILE_DELETE_TABLES = ("invoice_items", "invoices", "trainings", "weekly_plan",
                          "weekly_plan_months", "activity_types", "invoice_counters",
-                         "invoice_number_legacy_floors")
+                         "invoice_number_legacy_floors", "invoice_number_retired")
 
 
 def profile_deletion_summary(identifier, database_path, connection=None):
@@ -1738,3 +1732,16 @@ def delete_profile_transaction(identifier, expected, database_path):
         for table in PROFILE_DELETE_TABLES:
             connection.execute(f"DELETE FROM {table} WHERE organization_id=?", (identifier,))
         connection.execute("DELETE FROM organizations WHERE id=?", (identifier,))
+
+
+def _migrate_invoice_number_retired(connection):
+    if get_schema_version(connection) != 11:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute("CREATE TABLE invoice_number_retired (organization_id INTEGER NOT NULL REFERENCES organizations(id), year INTEGER NOT NULL CHECK(year BETWEEN 1 AND 9999), serial INTEGER NOT NULL CHECK(serial BETWEEN 1 AND 12), PRIMARY KEY(organization_id, year, serial))")
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (12)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise

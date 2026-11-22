@@ -141,7 +141,8 @@ class OrganizationSettingsUpdate(APIModel):
 
 
 class InvoiceCounterUpdate(APIModel):
-    next_number: int = Field(gt=0, le=999999999, strict=True)
+    next_number: int = Field(gt=0, le=12, strict=True)
+    confirm_reuse: bool = False
 
 
 class LogoUpload(APIModel):
@@ -208,6 +209,19 @@ class InvoicePeriod(APIModel):
 
 class InvoiceCreate(InvoicePeriod):
     invoice_date: date | None = None
+    invoice_number: str | None = Field(default=None, max_length=50)
+
+    @field_validator("invoice_number")
+    @classmethod
+    def normalize_number(cls, value):
+        return (value.strip() or None) if value is not None else None
+
+
+class InvoiceNumberCorrection(APIModel):
+    invoice_number: str = Field(min_length=1, max_length=50)
+    expected_invoice_number: str | None
+    confirmed: Literal[True]
+
 
 class BackupRequest(APIModel):
     directory: str | None = Field(default=None, min_length=1, max_length=4096)
