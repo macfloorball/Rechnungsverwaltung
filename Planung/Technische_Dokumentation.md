@@ -1677,3 +1677,30 @@ Vollständige Backups enthalten Einstellungen und Nummernkreise zusammen mit
 allen PDFs in der SQLite-Sicherung; die Wiederherstellung migriert alte
 Einzel- und Mehrprofilbestände ausschließlich in einer temporären Kopie.
 Der CSV-Datenexport enthält beide neuen Nummernkreistabellen ebenfalls.
+
+
+### Profile löschen (Issue #58)
+
+Die Profilverwaltung öffnet einen modalen HTML-Dialog mit Profilname und aktuellen
+Anzahlen für Rechnungen/Vorschauen, Positionen, Termine, Wochenplaneinträge,
+Monatsmarker, Tätigkeiten sowie Nummernkreise und Bestandsgrenzen. Einstellungen
+und eingebettete Logos gehören zum Profil. Ein weiteres Profil muss erhalten
+bleiben; das letzte Profil kann weder über die Oberfläche noch die API gelöscht
+werden. Nach bestätigter Löschung des aktiven Profils lädt die Oberfläche mit dem
+ersten verbleibenden Profil neu. Ausstehende Schreibanfragen verhindern den
+Profilwechsel; alte Leseantworten können das neue Dokument nicht verändern.
+
+Der Backend-Abgleich der bestätigten Übersicht und das Entfernen sämtlicher
+Profilzeilen erfolgen gemeinsam unter `BEGIN IMMEDIATE`. Dateizuordnung und
+Dateiidentität werden vor dem Commit geprüft. Anschließend werden ausschließlich
+eindeutig zugehörige PDFs unter erneuter Referenzprüfung entfernt. Fehler bei der
+Bereinigung hinterlassen unreferenzierte Dateien und eine sichtbare Meldung,
+keine ungültigen Datenbankreferenzen. Fremde Dateien, gemeinsam verwendete Dateien
+und externe Sicherungen bleiben erhalten. Die Löschung ist nicht rückgängig zu
+machen; eine externe vollständige Sicherung kann separat wiederhergestellt werden.
+
+Migration 11 ergänzt `profile_identifiers` mit SQLite-AUTOINCREMENT und übernimmt
+alle bestehenden IDs ohne Änderung an Rechnungen oder Dokumenten. Gelöschte IDs
+werden nicht wiederverwendet, damit verspätete Anfragen kein neues Profil treffen.
+Die ID-Historie bleibt in vollständigen Sicherungen erhalten. Beim Neustart und
+bei künftigen Migrationen wird ein gelöschtes Standardprofil nicht neu angelegt.

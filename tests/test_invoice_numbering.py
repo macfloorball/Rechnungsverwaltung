@@ -124,6 +124,7 @@ def test_migration_is_idempotent_and_preserves_legacy(environment):
         'invoice_snapshot_json': '{"tax_number":"Old"}', 'total_amount_cents': 0}, [], database)
     before = db.get_invoice(original, database)
     with sqlite3.connect(database) as connection:
+        connection.execute('DROP TABLE profile_identifiers')
         connection.execute('DELETE FROM schema_migrations WHERE version >= 9')
         connection.execute('ALTER TABLE organizations DROP COLUMN recipient_salutation')
         connection.execute('ALTER TABLE organizations DROP COLUMN recipient_contact_name')

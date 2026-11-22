@@ -162,7 +162,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -356,9 +356,8 @@ def initialize_database(database_path: Path | None = None) -> None:
         for statement in schema.split(";"):
             if statement.strip():
                 connection.execute(statement)
-        connection.execute(
-            "INSERT OR IGNORE INTO organizations (id, name) VALUES (1, '')"
-        )
+        if version == 0:
+            connection.execute("INSERT OR IGNORE INTO organizations (id, name) VALUES (1, '')")
         connection.commit()
         for migration in (
             _migrate_organization_support,
@@ -371,6 +370,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_recurrence,
             _migrate_invoice_numbering,
             _migrate_recipient_contact,
+            _migrate_profile_identifiers,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -1665,8 +1665,7 @@ def create_profile(name, database_path):
     with get_connection(database_path) as connection:
         connection.execute('BEGIN IMMEDIATE')
         # AUTOINCREMENT semantics without rebuilding historical organization IDs.
-        maximum = connection.execute('SELECT COALESCE(MAX(id), 0) FROM organizations').fetchone()[0]
-        identifier = maximum + 1
+        identifier = connection.execute("INSERT INTO profile_identifiers DEFAULT VALUES").lastrowid
         connection.execute('INSERT INTO organizations(id, profile_name) VALUES (?, ?)', (identifier, name))
         return {'id': identifier, 'name': name}
 
@@ -1688,3 +1687,54 @@ def _migrate_recipient_contact(connection: sqlite3.Connection) -> None:
     except Exception:
         connection.rollback()
         raise
+
+
+def _migrate_profile_identifiers(connection):
+    if get_schema_version(connection) != 10:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute("CREATE TABLE profile_identifiers (id INTEGER PRIMARY KEY AUTOINCREMENT)")
+        connection.execute("INSERT INTO profile_identifiers SELECT id FROM organizations")
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (11)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+PROFILE_DELETE_TABLES = ("invoice_items", "invoices", "trainings", "weekly_plan",
+                         "weekly_plan_months", "activity_types", "invoice_counters",
+                         "invoice_number_legacy_floors")
+
+
+def profile_deletion_summary(identifier, database_path, connection=None):
+    if connection is None:
+        with get_connection(database_path) as connection:
+            return profile_deletion_summary(identifier, database_path, connection)
+    row = connection.execute("SELECT profile_name FROM organizations WHERE id=?", (identifier,)).fetchone()
+    if row is None:
+        raise RecordNotFoundError("Profil wurde nicht gefunden")
+    counts = {table: connection.execute(f"SELECT COUNT(*) FROM {table} WHERE organization_id=?", (identifier,)).fetchone()[0]
+              for table in PROFILE_DELETE_TABLES}
+    return {"id": identifier, "name": row[0], "counts": counts,
+            "last_profile": connection.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] <= 1}
+
+
+@contextmanager
+def delete_profile_transaction(identifier, expected, database_path):
+    """Keep writers out through selection and deletion; files are cleaned after commit."""
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        summary = profile_deletion_summary(identifier, database_path, connection)
+        if summary["last_profile"]:
+            raise InvalidRecordError("Das letzte Profil kann nicht gelöscht werden. Lege zuerst ein weiteres Profil an.")
+        if summary != expected:
+            raise InvalidRecordError("Das Profil wurde zwischenzeitlich geändert. Bitte die Löschübersicht erneut öffnen.")
+        validate_profile_relationships(connection)
+        connection.row_factory = sqlite3.Row
+        invoices = [dict(row) for row in connection.execute("SELECT * FROM invoices WHERE organization_id=?", (identifier,))]
+        yield invoices
+        for table in PROFILE_DELETE_TABLES:
+            connection.execute(f"DELETE FROM {table} WHERE organization_id=?", (identifier,))
+        connection.execute("DELETE FROM organizations WHERE id=?", (identifier,))

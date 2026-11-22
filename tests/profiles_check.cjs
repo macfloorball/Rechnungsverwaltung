@@ -33,6 +33,13 @@ async function run() {
     assert.equal(await selected(),'2');
     assert.equal(await js(`document.querySelector('#active-profile').selectedOptions[0].textContent`),'Firma neu');
     assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'B gespeichert');
+    // The last remaining profile explains why deletion is unavailable.
+    await js(`fetch('/api/profiles/1/deletion').then(r=>r.json()).then(body=>fetch('/api/profiles/1',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).then(r=>{if(!r.ok)throw Error('delete first failed')})`);
+    await js(`document.querySelector('#delete-profile').click()`);
+    await until(()=>js(`document.querySelector('#profile-delete-dialog').open`),'last-profile dialog');
+    assert.equal(await js(`document.querySelector('#confirm-profile-delete').disabled`),true);
+    assert.match(await js(`document.querySelector('#profile-delete-error').textContent`),/letzte Profil/);
+    await js(`document.querySelector('#cancel-profile-delete').click()`);
     console.log('PROFILES_RESTART_OK');return;
   }
   assert.equal(await selected(),'1');
@@ -135,6 +142,23 @@ async function run() {
   assert.equal(await js(`document.querySelector('#active-profile').selectedOptions[0].textContent`),originalName);
   assert.deepEqual(await js(`fetch('/api/invoices',{headers:{'X-Profile-ID':'1'}}).then(r=>r.json())`),originalInvoices);
   assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'A gespeichert');
+  // Real deletion dialog: cancellation, concrete impact, active-profile fallback.
+  await click('#create-profile'); await setName('Delete me'); await click('#save-profile-name');
+  await until(()=>js(`document.querySelector('#active-profile').options.length===3`),'third profile');
+  await switchTo(3);
+  await click('#delete-profile');
+  await until(()=>js(`document.querySelector('#profile-delete-dialog').open`),'delete dialog');
+  assert.match(await js(`document.querySelector('#profile-delete-summary').textContent`),/Delete me.*Rechnungen.*Positionen.*Termine/);
+  assert.equal(await js('document.activeElement.id'),'cancel-profile-delete');
+  await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,'profile-delete-dialog.png'),(await contents.capturePage()).toPNG());
+  await click('#cancel-profile-delete');
+  assert.equal(await selected(),'3');
+  assert.equal(await js(`document.querySelector('#active-profile').options.length`),3);
+  await click('#delete-profile');
+  await until(()=>js(`document.querySelector('#profile-delete-dialog').open`),'delete dialog again');
+  await reload(()=>js(`document.querySelector('#confirm-profile-delete').click()`));
+  assert.equal(await selected(),'1');
+  assert.equal(await js(`document.querySelector('#active-profile').options.length`),2);
   // Unknown remembered profile resets predictably after restore/restart.
   await reload(()=>js(`localStorage.setItem('ttc.activeProfile','9999');location.reload();`));
   assert.equal(await selected(),'1');

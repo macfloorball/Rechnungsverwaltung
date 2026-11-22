@@ -220,3 +220,10 @@ class ProfileInput(APIModel):
     @classmethod
     def clean_name(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+
+class ProfileDeleteConfirmation(APIModel):
+    id: int = Field(gt=0)
+    name: str
+    counts: dict[str, int]
+    last_profile: bool

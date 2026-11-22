@@ -23,10 +23,10 @@ def main():
         document = root / "documents" / "existing.pdf"
         document.parent.mkdir()
         document.write_bytes(b"%PDF-preserve-this-document")
-        original = database._migrate_recipient_contact
-        database._migrate_recipient_contact = lambda connection: None
+        original = database._migrate_profile_identifiers
+        database._migrate_profile_identifiers = lambda connection: None
         database.initialize_database()
-        database._migrate_recipient_contact = original
+        database._migrate_profile_identifiers = original
         database.update_organization({"recipient_name": "Migration check", "next_invoice_number": 42})
 
         def interrupted(connection):
@@ -35,7 +35,7 @@ def main():
             connection.execute("INSERT INTO schema_migrations (version) VALUES (?)", (database.SCHEMA_VERSION,))
             raise sqlite3.DatabaseError("controlled migration failure")
 
-        database._migrate_recipient_contact = interrupted
+        database._migrate_profile_identifiers = interrupted
         try:
             database.initialize_database()
         except sqlite3.DatabaseError:
@@ -43,7 +43,7 @@ def main():
         else:
             raise AssertionError("Migration failure was not reported")
         finally:
-            database._migrate_recipient_contact = original
+            database._migrate_profile_identifiers = original
         with closing(sqlite3.connect(path)) as connection, connection:
             assert database.get_schema_version(connection) == database.SCHEMA_VERSION - 1
             assert not connection.execute("SELECT name FROM sqlite_master WHERE name='interrupted_update'").fetchall()

@@ -30,10 +30,11 @@ from backend.invoice_documents import (
     prepare_invoice_documents,
 )
 from backend.storage_import import prepare_database
-from backend.storage_errors import MESSAGES, error_code
+from backend.storage_errors import DatabaseAccessError, MESSAGES, error_code
 
 from backend.database import (
     get_invoice_counter, set_invoice_counter,
+    profile_deletion_summary, delete_profile_transaction,
     ProfileDatabasePath, profile_id, list_profiles, create_profile, rename_profile,
     save_activities,
     save_weekly_plan,
@@ -70,6 +71,7 @@ from backend.invoice_generator import (
 from backend.models import (
     InvoiceCounterUpdate,
     ProfileInput,
+    ProfileDeleteConfirmation,
     BackupRequest,
     InvoiceCreate,
     InvoicePeriod,
@@ -285,6 +287,41 @@ def put_profile(identifier: int, payload: ProfileInput, database_path: Annotated
     if not rename_profile(identifier, payload.name, database_path):
         raise HTTPException(status_code=404, detail="Profil wurde nicht gefunden")
     return {"id": identifier, "name": payload.name}
+
+
+@app.get("/api/profiles/{identifier}/deletion")
+def get_profile_deletion(identifier: int, database_path: Annotated[Path, Depends(get_database_path)]):
+    return profile_deletion_summary(identifier, database_path)
+
+
+@app.delete("/api/profiles/{identifier}")
+def remove_profile(identifier: int, payload: ProfileDeleteConfirmation,
+                   database_path: Annotated[Path, Depends(get_database_path)],
+                   invoice_directory: InvoiceDirectory):
+    selected = []
+    retained = 0
+    with document_operation("inspect"):
+        documents = DocumentStore(invoice_directory)
+    with delete_profile_transaction(identifier, payload.model_dump(), database_path) as invoices:
+        for invoice in invoices:
+            if not invoice["pdf_path"]:
+                continue
+            try:
+                reference = get_owned_invoice_document(invoice, database_path)
+                selected.append((reference, documents.get_identity(reference)))
+            except FileNotFoundError:
+                pass
+            except (ValueError, OSError):
+                retained += 1
+    # The committed deletion leaves no dangling database references even if a
+    # filesystem operation fails. Never delete an unverified or newly owned file.
+    for reference, identity in selected:
+        try:
+            with invoice_document_deletion_guard(reference, database_path):
+                documents.delete(reference, expected=identity, missing_ok=True)
+        except (OSError, ValueError, InvoiceDeletionConflictError, DatabaseAccessError):
+            retained += 1
+    return {"profiles": list_profiles(database_path), "retained_documents": retained}
 
 
 @app.get("/api/health")

@@ -17,6 +17,7 @@
           <select id="active-profile" disabled aria-describedby="profile-message"><option>Profile werden geladen …</option></select>
           <button id="create-profile" type="button" disabled>Neues Profil</button>
           <button id="rename-profile" type="button" disabled>Profil umbenennen</button>
+          <button id="delete-profile" type="button" disabled>Profil löschen</button>
           <p id="profile-message" role="status" aria-live="polite"></p>
         </div>
         <h1>Rechnungsverwaltung</h1>
@@ -470,6 +471,18 @@
       </div>
     </dialog>
 
+    <dialog id="profile-delete-dialog" aria-labelledby="profile-delete-title">
+      <form id="profile-delete-form">
+        <h2 id="profile-delete-title">Profil löschen</h2>
+        <p id="profile-delete-summary"></p>
+        <p>Die Profileinstellungen einschließlich Logo werden gelöscht. Andere Profile, gemeinsam verwendete Dateien, fremde Dokumente und externe Sicherungen bleiben erhalten. Nicht sicher zuordenbare Dateien bleiben ebenfalls erhalten.</p>
+        <p id="profile-delete-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-profile-delete" type="button">Abbrechen</button>
+          <button id="confirm-profile-delete" type="submit">Profil endgültig löschen</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="profile-name-dialog" aria-labelledby="profile-name-title">
       <form id="profile-name-form" novalidate>
         <div class="dialog-heading"><h2 id="profile-name-title">Neues Profil</h2></div>
