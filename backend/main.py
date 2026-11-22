@@ -6,6 +6,7 @@ import logging
 import os
 import sqlite3
 import struct
+import uuid
 import sys
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
@@ -30,10 +31,11 @@ from backend.invoice_documents import (
     prepare_invoice_documents,
 )
 from backend.storage_import import prepare_database
-from backend.storage_errors import MESSAGES, error_code
+from backend.storage_errors import DatabaseAccessError, MESSAGES, error_code
 
 from backend.database import (
-    get_invoice_counter, set_invoice_counter,
+    get_invoice_counter, set_invoice_counter, get_connection,
+    profile_deletion_summary, delete_profile_transaction,
     ProfileDatabasePath, profile_id, list_profiles, create_profile, rename_profile,
     save_activities,
     save_weekly_plan,
@@ -59,6 +61,8 @@ from backend.database import (
     update_organization,
     update_record,
 )
+from backend.invoice_numbering import NumberingError, select_number, numbering_state, remember_next
+
 from backend.invoice_generator import (
     InvoiceContactDetails,
     InvoiceDetails,
@@ -69,7 +73,9 @@ from backend.invoice_generator import (
 )
 from backend.models import (
     InvoiceCounterUpdate,
+    InvoiceNumberCorrection,
     ProfileInput,
+    ProfileDeleteConfirmation,
     BackupRequest,
     InvoiceCreate,
     InvoicePeriod,
@@ -287,6 +293,41 @@ def put_profile(identifier: int, payload: ProfileInput, database_path: Annotated
     return {"id": identifier, "name": payload.name}
 
 
+@app.get("/api/profiles/{identifier}/deletion")
+def get_profile_deletion(identifier: int, database_path: Annotated[Path, Depends(get_database_path)]):
+    return profile_deletion_summary(identifier, database_path)
+
+
+@app.delete("/api/profiles/{identifier}")
+def remove_profile(identifier: int, payload: ProfileDeleteConfirmation,
+                   database_path: Annotated[Path, Depends(get_database_path)],
+                   invoice_directory: InvoiceDirectory):
+    selected = []
+    retained = 0
+    with document_operation("inspect"):
+        documents = DocumentStore(invoice_directory)
+    with delete_profile_transaction(identifier, payload.model_dump(), database_path) as invoices:
+        for invoice in invoices:
+            if not invoice["pdf_path"]:
+                continue
+            try:
+                reference = get_owned_invoice_document(invoice, database_path)
+                selected.append((reference, documents.get_identity(reference)))
+            except FileNotFoundError:
+                pass
+            except (ValueError, OSError):
+                retained += 1
+    # The committed deletion leaves no dangling database references even if a
+    # filesystem operation fails. Never delete an unverified or newly owned file.
+    for reference, identity in selected:
+        try:
+            with invoice_document_deletion_guard(reference, database_path):
+                documents.delete(reference, expected=identity, missing_ok=True)
+        except (OSError, ValueError, InvoiceDeletionConflictError, DatabaseAccessError):
+            retained += 1
+    return {"profiles": list_profiles(database_path), "retained_documents": retained}
+
+
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
@@ -328,7 +369,7 @@ def read_invoice_counter(year: int, database_path: DatabasePath):
 @app.put("/api/organization/invoice-counter/{year}")
 def write_invoice_counter(year: int, payload: InvoiceCounterUpdate, database_path: DatabasePath):
     try:
-        return set_invoice_counter(year, payload.next_number, database_path)
+        return set_invoice_counter(year, payload.next_number, database_path, confirm_reuse=payload.confirm_reuse)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -630,10 +671,19 @@ def preview_invoice(
         database_path,
     )
     organization = get_organization(database_path)
-    sequence = get_invoice_counter(invoice_date.year, database_path)["next_number"]
+    numbering = get_invoice_counter(invoice_date.year, database_path)
+    proposed = numbering["invoice_number"]
+    if payload.invoice_number:
+        with get_connection(database_path) as connection:
+            try:
+                proposed, _ = select_number(connection, profile_id(database_path), invoice_date.year, payload.invoice_number)
+            except NumberingError as error:
+                raise HTTPException(422, str(error)) from error
     return {
         "invoice_date": invoice_date.isoformat(),
-        "invoice_number": f"{invoice_date.year:04d}-{sequence:02d}",
+        "invoice_number": proposed,
+        "numbering": numbering,
+        "numbering_mode": "manual" if payload.invoice_number else "automatic",
         "tax_id": organization.get("tax_id"),
         "iban": " ".join(organization["iban"][i:i+4] for i in range(0, len(organization["iban"]), 4)),
         "bic": organization["bic"],
@@ -675,58 +725,7 @@ def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
     ]
 
 
-@app.post("/api/invoices", status_code=status.HTTP_201_CREATED)
-def post_invoice(
-    payload: InvoiceCreate,
-    database_path: DatabasePath,
-    invoice_directory: InvoiceDirectory,
-) -> dict[str, Any]:
-    items, total_amount_cents = _build_invoice_items(
-        payload.year,
-        payload.month,
-        database_path,
-    )
-    if not items:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Für den ausgewählten Monat gibt es keine abrechenbaren Termine",
-        )
-
-    existing_invoices = list_records(
-        "invoices",
-        {"year": payload.year, "month": payload.month},
-        database_path,
-    )
-    if any(not invoice["is_preview"] for invoice in existing_invoices):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
-        )
-
-    organization = get_organization(database_path)
-    if organization is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organisationseinstellungen wurden nicht gefunden",
-        )
-    invoice_date = payload.invoice_date or date.today()
-    sequence = get_invoice_counter(invoice_date.year, database_path)["next_number"]
-    invoice_number = f"{invoice_date.year:04d}-{sequence:02d}"
-    invoice_snapshot = {
-        key: value
-        for key, value in organization.items()
-        if key not in {"id", "logo_data", "logo_path", "created_at", "updated_at",
-                       "payment_due_days", "invoice_number_prefix", "next_invoice_number"}
-    }
-    invoice_snapshot.update(
-        {
-            "invoice_number": invoice_number,
-            "invoice_date": invoice_date.isoformat(),
-            "year": payload.year,
-            "month": payload.month,
-            "items": items,
-        }
-    )
+def _invoice_pdf_details(organization, invoice_number):
     recipient_lines = tuple(
         line
         for line in (
@@ -807,6 +806,66 @@ def post_invoice(
         ),
     )
 
+    return pdf_details
+
+
+@app.post("/api/invoices", status_code=status.HTTP_201_CREATED)
+def post_invoice(
+    payload: InvoiceCreate,
+    database_path: DatabasePath,
+    invoice_directory: InvoiceDirectory,
+) -> dict[str, Any]:
+    items, total_amount_cents = _build_invoice_items(
+        payload.year,
+        payload.month,
+        database_path,
+    )
+    if not items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Für den ausgewählten Monat gibt es keine abrechenbaren Termine",
+        )
+
+    existing_invoices = list_records(
+        "invoices",
+        {"year": payload.year, "month": payload.month},
+        database_path,
+    )
+    if any(not invoice["is_preview"] for invoice in existing_invoices):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Für diesen Monat wurde bereits eine Rechnung erstellt",
+        )
+
+    organization = get_organization(database_path)
+    if organization is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organisationseinstellungen wurden nicht gefunden",
+        )
+    invoice_date = payload.invoice_date or date.today()
+    with get_connection(database_path) as connection:
+        try:
+            invoice_number, sequence = select_number(connection, profile_id(database_path), invoice_date.year, payload.invoice_number)
+        except NumberingError as error:
+            raise HTTPException(409, str(error)) from error
+    invoice_snapshot = {
+        key: value
+        for key, value in organization.items()
+        if key not in {"id", "logo_data", "logo_path", "created_at", "updated_at",
+                       "payment_due_days", "invoice_number_prefix", "next_invoice_number"}
+    }
+    invoice_snapshot.update(
+        {
+            "invoice_number": invoice_number,
+            "invoice_date": invoice_date.isoformat(),
+            "year": payload.year,
+            "month": payload.month,
+            "items": items,
+        }
+    )
+    pdf_details = _invoice_pdf_details(organization, invoice_number)
+
     filename = build_invoice_filename(payload.year, payload.month)
     if profile_id(database_path) != 1:
         filename = f"profile-{profile_id(database_path)}-{filename}"
@@ -869,6 +928,7 @@ def post_invoice(
             database_path,
             expected_next_invoice_number=sequence,
             updated_next_invoice_number=sequence + 1,
+            manual_invoice_number=bool(payload.invoice_number),
         )
     except InvoiceAlreadyExistsError as error:
         _cleanup_invoice_pdf(documents, filename, pdf_identity)
@@ -884,10 +944,10 @@ def post_invoice(
         ) from error
     except ValueError as error:
         _cleanup_invoice_pdf(documents, filename, pdf_identity)
-        if "rechnungsnummernkreis" in str(error).lower():
+        if isinstance(error, NumberingError) or "rechnungsnummernkreis" in str(error).lower():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Der Rechnungsnummernkreis wurde parallel geändert. Bitte versuche es erneut.",
+                detail=str(error),
             ) from error
         raise
     except Exception:
@@ -902,6 +962,101 @@ def post_invoice(
         for key, value in invoice.items()
         if key not in {"invoice_snapshot_json", "logo_snapshot", "logo_media_type"}
     }
+
+
+@app.put("/api/invoices/{invoice_id}/number")
+def correct_invoice_number(invoice_id: int, payload: InvoiceNumberCorrection,
+                           database_path: DatabasePath, invoice_directory: InvoiceDirectory):
+    invoice = get_invoice(invoice_id, database_path)
+    if invoice is None or invoice["is_preview"]:
+        raise HTTPException(404, "Gespeicherte endgültige Rechnung wurde nicht gefunden")
+    if invoice["invoice_number"] != payload.expected_invoice_number:
+        raise HTTPException(409, "Die Rechnung wurde geändert. Bitte Archiv neu laden.")
+    number = payload.invoice_number.strip()
+    if number == invoice["invoice_number"]:
+        raise HTTPException(422, "Bitte eine geänderte Rechnungsnummer eingeben.")
+    try:
+        invoice_date = date.fromisoformat(invoice["invoice_date"])
+        snapshot = json.loads(invoice["invoice_snapshot_json"] or "null")
+        # Historical content must come exclusively from the saved snapshot.
+        required = set(OrganizationSettingsUpdate.model_fields) - {"payment_due_days", "invoice_number_prefix", "recipient_salutation", "recipient_contact_name", "tax_id"}
+        if not isinstance(snapshot, dict) or not required <= snapshot.keys():
+            raise ValueError
+        if (snapshot.get("year") != invoice["year"] or snapshot.get("month") != invoice["month"] or
+                sum(item["amount_cents"] for item in invoice["items"]) != invoice["total_amount_cents"] or
+                snapshot.get("invoice_number") != invoice["invoice_number"] or
+                snapshot.get("invoice_date") != invoice["invoice_date"] or
+                snapshot.get("items") != [{key: item[key] for key in
+                    ("training_id", "description", "training_date", "hours", "unit_rate_cents", "amount_cents")}
+                    for item in invoice["items"]]):
+            raise ValueError
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(409, "Diese Bestandsrechnung besitzt keine vollständigen, passenden historischen Rechnungsangaben. Eine sichere PDF-Neuerzeugung ist nicht möglich; Original und Nummer bleiben erhalten.") from None
+    snapshot["invoice_number"] = number
+    organization = {"recipient_salutation": "", "recipient_contact_name": "", "tax_id": None, **snapshot, "logo_data": invoice["logo_snapshot"], "logo_media_type": invoice["logo_media_type"]}
+    old_reference = None
+    old_identity = None
+    with document_operation("inspect"):
+        documents = DocumentStore(invoice_directory)
+        if invoice["pdf_path"]:
+            try:
+                old_reference = get_owned_invoice_document(invoice, database_path)
+                old_identity = documents.get_identity(old_reference)
+            except FileNotFoundError:
+                pass
+            except InvoiceDocumentAssociationError:
+                raise HTTPException(409, "Die gespeicherte PDF ist nicht eindeutig zugeordnet. Die Korrektur wurde abgebrochen.") from None
+    with get_connection(database_path) as connection:
+        try:
+            select_number(connection, profile_id(database_path), invoice_date.year, number, exclude_id=invoice_id)
+        except NumberingError as error:
+            raise HTTPException(422, str(error)) from error
+    content = render_invoice_pdf(invoice["year"], invoice["month"], invoice_date,
+        [InvoiceLine(description=item["description"], training_date=date.fromisoformat(item["training_date"]),
+                     hours=Decimal(str(item["hours"])) if item["hours"] is not None else None,
+                     amount_cents=item["amount_cents"], unit_rate_cents=item["unit_rate_cents"])
+         for item in invoice["items"]], invoice["total_amount_cents"], _invoice_pdf_details(organization, number))
+    base = build_invoice_filename(invoice["year"], invoice["month"])
+    if profile_id(database_path) != 1:
+        base = f"profile-{profile_id(database_path)}-{base}"
+    reference = base[:-4] + "-revision-" + uuid.uuid4().hex + ".pdf"
+    with document_operation("write"):
+        _, identity = documents.save_new_with_identity(reference, content)
+    try:
+        with get_connection(database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.row_factory = sqlite3.Row
+            current = connection.execute("SELECT * FROM invoices WHERE id=? AND organization_id=current_profile()", (invoice_id,)).fetchone()
+            if current is None or any(invoice.get(key) != value for key, value in dict(current).items()):
+                raise HTTPException(409, "Die Rechnung wurde zwischenzeitlich geändert. Bitte neu laden.")
+            try:
+                select_number(connection, profile_id(database_path), invoice_date.year, number, exclude_id=invoice_id)
+            except NumberingError as error:
+                raise HTTPException(409, str(error)) from error
+            if old_reference and [row[0] for row in connection.execute("SELECT id FROM invoices WHERE pdf_path=? COLLATE NOCASE", (old_reference,))] != [invoice_id]:
+                raise HTTPException(409, "Die PDF-Zuordnung wurde zwischenzeitlich geändert.")
+            if old_identity is not None:
+                with document_operation("inspect"):
+                    if documents.get_identity(old_reference) != old_identity:
+                        raise HTTPException(409, "Die PDF wurde zwischenzeitlich geändert. Bitte prüfen.")
+            connection.execute("UPDATE invoices SET invoice_number=?, invoice_snapshot_json=?, pdf_path=? WHERE id=?", (number, json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")), reference, invoice_id))
+            # A confirmed correction resets only this year's derived counter.
+            # Explicit deletion markers remain until separately released.
+            state = numbering_state(connection, profile_id(database_path), invoice_date.year)
+            remember_next(connection, profile_id(database_path), invoice_date.year, state["next_number"])
+    except Exception:
+        _cleanup_invoice_pdf(documents, reference, identity)
+        raise
+    retained = False
+    if old_reference and old_identity is not None:
+        try:
+            with invoice_document_deletion_guard(old_reference, database_path):
+                documents.delete(old_reference, expected=old_identity, missing_ok=True)
+        except (OSError, ValueError, DatabaseAccessError):
+            retained = True
+    return {"id": invoice_id, "invoice_number": number, "pdf_path": reference,
+            "retained_previous_document": retained,
+            "numbering": get_invoice_counter(invoice_date.year, database_path)}
 
 
 @app.delete("/api/invoices/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1011,6 +1166,7 @@ def get_invoice_pdf(
         media_type="application/pdf",
         filename=reference,
         content_disposition_type="inline",
+        headers={"Cache-Control": "no-store"},
     )
 
 

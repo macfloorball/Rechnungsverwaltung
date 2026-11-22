@@ -13,6 +13,7 @@ function invoiceUI(create) {
       this.hidden = true;
       this.disabled = false;
       this.textContent = '';
+      this.value = '';
       this.events = {};
       this.attributes = {};
       this.children = [];
@@ -50,7 +51,7 @@ function invoiceUI(create) {
         return create(options);
       }
       const period = JSON.parse(options.body);
-      return { ok: true, json: async () => ({ ...period, total_amount_cents: 3000,
+      return { ok: true, json: async () => ({ ...period, invoice_number: period.invoice_number || '2026-01', total_amount_cents: 3000,
         items: [{ description: 'Training', training_date: '2026-11-01', hours: 2, amount_cents: 3000 }] }) };
     },
   });
@@ -142,4 +143,18 @@ test('manual local invoice date survives preview and save; editing invalidates p
   ui.get('#invoice-date').events.input();
   assert.equal(ui.button.disabled, true);
   assert.equal(ui.get('#invoice-preview').hidden, true);
+});
+
+
+test('manual number is optional, explicit and invalidates a previous preview', async () => {
+  let saved;
+  const ui = invoiceUI(options => { saved = JSON.parse(options.body); return success(); });
+  await ui.preview();
+  ui.get('#manual-invoice-number').value = 'RE-2026-04';
+  ui.get('#manual-invoice-number').events.input();
+  assert.equal(ui.button.disabled, true);
+  assert.match(ui.get('#invoice-number-mode').textContent, /Manuelle/);
+  await ui.preview();
+  await ui.click();
+  assert.equal(saved.invoice_number, 'RE-2026-04');
 });

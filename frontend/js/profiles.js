@@ -33,9 +33,10 @@ export async function initializeProfiles() {
   const message = document.querySelector('#profile-message');
   const createButton = document.querySelector('#create-profile');
   const renameButton = document.querySelector('#rename-profile');
+  const deleteButton = document.querySelector('#delete-profile');
   const main = document.querySelector('#main-content');
   const navigation = document.querySelector('.app-navigation');
-  select.disabled = createButton.disabled = renameButton.disabled = true;
+  select.disabled = createButton.disabled = renameButton.disabled = deleteButton.disabled = true;
   main.hidden = navigation.hidden = true;
   try {
     const response = await window.fetch('/api/profiles', { cache: 'no-store' });
@@ -48,7 +49,7 @@ export async function initializeProfiles() {
     select.replaceChildren(...profiles.map(profile => new Option(profile.name, String(profile.id))));
     select.value = String(activeId);
     message.textContent = '';
-    select.disabled = createButton.disabled = renameButton.disabled = false;
+    select.disabled = createButton.disabled = renameButton.disabled = deleteButton.disabled = false;
     main.hidden = navigation.hidden = false;
   } catch (error) {
     message.textContent = 'Profile konnten nicht geladen werden. Bitte App neu laden.';
@@ -58,14 +59,14 @@ export async function initializeProfiles() {
   select.addEventListener('change', () => {
     const requested = select.value;
     select.value = String(activeId);
-    if (editing || pendingWrites) {
+    if (editing || deletion || pendingWrites) {
       message.textContent = 'Speicherung läuft. Bitte vor dem Profilwechsel warten.';
       select.focus();
       return;
     }
     if (!window.confirm('Profil wechseln? Ungespeicherte Eingaben und offene Dialoge werden verworfen. Gespeicherte Daten bleiben erhalten.')) return;
     switching = true;
-    select.disabled = createButton.disabled = renameButton.disabled = true;
+    select.disabled = createButton.disabled = renameButton.disabled = deleteButton.disabled = true;
     storage.set('ttc.activeProfile', requested);
     // Reload is an isolation boundary: no callback from the old document can
     // update the new profile. Already started requests retain their profile ID.
@@ -87,7 +88,7 @@ export async function initializeProfiles() {
     errorMessage.hidden = !message;
   }
   function lock(locked) {
-    createButton.disabled = renameButton.disabled = select.disabled = locked;
+    createButton.disabled = renameButton.disabled = deleteButton.disabled = select.disabled = locked;
   }
   function editProfile(create, trigger) {
     if (editing || switching || saving) return;
@@ -158,5 +159,57 @@ export async function initializeProfiles() {
   });
   createButton.addEventListener('click', () => editProfile(true, createButton));
   renameButton.addEventListener('click', () => editProfile(false, renameButton));
+  const deleteDialog = document.querySelector('#profile-delete-dialog');
+  const deleteError = document.querySelector('#profile-delete-error');
+  const confirmDelete = document.querySelector('#confirm-profile-delete');
+  const cancelDelete = document.querySelector('#cancel-profile-delete');
+  let deletion = null;
+  let deleting = false;
+  deleteButton.addEventListener('click', async () => {
+    if (editing || pendingWrites || switching || deletion) return;
+    lock(true);
+    deletion = { loading: true };
+    try {
+      const response = await profileFetch(`/api/profiles/${activeId}/deletion`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Löschübersicht konnte nicht geladen werden.');
+      deletion = data;
+      const c = data.counts;
+      document.querySelector('#profile-delete-summary').textContent = `Profil „${data.name}“: ${c.invoices} Rechnungen einschließlich Vorschauen, ${c.invoice_items} Positionen, ${c.trainings} Termine, ${c.weekly_plan} Wochenplaneinträge, ${c.weekly_plan_months} Monatsmarker, ${c.activity_types} Tätigkeiten, ${c.invoice_counters} Jahresnummernkreise und ${c.invoice_number_legacy_floors} Bestandsgrenzen, ${c.invoice_number_retired} Löschvermerke für Rechnungsnummern sowie eindeutig zugehörige gespeicherte PDFs werden gelöscht.`;
+      deleteError.textContent = data.last_profile ? 'Das letzte Profil kann nicht gelöscht werden. Lege zuerst ein weiteres Profil an.' : '';
+      confirmDelete.disabled = data.last_profile;
+      deleteDialog.showModal();
+      cancelDelete.focus();
+    } catch (error) {
+      deletion = null;
+      lock(false);
+      message.textContent = error.message;
+    }
+  });
+  deleteDialog.addEventListener('cancel', event => { if (deleting) event.preventDefault(); });
+  cancelDelete.addEventListener('click', () => { if (!deleting) deleteDialog.close(); });
+  deleteDialog.addEventListener('close', () => { deletion = null; lock(false); deleteButton.focus(); });
+  document.querySelector('#profile-delete-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!deletion || deletion.last_profile || deleting) return;
+    deleting = true;
+    confirmDelete.disabled = cancelDelete.disabled = true;
+    try {
+      const response = await profileFetch(`/api/profiles/${deletion.id}`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(deletion),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || 'Profil konnte nicht gelöscht werden.');
+      storage.set('ttc.activeProfile', result.profiles[0].id);
+      if (result.retained_documents) storage.set('ttc.profileDeletionNotice', `${result.retained_documents} Dokumente konnten nicht sicher entfernt werden und bleiben in der Ablage erhalten.`);
+      switching = true;
+      location.reload();
+    } catch (error) {
+      deleteError.textContent = error.message;
+      confirmDelete.disabled = cancelDelete.disabled = false;
+    } finally { deleting = false; }
+  });
+  const notice = storage.get('ttc.profileDeletionNotice');
+  if (notice) { message.textContent = notice; storage.set('ttc.profileDeletionNotice', ''); }
   return true;
 }

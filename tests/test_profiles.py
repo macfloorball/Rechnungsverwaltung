@@ -95,8 +95,10 @@ def test_two_profiles_invoices_documents_and_full_restore(environment, tmp_path)
 
     request(client, 'DELETE', f'/api/invoices/{invoices[1]["id"]}', second, expected=204)
     assert hashlib.sha256(request(client, 'GET', f'/api/invoices/{invoices[0]["id"]}/pdf')).hexdigest() == digests[0]
+    from datetime import date
+    request(client, 'PUT', f'/api/organization/invoice-counter/{date.today().year}', second, {'next_number': 1, 'confirm_reuse': True})
     replacement = request(client, 'POST', '/api/invoices', second, {'year': 2025, 'month': 1}, 201)
-    assert replacement['invoice_number'] == invoices[1]['invoice_number'][:5] + '02'
+    assert replacement['invoice_number'] == invoices[1]['invoice_number']
     assert request(client, 'GET', '/api/organization/settings')['next_invoice_number'] == 2
 
 
@@ -168,7 +170,7 @@ def test_profile_validation_logo_and_management(environment):
         request(client, 'POST', '/api/profiles', body={'name': name}, expected=422)
     second = request(client, 'POST', '/api/profiles', body={'name': '  B  '}, expected=201)['id']
     assert request(client, 'GET', '/api/profiles')[1]['name'] == 'B'
-    request(client, 'DELETE', f'/api/profiles/{second}', expected=405)
+    request(client, 'DELETE', f'/api/profiles/{second}', expected=422)
     request(client, 'PUT', '/api/profiles/9999', body={'name': 'Missing'}, expected=404)
     assert client.get('/api/settings?profile_id=2', headers={'X-Profile-ID': '1'}).status_code == 422
     def chunk(kind, content):
@@ -217,3 +219,79 @@ def test_legacy_single_profile_archive_restore(environment, tmp_path, monkeypatc
     assert invoice['invoice_snapshot_json'] == '{"name":"Old snapshot"}'
     assert (restored / 'documents' / pdf.name).read_bytes() == pdf.read_bytes()
     assert legacy.read_bytes() == before
+
+
+def test_profile_delete_summary_isolation_restart_and_id_history(environment, tmp_path):
+    client, database, documents = environment
+    second = request(client, 'POST', '/api/profiles', body={'name': 'Keep'}, expected=201)['id']
+    invoices = []
+    for profile in (1, second):
+        identifier = activity(client, profile)
+        training(client, profile, identifier)
+        invoices.append(request(client, 'POST', '/api/invoices', profile,
+                                {'year': 2025, 'month': 1}, 201))
+        request(client, 'PUT', '/api/weekly-plan', profile,
+                [{'weekday': 0, 'activity_type_id': identifier, 'hours': 1}])
+    keep = (documents / invoices[1]['pdf_path']).read_bytes()
+    foreign = documents / 'foreign.pdf'
+    foreign.write_bytes(b'foreign')
+    archive = create_backup(database, documents, tmp_path / 'external-backups')
+    archive_bytes = archive.read_bytes()
+    summary = request(client, 'GET', '/api/profiles/1/deletion')
+    assert summary['counts']['invoices'] == 1
+    assert summary['counts']['invoice_items'] == 1
+    assert summary['counts']['trainings'] >= 1
+    # Opening and cancelling the summary has no side effects.
+    assert len(db.list_profiles(database)) == 2
+    request(client, 'PUT', '/api/profiles/1', body={'name': 'Renamed'})
+    request(client, 'DELETE', '/api/profiles/1', body=summary, expected=422)
+    summary = request(client, 'GET', '/api/profiles/1/deletion')
+    result = request(client, 'DELETE', '/api/profiles/1', body=summary)
+    assert result == {'profiles': [{'id': second, 'name': 'Keep'}], 'retained_documents': 0}
+    assert not (documents / invoices[0]['pdf_path']).exists()
+    assert (documents / invoices[1]['pdf_path']).read_bytes() == keep
+    assert foreign.read_bytes() == b'foreign'
+    assert archive.read_bytes() == archive_bytes
+    db.initialize_database(database)
+    assert db.list_profiles(database) == [{'id': second, 'name': 'Keep'}]
+    request(client, 'GET', '/api/settings', 1, expected=404)
+    last = request(client, 'GET', f'/api/profiles/{second}/deletion')
+    assert last['last_profile']
+    request(client, 'DELETE', f'/api/profiles/{second}', body=last, expected=422)
+    third = request(client, 'POST', '/api/profiles', body={'name': 'Temporary'}, expected=201)['id']
+    request(client, 'DELETE', f'/api/profiles/{third}', body=request(client, 'GET', f'/api/profiles/{third}/deletion'))
+    fourth = request(client, 'POST', '/api/profiles', body={'name': 'New'}, expected=201)['id']
+    assert fourth > third
+    with db.get_connection(database) as connection:
+        assert not connection.execute('PRAGMA foreign_key_check').fetchall()
+        for table in db.PROFILE_DELETE_TABLES:
+            assert not connection.execute(f'SELECT 1 FROM {table} WHERE organization_id=1').fetchone()
+
+
+def test_profile_delete_cleanup_failure_leaves_unreferenced_file(environment, monkeypatch):
+    from backend.document_storage import DocumentStore
+    client, database, documents = environment
+    request(client, 'POST', '/api/profiles', body={'name': 'Keep'}, expected=201)
+    training(client, 1, activity(client, 1))
+    invoice = request(client, 'POST', '/api/invoices', body={'year': 2025, 'month': 1}, expected=201)
+    summary = request(client, 'GET', '/api/profiles/1/deletion')
+    def fail(*args, **kwargs):
+        raise PermissionError('locked')
+    monkeypatch.setattr(DocumentStore, 'delete', fail)
+    assert request(client, 'DELETE', '/api/profiles/1', body=summary)['retained_documents'] == 1
+    assert (documents / invoice['pdf_path']).exists()
+    assert db.list_profiles(database) == [{'id': 2, 'name': 'Keep'}]
+
+
+def test_profile_delete_database_failure_rolls_back_before_file_cleanup(environment):
+    client, database, documents = environment
+    request(client, 'POST', '/api/profiles', body={'name': 'Keep'}, expected=201)
+    training(client, 1, activity(client, 1))
+    invoice = request(client, 'POST', '/api/invoices', body={'year': 2025, 'month': 1}, expected=201)
+    pdf = (documents / invoice['pdf_path']).read_bytes()
+    summary = request(client, 'GET', '/api/profiles/1/deletion')
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TRIGGER fail_profile_delete BEFORE DELETE ON organizations BEGIN SELECT RAISE(ABORT, 'injected'); END")
+    request(client, 'DELETE', '/api/profiles/1', body=summary, expected=409)
+    assert request(client, 'GET', '/api/profiles/1/deletion') == summary
+    assert (documents / invoice['pdf_path']).read_bytes() == pdf

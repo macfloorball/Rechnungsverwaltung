@@ -58,7 +58,9 @@ def test_contact_migration_preserves_existing_data(environment):
         'invoice_snapshot_json': '{"recipient_name":"Legacy"}', 'total_amount_cents': 0}, [], database)
     before = db.get_invoice(invoice_id, database)
     with sqlite3.connect(database) as connection:
-        connection.execute('DELETE FROM schema_migrations WHERE version = 10')
+        connection.execute('DROP TABLE invoice_number_retired')
+        connection.execute('DROP TABLE profile_identifiers')
+        connection.execute('DELETE FROM schema_migrations WHERE version >= 10')
         connection.execute('ALTER TABLE organizations DROP COLUMN recipient_salutation')
         connection.execute('ALTER TABLE organizations DROP COLUMN recipient_contact_name')
     db.initialize_database(database)
