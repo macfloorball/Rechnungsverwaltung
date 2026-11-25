@@ -43,7 +43,7 @@ def test_invoice_snapshot_preview_and_last_page(environment):
     request(client, 'POST', '/api/organization/signature', body={'data_base64': png()})
     identifier = activity(client, 1)
     training(client, 1, identifier)
-    payload = {'year': 2025, 'month': 1, 'invoice_date': '2025-01-31', 'signature': {'enabled': True, 'x_mm': 35, 'y_mm': 260, 'width_mm': 40}}
+    payload = {'render_pdf': True, 'year': 2025, 'month': 1, 'invoice_date': '2025-01-31', 'signature': {'enabled': True, 'x_mm': 35, 'y_mm': 260, 'width_mm': 40}}
     preview = request(client, 'POST', '/api/invoices/preview', body=payload)
     assert preview['signature']['x_mm'] == 35
     assert preview['layout'] == {'pages': 1, 'collision': False}

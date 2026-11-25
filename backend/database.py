@@ -1754,7 +1754,8 @@ def _migrate_signatures(connection):
         return
     connection.execute("BEGIN IMMEDIATE")
     try:
-        connection.execute("ALTER TABLE organizations ADD COLUMN signature_json TEXT")
+        if "signature_json" not in {row[1] for row in connection.execute("PRAGMA table_info(organizations)")}:
+            connection.execute("ALTER TABLE organizations ADD COLUMN signature_json TEXT")
         connection.execute("INSERT INTO schema_migrations(version) VALUES (13)")
         connection.commit()
     except Exception:

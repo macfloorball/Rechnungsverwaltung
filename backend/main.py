@@ -1,4 +1,4 @@
-from backend.models import SignatureLayout, SignatureUpload
+from backend.models import SignatureLayout, SignatureUpload, SignatureRevision
 from backend.signatures import decode_png, validate_signature
 import calendar
 import base64
@@ -704,18 +704,20 @@ def preview_invoice(
                 raise HTTPException(422, str(error)) from error
     organization = _with_invoice_signature(organization, payload.signature)
     signature = json.loads(organization.get("signature_json") or "null")
-    layout = {}
-    try:
-        pdf = render_invoice_pdf(payload.year, payload.month, invoice_date,
-            _pdf_lines(items), total_amount_cents, _invoice_pdf_details(organization, proposed or ""), layout)
-    except ValueError as error:
-        raise HTTPException(422, str(error)) from error
+    pdf_preview = {}
+    if payload.render_pdf:
+        layout = {}
+        try:
+            pdf = render_invoice_pdf(payload.year, payload.month, invoice_date,
+                _pdf_lines(items), total_amount_cents, _invoice_pdf_details(organization, proposed or ""), layout)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        pdf_preview = {"pdf_base64": base64.b64encode(pdf).decode(), "layout": layout}
     return {
         "invoice_date": invoice_date.isoformat(),
         "invoice_number": proposed,
         "signature": signature,
-        "pdf_base64": base64.b64encode(pdf).decode(),
-        "layout": layout,
+        **pdf_preview,
         "numbering": numbering,
         "numbering_mode": "manual" if payload.invoice_number else "automatic",
         "tax_id": organization.get("tax_id"),
@@ -1036,7 +1038,7 @@ def _revise_invoice(invoice_id, payload, database_path, invoice_directory, signa
         signature = json.loads(snapshot.get("signature_json") or "null")
         if not signature:
             raise HTTPException(422, "Diese Rechnung enthält keinen gespeicherten Unterschriftenstand.")
-        signature.update(signature_override.model_dump())
+        signature.update(signature_override.model_dump(include=set(SignatureLayout.model_fields)))
         try:
             validate_signature(signature)
         except ValueError as error:
@@ -1298,12 +1300,37 @@ def saved_invoice_signature(invoice_id: int, database_path: DatabasePath):
             "invoice_number": invoice["invoice_number"], "pdf_path": invoice["pdf_path"]}
 
 
+@app.post("/api/invoices/{invoice_id}/signature/preview")
+def preview_saved_signature(invoice_id: int, payload: SignatureLayout, database_path: DatabasePath):
+    invoice = get_invoice(invoice_id, database_path)
+    if not invoice or invoice["is_preview"]:
+        raise HTTPException(404, "Rechnung wurde nicht gefunden.")
+    snapshot = json.loads(invoice["invoice_snapshot_json"] or "{}")
+    signature = json.loads(snapshot.get("signature_json") or "null")
+    if not signature:
+        raise HTTPException(422, "Diese Rechnung enthält keinen gespeicherten Unterschriftenstand.")
+    signature.update(payload.model_dump())
+    try:
+        validate_signature(signature)
+        organization = {**snapshot, "signature_json": json.dumps(signature),
+                        "logo_data": invoice["logo_snapshot"], "logo_media_type": invoice["logo_media_type"]}
+        layout = {}
+        content = render_invoice_pdf(invoice["year"], invoice["month"], date.fromisoformat(invoice["invoice_date"]),
+            _pdf_lines(invoice["items"]), invoice["total_amount_cents"],
+            _invoice_pdf_details(organization, invoice["invoice_number"]), layout)
+    except (ValueError, KeyError) as error:
+        raise HTTPException(422, "Der gespeicherte Rechnungsstand oder die Position ist ungültig.") from error
+    return {"signature": signature, "pdf_base64": base64.b64encode(content).decode(), "layout": layout}
+
+
 @app.put("/api/invoices/{invoice_id}/signature")
-def revise_saved_signature(invoice_id: int, payload: SignatureLayout, database_path: DatabasePath,
+def revise_saved_signature(invoice_id: int, payload: SignatureRevision, database_path: DatabasePath,
                            invoice_directory: InvoiceDirectory):
     invoice = get_invoice(invoice_id, database_path)
     if not invoice or invoice["is_preview"]:
         raise HTTPException(404, "Rechnung wurde nicht gefunden.")
+    if invoice["pdf_path"] != payload.expected_pdf_path:
+        raise HTTPException(409, "Die Rechnung wurde zwischenzeitlich geändert. Bitte erneut öffnen.")
     return _revise_invoice(invoice_id, InvoiceNumberCorrection(invoice_number=invoice["invoice_number"],
         expected_invoice_number=invoice["invoice_number"], confirmed=True), database_path,
         invoice_directory, payload)

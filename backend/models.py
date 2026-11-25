@@ -214,11 +214,16 @@ class SignatureLayout(APIModel):
     width_mm: float = Field(default=50, ge=10, le=150, allow_inf_nan=False)
 
 
+class SignatureRevision(SignatureLayout):
+    expected_pdf_path: str
+
+
 class SignatureUpload(APIModel):
     data_base64: str = Field(min_length=1, max_length=2_800_000)
 
 
 class InvoiceCreate(InvoicePeriod):
+    render_pdf: bool = False
     signature: SignatureLayout | None = None
     invoice_date: date | None = None
     invoice_number: str | None = Field(default=None, max_length=50)

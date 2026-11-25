@@ -306,6 +306,10 @@ function renderInvoices(rows, emptyMessage, invoices) {
     } else {
       actions.append(element("span", "Kein gespeichertes PDF vorhanden"));
     }
+    const signatureButton = element('button', 'Unterschrift bearbeiten');
+    signatureButton.type = 'button'; signatureButton.className = 'secondary-button';
+    signatureButton.addEventListener('click', () => document.dispatchEvent(new CustomEvent('edit-invoice-signature', { detail: invoice.id })));
+    actions.append(signatureButton);
     const correctionButton = element("button", "Nummer korrigieren");
     correctionButton.type = "button";
     correctionButton.className = "secondary-button";
