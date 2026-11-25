@@ -148,7 +148,7 @@ async function run() {
   await switchTo(3);
   await click('#delete-profile');
   await until(()=>js(`document.querySelector('#profile-delete-dialog').open`),'delete dialog');
-  assert.match(await js(`document.querySelector('#profile-delete-summary').textContent`),/Delete me.*Rechnungen.*Positionen.*Termine/);
+  assert.match(await js(`document.querySelector('#profile-delete-summary').textContent`),/Delete me.*Termine.*Rechnungen.*PDFs/);
   assert.equal(await js('document.activeElement.id'),'cancel-profile-delete');
   await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,'profile-delete-dialog.png'),(await contents.capturePage()).toPNG());
   await click('#cancel-profile-delete');

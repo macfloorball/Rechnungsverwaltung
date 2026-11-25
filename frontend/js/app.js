@@ -1,3 +1,4 @@
+import { initializeProfileArchive } from "./profile-archive.js";
 import { initializeSavedSignatures } from "./signature-preview.js";
 import { initializeSignatures } from "./signatures.js";
 import { initializeProfiles } from "./profiles.js";
@@ -15,6 +16,7 @@ initializeInvoicePreview();
 initializeSettings();
 initializeSignatures();
 initializeSavedSignatures();
+initializeProfileArchive();
 initializeDesktopUpdates();
 }
 

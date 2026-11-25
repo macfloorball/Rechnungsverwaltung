@@ -18,6 +18,7 @@ DATABASE_PATH = PROJECT_ROOT / "data" / "ttc.db"
 
 TABLE_COLUMNS = {
     "organizations": {
+        "is_archived",
         "signature_json",
         "profile_name",
         "name",
@@ -163,7 +164,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -374,6 +375,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_profile_identifiers,
             _migrate_invoice_number_retired,
             _migrate_signatures,
+            _migrate_profile_archive,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -1654,7 +1656,7 @@ def _migrate_profiles(connection):
 
 def list_profiles(database_path):
     with get_connection(database_path) as connection:
-        return [{'id': row[0], 'name': row[1]} for row in connection.execute('SELECT id, profile_name FROM organizations ORDER BY id')]
+        return [{'id': row[0], 'name': row[1]} for row in connection.execute('SELECT id, profile_name FROM organizations WHERE is_archived=0 ORDER BY id')]
 
 
 def create_profile(name, database_path):
@@ -1668,7 +1670,7 @@ def create_profile(name, database_path):
 
 def rename_profile(identifier, name, database_path):
     with get_connection(database_path) as connection:
-        return connection.execute('UPDATE organizations SET profile_name=? WHERE id=?', (name, identifier)).rowcount == 1
+        return connection.execute('UPDATE organizations SET profile_name=? WHERE id=? AND is_archived=0', (name, identifier)).rowcount == 1
 
 
 def _migrate_recipient_contact(connection: sqlite3.Connection) -> None:
@@ -1708,18 +1710,18 @@ def profile_deletion_summary(identifier, database_path, connection=None):
     if connection is None:
         with get_connection(database_path) as connection:
             return profile_deletion_summary(identifier, database_path, connection)
-    row = connection.execute("SELECT profile_name FROM organizations WHERE id=?", (identifier,)).fetchone()
+    row = connection.execute("SELECT profile_name FROM organizations WHERE id=? AND is_archived=0", (identifier,)).fetchone()
     if row is None:
         raise RecordNotFoundError("Profil wurde nicht gefunden")
     counts = {table: connection.execute(f"SELECT COUNT(*) FROM {table} WHERE organization_id=?", (identifier,)).fetchone()[0]
               for table in PROFILE_DELETE_TABLES}
     return {"id": identifier, "name": row[0], "counts": counts,
-            "last_profile": connection.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] <= 1}
+            "last_profile": connection.execute("SELECT COUNT(*) FROM organizations WHERE is_archived=0").fetchone()[0] <= 1}
 
 
 @contextmanager
 def delete_profile_transaction(identifier, expected, database_path):
-    """Keep writers out through selection and deletion; files are cleaned after commit."""
+    """Archive finalized records and remove active working data atomically."""
     with get_connection(database_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
         summary = profile_deletion_summary(identifier, database_path, connection)
@@ -1731,9 +1733,15 @@ def delete_profile_transaction(identifier, expected, database_path):
         connection.row_factory = sqlite3.Row
         invoices = [dict(row) for row in connection.execute("SELECT * FROM invoices WHERE organization_id=?", (identifier,))]
         yield invoices
+        # Keep finalized invoices and their independent snapshots. Detach only
+        # the live training links before removing the profile's working data.
+        connection.execute("DELETE FROM invoices WHERE organization_id=? AND is_preview=1", (identifier,))
+        connection.execute("UPDATE invoice_items SET training_id=NULL WHERE organization_id=?", (identifier,))
         for table in PROFILE_DELETE_TABLES:
-            connection.execute(f"DELETE FROM {table} WHERE organization_id=?", (identifier,))
-        connection.execute("DELETE FROM organizations WHERE id=?", (identifier,))
+            if table not in {"invoices", "invoice_items"}:
+                connection.execute(f"DELETE FROM {table} WHERE organization_id=?", (identifier,))
+        connection.execute("UPDATE organizations SET is_archived=1, signature_json=NULL, logo_data=NULL, logo_path=NULL, logo_media_type=NULL, logo_enabled=0 WHERE id=?", (identifier,))
+
 
 
 def _migrate_invoice_number_retired(connection):
@@ -1757,6 +1765,33 @@ def _migrate_signatures(connection):
         if "signature_json" not in {row[1] for row in connection.execute("PRAGMA table_info(organizations)")}:
             connection.execute("ALTER TABLE organizations ADD COLUMN signature_json TEXT")
         connection.execute("INSERT INTO schema_migrations(version) VALUES (13)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def list_archived_profiles(database_path):
+    with get_connection(database_path) as connection:
+        return [{"id": row[0], "name": row[1], "invoices": row[2]} for row in connection.execute(
+            "SELECT o.id, o.profile_name, COUNT(i.id) FROM organizations o LEFT JOIN invoices i ON i.organization_id=o.id AND i.is_preview=0 WHERE o.is_archived=1 GROUP BY o.id ORDER BY o.id")]
+
+
+def _migrate_profile_archive(connection):
+    if get_schema_version(connection) != 13:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        if "is_archived" not in {row[1] for row in connection.execute("PRAGMA table_info(organizations)")}:
+            connection.execute("ALTER TABLE organizations ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0 CHECK(is_archived IN (0,1))")
+        # Enforce read-only archives even for writes that obtained a profile
+        # context just before deletion or for direct local database callers.
+        for table in PROFILE_DELETE_TABLES:
+            for operation in ("INSERT", "UPDATE", "DELETE"):
+                ref = "OLD" if operation == "DELETE" else "NEW"
+                connection.execute(f"CREATE TRIGGER IF NOT EXISTS archive_{table}_{operation.lower()} BEFORE {operation} ON {table} WHEN EXISTS(SELECT 1 FROM organizations WHERE id={ref}.organization_id AND is_archived=1) BEGIN SELECT RAISE(ABORT, 'Archivierte Profile sind schreibgeschützt'); END")
+        connection.execute("CREATE TRIGGER IF NOT EXISTS archive_organization_immutable BEFORE UPDATE ON organizations WHEN OLD.is_archived=1 BEGIN SELECT RAISE(ABORT, 'Archivierte Profile sind schreibgeschützt'); END")
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (14)")
         connection.commit()
     except Exception:
         connection.rollback()

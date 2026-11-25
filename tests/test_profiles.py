@@ -248,7 +248,10 @@ def test_profile_delete_summary_isolation_restart_and_id_history(environment, tm
     summary = request(client, 'GET', '/api/profiles/1/deletion')
     result = request(client, 'DELETE', '/api/profiles/1', body=summary)
     assert result == {'profiles': [{'id': second, 'name': 'Keep'}], 'retained_documents': 0}
-    assert not (documents / invoices[0]['pdf_path']).exists()
+    assert (documents / invoices[0]['pdf_path']).exists()
+    archived = request(client, 'GET', '/api/archived-profiles')
+    assert archived == [{'id': 1, 'name': 'Renamed', 'invoices': 1}]
+    assert request(client, 'GET', '/api/archived-profiles/1/invoices')[0]['id'] == invoices[0]['id']
     assert (documents / invoices[1]['pdf_path']).read_bytes() == keep
     assert foreign.read_bytes() == b'foreign'
     assert archive.read_bytes() == archive_bytes
@@ -264,11 +267,11 @@ def test_profile_delete_summary_isolation_restart_and_id_history(environment, tm
     assert fourth > third
     with db.get_connection(database) as connection:
         assert not connection.execute('PRAGMA foreign_key_check').fetchall()
-        for table in db.PROFILE_DELETE_TABLES:
+        for table in set(db.PROFILE_DELETE_TABLES) - {"invoices", "invoice_items"}:
             assert not connection.execute(f'SELECT 1 FROM {table} WHERE organization_id=1').fetchone()
 
 
-def test_profile_delete_cleanup_failure_leaves_unreferenced_file(environment, monkeypatch):
+def test_profile_delete_keeps_referenced_pdf_without_filesystem_cleanup(environment, monkeypatch):
     from backend.document_storage import DocumentStore
     client, database, documents = environment
     request(client, 'POST', '/api/profiles', body={'name': 'Keep'}, expected=201)
@@ -278,12 +281,12 @@ def test_profile_delete_cleanup_failure_leaves_unreferenced_file(environment, mo
     def fail(*args, **kwargs):
         raise PermissionError('locked')
     monkeypatch.setattr(DocumentStore, 'delete', fail)
-    assert request(client, 'DELETE', '/api/profiles/1', body=summary)['retained_documents'] == 1
+    assert request(client, 'DELETE', '/api/profiles/1', body=summary)['retained_documents'] == 0
     assert (documents / invoice['pdf_path']).exists()
     assert db.list_profiles(database) == [{'id': 2, 'name': 'Keep'}]
 
 
-def test_profile_delete_database_failure_rolls_back_before_file_cleanup(environment):
+def test_profile_delete_database_failure_rolls_back_before_archiving(environment):
     client, database, documents = environment
     request(client, 'POST', '/api/profiles', body={'name': 'Keep'}, expected=201)
     training(client, 1, activity(client, 1))
@@ -291,7 +294,7 @@ def test_profile_delete_database_failure_rolls_back_before_file_cleanup(environm
     pdf = (documents / invoice['pdf_path']).read_bytes()
     summary = request(client, 'GET', '/api/profiles/1/deletion')
     with sqlite3.connect(database) as connection:
-        connection.execute("CREATE TRIGGER fail_profile_delete BEFORE DELETE ON organizations BEGIN SELECT RAISE(ABORT, 'injected'); END")
+        connection.execute("CREATE TRIGGER fail_profile_delete BEFORE UPDATE OF is_archived ON organizations BEGIN SELECT RAISE(ABORT, 'injected'); END")
     request(client, 'DELETE', '/api/profiles/1', body=summary, expected=409)
     assert request(client, 'GET', '/api/profiles/1/deletion') == summary
     assert (documents / invoice['pdf_path']).read_bytes() == pdf

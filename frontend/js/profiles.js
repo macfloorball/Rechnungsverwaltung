@@ -175,7 +175,7 @@ export async function initializeProfiles() {
       if (!response.ok) throw new Error(data.detail || 'Löschübersicht konnte nicht geladen werden.');
       deletion = data;
       const c = data.counts;
-      document.querySelector('#profile-delete-summary').textContent = `Profil „${data.name}“: ${c.invoices} Rechnungen einschließlich Vorschauen, ${c.invoice_items} Positionen, ${c.trainings} Termine, ${c.weekly_plan} Wochenplaneinträge, ${c.weekly_plan_months} Monatsmarker, ${c.activity_types} Tätigkeiten, ${c.invoice_counters} Jahresnummernkreise und ${c.invoice_number_legacy_floors} Bestandsgrenzen, ${c.invoice_number_retired} Löschvermerke für Rechnungsnummern sowie eindeutig zugehörige gespeicherte PDFs werden gelöscht.`;
+      document.querySelector('#profile-delete-summary').textContent = `Profil „${data.name}“ aus der aktiven Auswahl entfernen: ${c.trainings} Termine, ${c.weekly_plan} Wochenplaneinträge und ${c.activity_types} Tätigkeiten sowie die Profilunterschrift werden gelöscht. Bereits fertiggestellte Rechnungen einschließlich Positionen, Unterschriftenständen und PDFs bleiben im schreibgeschützten Archiv unter Verwaltung / App-Einstellungen → Gelöschte Profile erhalten. Rechnungsvorschauen werden verworfen.`;
       deleteError.textContent = data.last_profile ? 'Das letzte Profil kann nicht gelöscht werden. Lege zuerst ein weiteres Profil an.' : '';
       confirmDelete.disabled = data.last_profile;
       deleteDialog.showModal();

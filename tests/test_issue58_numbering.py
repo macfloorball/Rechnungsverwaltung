@@ -208,7 +208,9 @@ def test_corrected_documents_isolate_profiles_and_support_profile_deletion(envir
     assert (restored / 'documents' / changed_again['pdf_path']).exists()
     summary = request(client, 'GET', f'/api/profiles/{second}/deletion')
     request(client, 'DELETE', f'/api/profiles/{second}', body=summary)
-    assert not (documents / changed_again['pdf_path']).exists()
+    assert (documents / changed_again['pdf_path']).exists()
+    archived = request(client, 'GET', f'/api/archived-profiles/{second}/invoices')
+    assert archived[0]['pdf_path'] == changed_again['pdf_path']
     assert (documents / invoices[0]['pdf_path']).read_bytes() == before
 
 

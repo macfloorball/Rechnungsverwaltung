@@ -25,6 +25,7 @@ export class SignaturePreview {
         if (standard && this.signature) this.update(signatureLayout(standard));
       } catch (error) { this.message.textContent = error.message; }
     });
+    this.defaultsButton = defaults; this.resetButton = reset;
     const label = document.createElement('label'); label.textContent = 'Vorschauzoom';
     const zoom = document.createElement('input'); zoom.type = 'range'; zoom.min = 50; zoom.max = 150; zoom.value = 100;
     zoom.addEventListener('input', () => { this.pages.style.width = `${zoom.value}%`; }); label.append(zoom);
@@ -59,6 +60,7 @@ export class SignaturePreview {
   async render(data) {
     const version = ++this.version;
     this.signature = data.signature;
+    this.defaultsButton.disabled = this.resetButton.disabled = !this.signature;
     this.controls.set(this.signature);
     this.message.textContent = data.layout.collision ? 'Warnung: Unterschrift oder Name überschneiden sich möglicherweise mit Rechnungsinhalten. Bitte Position ändern.' : `PDF-Vorschau: ${data.layout.pages} Seite(n). Unterschrift auf der letzten Seite.`;
     const bytes = Uint8Array.from(atob(data.pdf_base64), char => char.charCodeAt(0));

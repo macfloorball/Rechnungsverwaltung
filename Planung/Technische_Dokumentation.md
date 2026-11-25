@@ -1557,8 +1557,8 @@ eine Datenbankmigration ist dafür nicht erforderlich.
 Der Umschalter **Aktives Rechnungsprofil** steht dauerhaft oberhalb der Navigation.
 **Neues Profil** legt einen leeren Arbeitsbereich mit eigenen Standardwerten an;
 Tätigkeiten, Wochenplan oder Kontaktdaten werden nicht aus dem bisherigen Profil kopiert.
-**Profil umbenennen** ändert nur den Anzeigenamen. Profillöschung ist in dieser
-Erstversion bewusst nicht vorgesehen, damit historische Belege erhalten bleiben.
+**Profil umbenennen** ändert nur den Anzeigenamen. Beim bestätigten Löschen eines
+Profils bleiben historische Belege im schreibgeschützten Rechnungsarchiv erhalten.
 
 Jedes Profil hat eigene Absender-/Empfängerdaten, Zahlungseinstellungen, Logo,
 Tätigkeiten (höchstens zehn einschließlich deaktivierter Einträge), Wochenplanung,
@@ -1713,14 +1713,15 @@ werden. Nach bestätigter Löschung des aktiven Profils lädt die Oberfläche mi
 ersten verbleibenden Profil neu. Ausstehende Schreibanfragen verhindern den
 Profilwechsel; alte Leseantworten können das neue Dokument nicht verändern.
 
-Der Backend-Abgleich der bestätigten Übersicht und das Entfernen sämtlicher
-Profilzeilen erfolgen gemeinsam unter `BEGIN IMMEDIATE`. Dateizuordnung und
-Dateiidentität werden vor dem Commit geprüft. Anschließend werden ausschließlich
-eindeutig zugehörige PDFs unter erneuter Referenzprüfung entfernt. Fehler bei der
-Bereinigung hinterlassen unreferenzierte Dateien und eine sichtbare Meldung,
-keine ungültigen Datenbankreferenzen. Fremde Dateien, gemeinsam verwendete Dateien
-und externe Sicherungen bleiben erhalten. Die Löschung ist nicht rückgängig zu
-machen; eine externe vollständige Sicherung kann separat wiederhergestellt werden.
+Seit Issue #64 erfolgen der Backend-Abgleich der bestätigten Übersicht, das Löschen
+der Arbeitsdaten und die Archivierung des Profils gemeinsam unter `BEGIN IMMEDIATE`.
+Fertige Rechnungen, deren Positionen, historische Unterschriftenstände und PDFs
+werden nicht gelöscht. Vorschauen werden verworfen, Trainingsverknüpfungen an
+Rechnungspositionen werden gelöst. Die Profilunterschrift und das Logo werden aus
+dem Profil entfernt; unabhängige Rechnungskopien bleiben erhalten. Das Archiv ist
+unter Verwaltung / App-Einstellungen zugänglich und schreibgeschützt. Andere Profile,
+fremde Dokumente und externe Sicherungen bleiben unverändert. Eine Wiederherstellung
+gelöschter Arbeitsdaten ist nur aus einer vorher erstellten vollständigen Sicherung möglich.
 
 Migration 11 ergänzt `profile_identifiers` mit SQLite-AUTOINCREMENT und übernimmt
 alle bestehenden IDs ohne Änderung an Rechnungen oder Dokumenten. Gelöschte IDs
@@ -1757,9 +1758,14 @@ bleiben erhalten und die vorhandene Sicherung vor Migration wird weiter verwende
 PNG-Daten (maximal 2 MB, 4000 × 4000 Pixel) werden nach vollständigem Dekodieren und
 PNG-Prüfung unverändert als Base64 in SQLite gespeichert. Es entstehen keine separaten
 Unterschriftendateien. Vollständige App-Sicherungen und deren Wiederherstellung
-enthalten dadurch sowohl Profilbilder als auch die Rechnungsstände. Profil-Löschungen
-folgen weiterhin der ausdrücklich bestätigten bestehenden Löschlogik einschließlich
-zugehöriger Rechnungen; zusätzliche Bilddateien müssen nicht aufgeräumt werden.
+enthalten dadurch sowohl Profilbilder als auch die Rechnungsstände. Beim bestätigten Löschen eines Profils werden dessen Arbeitsdaten und Profilbilder
+entfernt. Fertige Rechnungen mit ihren unabhängigen Unterschriftenständen und PDFs
+bleiben unter **Verwaltung / App-Einstellungen → Gelöschte Profile – Rechnungsarchiv**
+erhalten. Dort lassen sich PDFs öffnen und herunterladen; Änderungen sind gesperrt.
+Die Archivierung entfernt das Profil aus der aktiven Auswahl. Schema 14 ergänzt dazu
+`organizations.is_archived`; Datenbanktrigger verhindern auch verspätete Schreibzugriffe.
+Vorhandene Rechnungspositionen werden lediglich von gelöschten Terminen entkoppelt.
+Sicherungen enthalten das gesamte Archiv. Zusätzliche Bilddateien entstehen nicht.
 
 Fertige Rechnungen speichern Bild, Name, Aktivierungsstatus und Layout unabhängig
 im bestehenden `invoice_snapshot_json`. Profiländerungen schreiben keine PDFs um.

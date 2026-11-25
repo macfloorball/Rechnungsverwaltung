@@ -76,7 +76,7 @@ Pro Rechnungsprofil sind bis zu **zehn Tätigkeiten** mit eigenen Stundenpreisen
 
 ### Rechnungen passend zum Auftraggeber erstellen
 
-- **Getrennte Rechnungsprofile** für verschiedene Vereine und Auftraggeber, mit bestätigtem Löschen einschließlich Datenübersicht.
+- **Getrennte Rechnungsprofile** für verschiedene Vereine und Auftraggeber, mit bestätigtem Löschen einschließlich Datenübersicht; fertige Rechnungen bleiben im Archiv gelöschter Profile erhalten.
 - Eigene Absender-, Empfänger-, Steuer- und Zahlungsangaben sowie ein optionales Logo.
 - Lokale Unterschriften je Profil: PNG-Import oder Zeichnen, Position und Größe in der PDF-Vorschau bearbeiten; unabhängige Unterschriftenstände je Rechnung.
 - Jährliche Rechnungsnummern 01–12 je Profil, automatisch oder manuell mit optionalem Präfix.

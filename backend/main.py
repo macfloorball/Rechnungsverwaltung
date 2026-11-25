@@ -1,3 +1,4 @@
+from backend.database import list_archived_profiles
 from dataclasses import replace
 from backend.models import SignatureLayout, SignatureUpload, SignatureRevision
 from backend.signatures import decode_png, validate_signature
@@ -148,7 +149,8 @@ def get_profile_database_path(request: Request, database_path: Annotated[Path, D
     if len(raw) > 19 or not raw.isascii() or not raw.isdigit() or not 1 <= int(raw) <= 9223372036854775807:
         raise HTTPException(status_code=422, detail="Ungültige Profil-ID")
     identifier = int(raw)
-    if get_organization(database_path, identifier) is None:
+    organization = get_organization(database_path, identifier)
+    if organization is None or organization.get("is_archived"):
         raise HTTPException(status_code=404, detail="Profil wurde nicht gefunden")
     return ProfileDatabasePath(database_path, identifier)
 
@@ -303,32 +305,11 @@ def get_profile_deletion(identifier: int, database_path: Annotated[Path, Depends
 
 @app.delete("/api/profiles/{identifier}")
 def remove_profile(identifier: int, payload: ProfileDeleteConfirmation,
-                   database_path: Annotated[Path, Depends(get_database_path)],
-                   invoice_directory: InvoiceDirectory):
-    selected = []
-    retained = 0
-    with document_operation("inspect"):
-        documents = DocumentStore(invoice_directory)
-    with delete_profile_transaction(identifier, payload.model_dump(), database_path) as invoices:
-        for invoice in invoices:
-            if not invoice["pdf_path"]:
-                continue
-            try:
-                reference = get_owned_invoice_document(invoice, database_path)
-                selected.append((reference, documents.get_identity(reference)))
-            except FileNotFoundError:
-                pass
-            except (ValueError, OSError):
-                retained += 1
-    # The committed deletion leaves no dangling database references even if a
-    # filesystem operation fails. Never delete an unverified or newly owned file.
-    for reference, identity in selected:
-        try:
-            with invoice_document_deletion_guard(reference, database_path):
-                documents.delete(reference, expected=identity, missing_ok=True)
-        except (OSError, ValueError, InvoiceDeletionConflictError, DatabaseAccessError):
-            retained += 1
-    return {"profiles": list_profiles(database_path), "retained_documents": retained}
+                   database_path: Annotated[Path, Depends(get_database_path)]):
+    with delete_profile_transaction(identifier, payload.model_dump(), database_path):
+        pass
+    return {"profiles": list_profiles(database_path), "retained_documents": 0}
+
 
 
 @app.get("/api/health")
@@ -1345,6 +1326,30 @@ def revise_saved_signature(invoice_id: int, payload: SignatureRevision, database
     return _revise_invoice(invoice_id, InvoiceNumberCorrection(invoice_number=invoice["invoice_number"],
         expected_invoice_number=invoice["invoice_number"], confirmed=True), database_path,
         invoice_directory, payload)
+
+
+def _archived_database(identifier, database_path):
+    organization = get_organization(database_path, identifier)
+    if organization is None or not organization.get("is_archived"):
+        raise HTTPException(404, "Archiviertes Profil wurde nicht gefunden.")
+    return ProfileDatabasePath(database_path, identifier)
+
+
+@app.get("/api/archived-profiles")
+def archived_profiles(database_path: Annotated[Path, Depends(get_database_path)]):
+    return list_archived_profiles(database_path)
+
+
+@app.get("/api/archived-profiles/{identifier}/invoices")
+def archived_invoices(identifier: int, database_path: Annotated[Path, Depends(get_database_path)]):
+    return list_invoices(_archived_database(identifier, database_path))
+
+
+@app.get("/api/archived-profiles/{identifier}/invoices/{invoice_id}/pdf")
+def archived_invoice_pdf(identifier: int, invoice_id: int,
+                         database_path: Annotated[Path, Depends(get_database_path)],
+                         invoice_directory: InvoiceDirectory):
+    return get_invoice_pdf(invoice_id, _archived_database(identifier, database_path), invoice_directory)
 
 
 app.mount(

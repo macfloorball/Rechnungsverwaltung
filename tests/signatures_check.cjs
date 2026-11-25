@@ -41,7 +41,9 @@ async function run() {
   await js('document.querySelector("[data-draw]").click()');
   async function drag(selector, dx, dy) {
     win.focus(); await pause();
-    const box = await js(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2, width:r.width, height:r.height, hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.className}})()`);
+    await js(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);
+    await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const box = await js(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
     const x=Math.round(box.x), y=Math.round(box.y);
     contents.sendInputEvent({type:'mouseMove',x,y});
     contents.sendInputEvent({type:'mouseDown',x,y,button:'left',clickCount:1}); await pause();

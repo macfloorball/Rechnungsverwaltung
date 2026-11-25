@@ -34,3 +34,12 @@ test('profile PDF handoff accepts only one explicit positive profile ID',()=>{
     assert.equal(invoicePDFURL(origin+'api/invoices/12/pdf'+query,origin),null);
   }
 });
+
+test('archived invoices have narrowly scoped local PDF links', () => {
+  const origin = 'http://127.0.0.1:8000/';
+  const url = origin + 'api/archived-profiles/2/invoices/12/pdf';
+  assert.equal(invoicePDFURL(url, origin), url);
+  for (const suffix of ['api/archived-profiles/0/invoices/12/pdf','api/archived-profiles/2/invoices/0/pdf','api/archived-profiles/2/invoices/12/pdf?redirect=evil','api/archived-profiles/2/invoices/12/signature']) {
+    assert.equal(invoicePDFURL(origin + suffix, origin), null);
+  }
+});
