@@ -110,6 +110,9 @@ async function run() {
   async function selectInvoiceMonth(year, month) {
     await until(() => js('document.querySelector("#calendar").getAttribute("aria-busy") === "false"'), "calendar settled before test month selection");
     await js(`document.dispatchEvent(new CustomEvent('calendar-month-changed', {detail:{year:${year},month:${month}}}))`);
+    await js(`if (![...document.querySelector('#archive-year').options].some(option=>option.value==='${year}')) document.querySelector('#archive-year').add(new Option('${year}','${year}'));
+      document.querySelector('#archive-year').value='${year}';document.querySelector('#archive-year').dispatchEvent(new Event('change'));
+      document.querySelector('#archive-month').value='${month}';document.querySelector('#archive-month').dispatchEvent(new Event('change'));`);
   }
   const origin = new URL('/', contents.getURL()).href;
   const directory = process.env.TTC_DOCUMENT_DIRECTORY || path.join(process.env.TTC_DATA_DIRECTORY, 'documents');
@@ -517,6 +520,9 @@ async function run() {
   assert.match(url, /\/api\/invoices\/[1-9]\d*\/pdf\?profile_id=1$/);
   const invoiceId = Number(new URL(url).pathname.split('/')[3]);
   // The archive must update in the same renderer, without reload or restart.
+  await js(`if (![...document.querySelector('#archive-year').options].some(option=>option.value==='2020')) document.querySelector('#archive-year').add(new Option('2020','2020'));
+    document.querySelector('#archive-year').value='2020';document.querySelector('#archive-year').dispatchEvent(new Event('change'));
+    document.querySelector('#archive-month').value='1';document.querySelector('#archive-month').dispatchEvent(new Event('change'));`);
   await until(() => js(`Boolean(document.querySelector('#saved-invoices-rows a[href="/api/invoices/${invoiceId}/pdf?profile_id=1"][target=_blank]'))`), 'archive immediately after finalization');
   assert.equal(await js('document.querySelector("#create-invoice").getAttribute("aria-busy")'), 'false');
   assert.equal(await js('document.querySelector("#create-invoice").textContent'), 'Rechnung gespeichert');
@@ -623,9 +629,11 @@ async function run() {
   assert.equal(await js('window.__confirmCount'), 2);
   assert.deepEqual(Buffer.from(await (await fetch(url)).arrayBuffer()), pdf);
   assert.equal((await (await fetch(new URL('/api/organization/settings', origin))).json()).next_invoice_number, numberBeforeDelete);
+  await js(`window.__deletionFinished=false;document.addEventListener('invoice-numbering-changed',()=>{window.__deletionFinished=true;},{once:true});`);
   await js(`window.confirm = () => { window.__confirmCount++; return true; };
     document.querySelector('[data-delete-invoice="${invoiceId}"]').click()`);
   await until(() => js(`!document.querySelector('[data-delete-invoice="${invoiceId}"]')`), 'confirmed invoice deletion');
+  await until(() => js('window.__deletionFinished'), 'deletion refresh completed');
   assert.equal(await js('window.__confirmCount'), 3);
   assert.equal(await js('document.querySelector("#saved-invoices-error").hidden'), true);
   assert.equal((await fetch(url)).status, 404);

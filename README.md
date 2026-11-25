@@ -81,7 +81,7 @@ Pro Rechnungsprofil sind bis zu **zehn Tätigkeiten** mit eigenen Stundenpreisen
 - Lokale Unterschriften je Profil: PNG-Import oder Zeichnen, Position und Größe in der PDF-Vorschau bearbeiten; unabhängige Unterschriftenstände je Rechnung.
 - Jährliche Rechnungsnummern 01–12 je Profil, automatisch oder manuell mit optionalem Präfix.
 - Lückenprüfung und ausdrückliche Nummernkorrektur mit neuem PDF aus den gespeicherten Rechnungsangaben.
-- Gespeicherte Monatsrechnungen als PDF öffnen und herunterladen.
+- Eigenes Rechnungsarchiv mit Abrechnungsjahr, optionalem Monatsfilter und Suche nach Rechnungsnummer oder historischem Empfänger; gespeicherte PDFs öffnen und herunterladen.
 
 ### Daten sichern und mitnehmen
 

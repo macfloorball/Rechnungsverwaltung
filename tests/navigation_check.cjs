@@ -149,7 +149,7 @@ async function run() {
   await navigate('calendar');
   assert.equal(await js(`document.querySelector('#invoice-month').value`),selected);
   await js('window.fetch=window.__fetch; void 0');
-  // Real monthly final invoices: no draft in the final list, cached list filters on month changes.
+  // Final invoices remain visible when the calendar month changes.
   const [year,monthNumber]=selected.split('-').map(Number);
   const activity=(await api('/api/settings')).activities[0];
   await api('/api/trainings','POST',{training_date:`${selected}-15`,activity_type_id:activity.id,hours:1,status:'completed'});
@@ -158,11 +158,12 @@ async function run() {
   await until(()=>js(`!document.querySelector('#reload-invoices').disabled`),'draft list');
   assert.equal(await js(`document.querySelectorAll('#saved-invoices-rows tr').length`),0);
   await api('/api/invoices','POST',{year,month:monthNumber});
+  await js(`document.querySelector('#archive-year').add(new Option('${year}','${year}'));document.querySelector('#archive-year').value='${year}';`);
   await js(`document.querySelector('#reload-invoices').click()`);
   await until(()=>js(`document.querySelectorAll('#saved-invoices-rows tr').length===1`),'final list');
   await js(`document.querySelector('#next-month').click()`);
   await until(()=>js(`document.querySelector('#invoice-month').value!==${JSON.stringify(selected)}`),'next month');
-  assert.equal(await js(`document.querySelectorAll('#saved-invoices-rows tr').length`),0);
+  assert.equal(await js(`document.querySelectorAll('#saved-invoices-rows tr').length`),1);
   // Initial failures lock unloaded forms, offer retry and never blank saved records.
   await js(`window.__fetch=window.fetch;
     window.fetch=(...args)=>args[0]==='/api/settings' || args[0]==='/api/organization/settings'
