@@ -653,6 +653,27 @@ def _build_invoice_items(
     return items, total_amount_cents
 
 
+def _with_invoice_signature(organization, override):
+    organization = dict(organization)
+    signature = json.loads(organization.get("signature_json") or "null")
+    if signature:
+        if override is not None:
+            signature.update(override.model_dump())
+        signature["name"] = " ".join(filter(None, (organization.get("issuer_first_name"), organization.get("issuer_last_name"))))
+        try:
+            validate_signature(signature)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+    organization["signature_json"] = json.dumps(signature)
+    return organization
+
+
+def _pdf_lines(items):
+    return [InvoiceLine(description=item["description"], training_date=date.fromisoformat(item["training_date"]),
+        hours=Decimal(str(item["hours"])) if item["hours"] is not None else None,
+        amount_cents=item["amount_cents"], unit_rate_cents=item["unit_rate_cents"]) for item in items]
+
+
 @app.post("/api/invoices/preview")
 def preview_invoice(
     payload: InvoiceCreate,
@@ -681,9 +702,20 @@ def preview_invoice(
                 proposed, _ = select_number(connection, profile_id(database_path), invoice_date.year, payload.invoice_number)
             except NumberingError as error:
                 raise HTTPException(422, str(error)) from error
+    organization = _with_invoice_signature(organization, payload.signature)
+    signature = json.loads(organization.get("signature_json") or "null")
+    layout = {}
+    try:
+        pdf = render_invoice_pdf(payload.year, payload.month, invoice_date,
+            _pdf_lines(items), total_amount_cents, _invoice_pdf_details(organization, proposed or ""), layout)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
     return {
         "invoice_date": invoice_date.isoformat(),
         "invoice_number": proposed,
+        "signature": signature,
+        "pdf_base64": base64.b64encode(pdf).decode(),
+        "layout": layout,
         "numbering": numbering,
         "numbering_mode": "manual" if payload.invoice_number else "automatic",
         "tax_id": organization.get("tax_id"),
@@ -781,6 +813,7 @@ def _invoice_pdf_details(organization, invoice_number):
         if line
     )
     pdf_details = InvoiceDetails(
+        signature=json.loads(organization.get("signature_json") or "null"),
         contact=InvoiceContactDetails(
             recipient_lines=recipient_lines,
             sender_lines=sender_lines,
@@ -851,6 +884,7 @@ def post_invoice(
             invoice_number, sequence = select_number(connection, profile_id(database_path), invoice_date.year, payload.invoice_number)
         except NumberingError as error:
             raise HTTPException(409, str(error)) from error
+    organization = _with_invoice_signature(organization, payload.signature)
     invoice_snapshot = {
         key: value
         for key, value in organization.items()
@@ -969,13 +1003,17 @@ def post_invoice(
 @app.put("/api/invoices/{invoice_id}/number")
 def correct_invoice_number(invoice_id: int, payload: InvoiceNumberCorrection,
                            database_path: DatabasePath, invoice_directory: InvoiceDirectory):
+    return _revise_invoice(invoice_id, payload, database_path, invoice_directory)
+
+
+def _revise_invoice(invoice_id, payload, database_path, invoice_directory, signature_override=None):
     invoice = get_invoice(invoice_id, database_path)
     if invoice is None or invoice["is_preview"]:
         raise HTTPException(404, "Gespeicherte endgültige Rechnung wurde nicht gefunden")
     if invoice["invoice_number"] != payload.expected_invoice_number:
         raise HTTPException(409, "Die Rechnung wurde geändert. Bitte Archiv neu laden.")
     number = payload.invoice_number.strip()
-    if number == invoice["invoice_number"]:
+    if number == invoice["invoice_number"] and signature_override is None:
         raise HTTPException(422, "Bitte eine geänderte Rechnungsnummer eingeben.")
     try:
         invoice_date = date.fromisoformat(invoice["invoice_date"])
@@ -994,6 +1032,16 @@ def correct_invoice_number(invoice_id: int, payload: InvoiceNumberCorrection,
             raise ValueError
     except (ValueError, TypeError, KeyError):
         raise HTTPException(409, "Diese Bestandsrechnung besitzt keine vollständigen, passenden historischen Rechnungsangaben. Eine sichere PDF-Neuerzeugung ist nicht möglich; Original und Nummer bleiben erhalten.") from None
+    if signature_override is not None:
+        signature = json.loads(snapshot.get("signature_json") or "null")
+        if not signature:
+            raise HTTPException(422, "Diese Rechnung enthält keinen gespeicherten Unterschriftenstand.")
+        signature.update(signature_override.model_dump())
+        try:
+            validate_signature(signature)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        snapshot["signature_json"] = json.dumps(signature)
     snapshot["invoice_number"] = number
     organization = {"recipient_salutation": "", "recipient_contact_name": "", "tax_id": None, **snapshot, "logo_data": invoice["logo_snapshot"], "logo_media_type": invoice["logo_media_type"]}
     old_reference = None
@@ -1238,6 +1286,27 @@ def update_signature(payload: SignatureLayout, database_path: DatabasePath):
 def delete_signature(database_path: DatabasePath):
     update_organization({"signature_json": None}, database_path)
     return {"deleted": True}
+
+
+@app.get("/api/invoices/{invoice_id}/signature")
+def saved_invoice_signature(invoice_id: int, database_path: DatabasePath):
+    invoice = get_invoice(invoice_id, database_path)
+    if not invoice or invoice["is_preview"]:
+        raise HTTPException(404, "Rechnung wurde nicht gefunden.")
+    snapshot = json.loads(invoice["invoice_snapshot_json"] or "{}")
+    return {"signature": json.loads(snapshot.get("signature_json") or "null"),
+            "invoice_number": invoice["invoice_number"], "pdf_path": invoice["pdf_path"]}
+
+
+@app.put("/api/invoices/{invoice_id}/signature")
+def revise_saved_signature(invoice_id: int, payload: SignatureLayout, database_path: DatabasePath,
+                           invoice_directory: InvoiceDirectory):
+    invoice = get_invoice(invoice_id, database_path)
+    if not invoice or invoice["is_preview"]:
+        raise HTTPException(404, "Rechnung wurde nicht gefunden.")
+    return _revise_invoice(invoice_id, InvoiceNumberCorrection(invoice_number=invoice["invoice_number"],
+        expected_invoice_number=invoice["invoice_number"], confirmed=True), database_path,
+        invoice_directory, payload)
 
 
 app.mount(
