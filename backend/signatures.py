@@ -28,11 +28,6 @@ def decode_png(encoded):
         raise ValueError('Bitte eine unbeschädigte PNG-Unterschrift mit höchstens 2 MB und 4000 × 4000 Pixeln wählen.') from error
 
 
-def signature_box(signature):
-    layout = SignatureLayout.model_validate(signature)
-    return layout
-
-
 def geometry(signature):
     """Include the centred issuer name in bounds and collision tests."""
     width = signature['width_mm']
@@ -49,5 +44,6 @@ def geometry(signature):
 def validate_signature(signature):
     if signature and signature.get('data_base64'):
         SignatureLayout.model_validate({k: signature[k] for k in SignatureLayout.model_fields})
+        signature["name_width_mm"] = stringWidth(signature.get("name", ""), "Helvetica", 11) * 25.4 / 72
         geometry(signature)
     return signature

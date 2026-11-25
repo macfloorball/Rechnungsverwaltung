@@ -1,5 +1,5 @@
 import { getDocument, GlobalWorkerOptions } from '../vendor/pdfjs/pdf.mjs';
-import { signatureLayout, boundedLayout, layoutControls, signatureRequest } from './signatures.js';
+import { signatureLayout, boundedLayout, gestureLayout, layoutControls, signatureRequest } from './signatures.js';
 GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.mjs', import.meta.url).href;
 
 // The editor renders the actual ReportLab PDF. CSS dimensions are mapped to A4
@@ -46,6 +46,15 @@ export class SignaturePreview {
     this.overlay.style.top = `${s.y_mm / 297 * 100}%`;
     this.overlay.style.width = `${s.width_mm / 210 * 100}%`;
     this.overlay.style.height = `${(s.width_mm * s.image_height / s.image_width + 7) / 297 * 100}%`;
+    const svg = this.overlay.querySelector('svg');
+    if (svg) {
+      const imageHeight = s.width_mm * s.image_height / s.image_width;
+      svg.setAttribute('viewBox', `0 0 ${s.width_mm} ${imageHeight + 7}`);
+      svg.querySelector('image').setAttribute('width', s.width_mm);
+      svg.querySelector('image').setAttribute('height', imageHeight);
+      svg.querySelector('text').setAttribute('x', s.width_mm / 2);
+      svg.querySelector('text').setAttribute('y', imageHeight + 5);
+    }
   }
   async render(data) {
     const version = ++this.version;
@@ -72,21 +81,30 @@ export class SignaturePreview {
           overlay.setAttribute('role', 'group'); overlay.setAttribute('aria-label', 'Unterschrift und Name verschieben. Pfeiltasten bewegen um einen Millimeter.');
           const handle = document.createElement('button'); handle.type = 'button'; handle.className = 'signature-resize'; handle.setAttribute('aria-label', 'Unterschrift proportional vergrößern oder verkleinern');
           overlay.append(handle); wrapper.append(overlay); this.overlay = overlay; this.position();
+          let background = null;
+          if (data.background_pdf_base64) {
+            const backgroundTask = getDocument({ data: Uint8Array.from(atob(data.background_pdf_base64), char => char.charCodeAt(0)),
+              isEvalSupported: false, useSystemFonts: false,
+              standardFontDataUrl: new URL('../vendor/pdfjs/standard_fonts/', import.meta.url).href });
+            try {
+              const backgroundPdf = await backgroundTask.promise;
+              const backgroundPage = await backgroundPdf.getPage(backgroundPdf.numPages);
+              background = document.createElement('canvas'); background.width = canvas.width; background.height = canvas.height;
+              await backgroundPage.render({ canvasContext: background.getContext('2d'), viewport }).promise;
+            } finally { await backgroundTask.destroy(); }
+          }
           let drag = null;
           overlay.addEventListener('pointerdown', event => {
             if (event.pointerType === 'mouse' && event.button !== 0) return;
             event.preventDefault(); overlay.setPointerCapture(event.pointerId);
-            drag = { x: event.clientX, y: event.clientY, rect: wrapper.getBoundingClientRect(), layout: signatureLayout(this.signature), resize: event.target === handle };
+            if (background) canvas.getContext('2d').drawImage(background, 0, 0);
+            overlay.classList.add('moving');
+            drag = { x: event.clientX, y: event.clientY, rect: wrapper.getBoundingClientRect(), pointerId: event.pointerId, layout: signatureLayout(this.signature), resize: event.target === handle };
           });
           overlay.addEventListener('pointermove', event => {
-            if (!drag || !overlay.hasPointerCapture(event.pointerId)) return;
-            const dx = (event.clientX - drag.x) * 210 / drag.rect.width;
-            const dy = (event.clientY - drag.y) * 297 / drag.rect.height;
-            const next = { ...drag.layout };
-            if (drag.resize) next.width_mm += dx;
-            else { next.x_mm += dx; next.y_mm += dy; }
-            // Update the image locally immediately; render the PDF after the gesture.
-            Object.assign(this.signature, boundedLayout(this.signature, next)); this.controls.set(this.signature); this.position();
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            Object.assign(this.signature, gestureLayout(this.signature, drag, event.clientX, event.clientY));
+            this.controls.set(this.signature); this.position();
             this.message.textContent = 'Position geändert – PDF-Prüfung folgt nach dem Loslassen.';
           });
           const finish = () => { if (!drag) return; drag = null; this.changed(signatureLayout(this.signature)); };
@@ -101,11 +119,20 @@ export class SignaturePreview {
           });
           // The PDF already contains the signature. This transparent interactive
           // image is visible only while moving, avoiding a duplicate at rest.
-          const image = document.createElement('img'); image.src = `data:image/png;base64,${this.signature.data_base64}`; image.alt = '';
-          const name = document.createElement('span'); name.textContent = this.signature.name;
-          overlay.prepend(image, name);
-          overlay.addEventListener('pointerdown', () => overlay.classList.add('moving'));
-          overlay.addEventListener('pointerup', () => overlay.classList.remove('moving'));
+          const ns = 'http://www.w3.org/2000/svg';
+          const svg = document.createElementNS(ns, 'svg');
+          const s = this.signature;
+          const imageHeight = s.width_mm * s.image_height / s.image_width;
+          svg.setAttribute('viewBox', `0 0 ${s.width_mm} ${imageHeight + 7}`);
+          svg.setAttribute('aria-hidden', 'true');
+          const image = document.createElementNS(ns, 'image');
+          image.setAttribute('href', `data:image/png;base64,${s.data_base64}`);
+          image.setAttribute('width', s.width_mm); image.setAttribute('height', imageHeight);
+          const name = document.createElementNS(ns, 'text'); name.textContent = s.name;
+          name.setAttribute('x', s.width_mm / 2); name.setAttribute('y', imageHeight + 5);
+          name.setAttribute('text-anchor', 'middle'); name.setAttribute('font-size', 11 * 25.4 / 72);
+          name.setAttribute('font-family', 'SignatureHelvetica, Arial, sans-serif');
+          svg.append(image, name); overlay.prepend(svg);
         }
       }
     } finally { await loadingTask.destroy(); }
@@ -127,7 +154,9 @@ export function initializeSavedSignatures() {
       try {
         const preview = await signatureRequest(`/api/invoices/${id}/signature/preview`, 'POST', layout);
         if (requestVersion !== version || !dialog.open) return;
-        await editor.render(preview); current = layout; save.disabled = false; status.textContent = '';
+        await editor.render(preview);
+        if (requestVersion !== version) return;
+        current = layout; save.disabled = false; status.textContent = '';
       } catch (error) { if (requestVersion === version) status.textContent = error.message; }
     });
     dialog.append(save, close); dialog.showModal();

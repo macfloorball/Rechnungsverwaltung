@@ -248,3 +248,12 @@ Die Ausgabedatei muss neu sein. Fehlende bekannte Hauptnachweise führen zu
 Exitcode 1. Ein fehlerfreies Inventar bestätigt vorhandene Dateien; die
 vollständige Zuordnung nativer Unterkomponenten, erforderliche Quellangebote
 und die Freigabe zur Binärverteilung bleiben eine gesonderte Prüfung.
+
+## Lokal gebündelte PDF-Vorschau
+
+Die Offline-Vorschau verwendet **Mozilla PDF.js / pdfjs-dist 6.5.438** unter Apache-2.0.
+Quellpaket-URL und SHA-256 stehen in `frontend/vendor/pdfjs/SOURCE.txt`, der vollständige
+Lizenztext in `frontend/vendor/pdfjs/LICENSE`. Die mitgelieferten Foxit-Standardschriften
+und Liberation-Schriften besitzen eigene Hinweise unter
+`frontend/vendor/pdfjs/standard_fonts/LICENSE_FOXIT` und `LICENSE_LIBERATION`.
+Diese Dateien werden zusammen mit dem Frontend in die Desktop-Pakete übernommen.

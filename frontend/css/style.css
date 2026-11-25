@@ -1133,3 +1133,6 @@ dialog .number-correction-confirmation input {
 .signature-overlay > span { display: block; text-align: center; white-space: nowrap; font-family: Helvetica, Arial, sans-serif; font-size: .8rem; }
 .signature-resize { position: absolute; right: -7px; bottom: -7px; min-width: 14px; min-height: 14px; width: 14px; height: 14px; padding: 0; background: #286797; border: 1px solid white; cursor: nwse-resize; touch-action: none; }
 .signature-preview-editor { margin-top: 1rem; }
+@font-face { font-family: SignatureHelvetica; src: url('../vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf') format('truetype'); }
+.signature-overlay > svg { visibility: hidden; display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.signature-overlay.moving > svg { visibility: visible; }

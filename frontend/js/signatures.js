@@ -14,11 +14,25 @@ export function signatureLayout(signature) {
 }
 
 export function boundedLayout(signature, proposed) {
-  const width = Math.max(10, Math.min(150, proposed.width_mm));
-  const height = width * signature.image_height / signature.image_width + 7;
+  const ratio = signature.image_height / signature.image_width;
+  const snap = value => Math.round(value * 10) / 10;
+  const floor = value => Math.floor(value * 10) / 10;
+  const width = Math.max(10, Math.min(150, floor((297 - 7) / ratio), snap(proposed.width_mm)));
+  const height = width * ratio + 7;
+  const nameWidth = signature.name_width_mm || 0;
+  const inset = Math.max(0, (nameWidth - width) / 2);
   return { enabled: proposed.enabled, width_mm: width,
-    x_mm: Math.max(0, Math.min(210 - width, proposed.x_mm)),
-    y_mm: Math.max(0, Math.min(297 - height, proposed.y_mm)) };
+    x_mm: Math.max(Math.ceil(inset * 10) / 10, Math.min(floor(210 - width - inset), snap(proposed.x_mm))),
+    y_mm: Math.max(0, Math.min(floor(297 - height), snap(proposed.y_mm))) };
+}
+
+export function gestureLayout(signature, start, clientX, clientY) {
+  const dx = (clientX - start.x) * 210 / start.rect.width;
+  const dy = (clientY - start.y) * 297 / start.rect.height;
+  const next = { ...start.layout };
+  if (start.resize) next.width_mm += dx;
+  else { next.x_mm += dx; next.y_mm += dy; }
+  return boundedLayout(signature, next);
 }
 
 export function layoutControls(signature, changed) {
@@ -65,17 +79,25 @@ export async function initializeSignatures() {
   const image = section.querySelector('img');
   let signature = null;
   let busy = false;
-  const controls = layoutControls(null, async layout => {
-    if (busy) return;
-    return await action(async () => { signature = await signatureRequest('/api/organization/signature', 'PUT', layout); });
+  const controls = layoutControls(null, layout => {
+    if (!signature) return;
+    signature = { ...signature, ...layout };
+    message.textContent = 'Layout geändert. Bitte Profilstandard speichern.';
   });
+  const saveDefaults = document.createElement('button'); saveDefaults.type = 'button';
+  saveDefaults.className = 'primary-button'; saveDefaults.textContent = 'Profilstandard speichern';
+  saveDefaults.addEventListener('click', () => action(async () => {
+    if (signature) signature = await signatureRequest('/api/organization/signature', 'PUT', signatureLayout(signature));
+  }));
   section.insertBefore(controls.root, message);
+  section.insertBefore(saveDefaults, message);
   function display() {
     image.hidden = !signature;
     if (signature) image.src = `data:image/png;base64,${signature.data_base64}`;
     else image.removeAttribute('src');
     controls.set(signature);
     section.querySelector('[data-delete]').disabled = !signature;
+    saveDefaults.disabled = !signature;
     document.dispatchEvent(new Event('signature-profile-updated'));
   }
   async function action(callback) {
@@ -106,7 +128,7 @@ export async function initializeSignatures() {
     <div class="signature-actions"><button type="button" class="secondary-button" data-undo>Rückgängig</button><button type="button" class="secondary-button" data-clear>Leeren</button><button type="button" class="secondary-button" data-cancel>Abbrechen</button><button type="button" class="secondary-button" data-save>Unterschrift speichern</button></div><p role="status"></p>`;
   document.body.append(dialog);
   const canvas = dialog.querySelector('canvas'); const ctx = canvas.getContext('2d');
-  let strokes = [], stroke = null;
+  let strokes = [], stroke = null, activePointer = null;
   function paint() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = '#111'; ctx.fillStyle = '#111'; ctx.lineWidth = 4; ctx.lineCap = ctx.lineJoin = 'round';
@@ -117,9 +139,9 @@ export async function initializeSignatures() {
     }
   }
   function point(event) { const box = canvas.getBoundingClientRect(); return [(event.clientX - box.left) * canvas.width / box.width, (event.clientY - box.top) * canvas.height / box.height]; }
-  canvas.addEventListener('pointerdown', event => { if (busy || (event.pointerType === 'mouse' && event.button !== 0)) return; event.preventDefault(); canvas.setPointerCapture(event.pointerId); stroke = [point(event)]; strokes.push(stroke); paint(); });
-  canvas.addEventListener('pointermove', event => { if (!stroke || !canvas.hasPointerCapture(event.pointerId)) return; stroke.push(point(event)); paint(); });
-  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(name, () => { stroke = null; });
+  canvas.addEventListener('pointerdown', event => { if (busy || stroke || (event.pointerType === 'mouse' && event.button !== 0)) return; event.preventDefault(); canvas.setPointerCapture(event.pointerId); activePointer = event.pointerId; stroke = [point(event)]; strokes.push(stroke); paint(); });
+  canvas.addEventListener('pointermove', event => { if (!stroke || activePointer !== event.pointerId) return; stroke.push(point(event)); paint(); });
+  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(name, event => { if (event.pointerId === activePointer) { stroke = null; activePointer = null; } });
   section.querySelector('[data-draw]').addEventListener('click', () => { if (busy) return; strokes = []; stroke = null; paint(); dialog.querySelector('p[role=status]').textContent = ''; dialog.showModal(); });
   dialog.querySelector('[data-undo]').addEventListener('click', () => { strokes.pop(); paint(); });
   dialog.querySelector('[data-clear]').addEventListener('click', () => { strokes = []; paint(); });

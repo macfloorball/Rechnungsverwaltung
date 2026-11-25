@@ -1,3 +1,4 @@
+from dataclasses import replace
 from backend.models import SignatureLayout, SignatureUpload, SignatureRevision
 from backend.signatures import decode_png, validate_signature
 import calendar
@@ -668,6 +669,18 @@ def _with_invoice_signature(organization, override):
     return organization
 
 
+def _signature_preview_pdf(year, month, invoice_date, items, total, details):
+    layout = {}
+    lines = _pdf_lines(items)
+    content = render_invoice_pdf(year, month, invoice_date, lines, total, details, layout)
+    result = {"pdf_base64": base64.b64encode(content).decode(), "layout": layout}
+    if details.signature and details.signature.get("enabled"):
+        # An unsigned background prevents a stationary ghost image while dragging.
+        background = render_invoice_pdf(year, month, invoice_date, lines, total, replace(details, signature=None))
+        result["background_pdf_base64"] = base64.b64encode(background).decode()
+    return result
+
+
 def _pdf_lines(items):
     return [InvoiceLine(description=item["description"], training_date=date.fromisoformat(item["training_date"]),
         hours=Decimal(str(item["hours"])) if item["hours"] is not None else None,
@@ -706,13 +719,11 @@ def preview_invoice(
     signature = json.loads(organization.get("signature_json") or "null")
     pdf_preview = {}
     if payload.render_pdf:
-        layout = {}
         try:
-            pdf = render_invoice_pdf(payload.year, payload.month, invoice_date,
-                _pdf_lines(items), total_amount_cents, _invoice_pdf_details(organization, proposed or ""), layout)
+            pdf_preview = _signature_preview_pdf(payload.year, payload.month, invoice_date,
+                items, total_amount_cents, _invoice_pdf_details(organization, proposed or ""))
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
-        pdf_preview = {"pdf_base64": base64.b64encode(pdf).decode(), "layout": layout}
     return {
         "invoice_date": invoice_date.isoformat(),
         "invoice_number": proposed,
@@ -1010,6 +1021,8 @@ def correct_invoice_number(invoice_id: int, payload: InvoiceNumberCorrection,
 
 def _revise_invoice(invoice_id, payload, database_path, invoice_directory, signature_override=None):
     invoice = get_invoice(invoice_id, database_path)
+    if signature_override is not None and invoice and invoice["pdf_path"] != signature_override.expected_pdf_path:
+        raise HTTPException(409, "Die Rechnung wurde zwischenzeitlich geändert. Bitte erneut öffnen.")
     if invoice is None or invoice["is_preview"]:
         raise HTTPException(404, "Gespeicherte endgültige Rechnung wurde nicht gefunden")
     if invoice["invoice_number"] != payload.expected_invoice_number:
@@ -1314,13 +1327,11 @@ def preview_saved_signature(invoice_id: int, payload: SignatureLayout, database_
         validate_signature(signature)
         organization = {**snapshot, "signature_json": json.dumps(signature),
                         "logo_data": invoice["logo_snapshot"], "logo_media_type": invoice["logo_media_type"]}
-        layout = {}
-        content = render_invoice_pdf(invoice["year"], invoice["month"], date.fromisoformat(invoice["invoice_date"]),
-            _pdf_lines(invoice["items"]), invoice["total_amount_cents"],
-            _invoice_pdf_details(organization, invoice["invoice_number"]), layout)
+        result = _signature_preview_pdf(invoice["year"], invoice["month"], date.fromisoformat(invoice["invoice_date"]),
+            invoice["items"], invoice["total_amount_cents"], _invoice_pdf_details(organization, invoice["invoice_number"]))
     except (ValueError, KeyError) as error:
         raise HTTPException(422, "Der gespeicherte Rechnungsstand oder die Position ist ungültig.") from error
-    return {"signature": signature, "pdf_base64": base64.b64encode(content).decode(), "layout": layout}
+    return {"signature": signature, **result}
 
 
 @app.put("/api/invoices/{invoice_id}/signature")

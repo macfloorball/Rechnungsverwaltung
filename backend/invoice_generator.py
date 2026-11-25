@@ -268,7 +268,11 @@ def render_invoice_pdf(
         pdf.showPage()
         page_count += 1
         bottom = PAGE_HEIGHT - PAGE_MARGIN
-    final_y = draw_invoice_footer(pdf, total_amount_cents, bottom, details.footer)
+    def footer_page():
+        nonlocal page_count
+        pdf.showPage()
+        page_count += 1
+    final_y = draw_invoice_footer(pdf, total_amount_cents, bottom, details.footer, new_page=footer_page)
     signature = details.signature
     collision = False
     if signature and signature.get('enabled') and signature.get('data_base64'):
@@ -456,6 +460,7 @@ def draw_invoice_footer(
     total_amount_cents: int,
     table_bottom_y: float,
     details: InvoiceFooterDetails = FOOTER_DETAILS,
+    *, new_page=None,
 ) -> float:
     if total_amount_cents < 0:
         raise ValueError("Die Rechnungssumme darf nicht negativ sein")
@@ -498,7 +503,7 @@ def draw_invoice_footer(
         for paragraph in rendered
     ]
     final_y = content_top_y - sum(height + 4 for height in heights)
-    if final_y < PAGE_MARGIN:
+    if final_y < PAGE_MARGIN and new_page is None:
         raise ValueError("Die Rechnungspositionen passen nicht mit dem Footer auf eine Seite")
 
     pdf.setLineWidth(0.5)
@@ -514,6 +519,9 @@ def draw_invoice_footer(
 
     y = content_top_y
     for paragraph, height in zip(rendered, heights, strict=True):
+        if y - height < PAGE_MARGIN and new_page is not None:
+            new_page()
+            y = PAGE_HEIGHT - PAGE_MARGIN
         paragraph.drawOn(pdf, PAGE_MARGIN, y - height)
         y -= height + 4
-    return final_y
+    return y
