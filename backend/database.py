@@ -18,6 +18,7 @@ DATABASE_PATH = PROJECT_ROOT / "data" / "ttc.db"
 
 TABLE_COLUMNS = {
     "organizations": {
+        "signature_json",
         "profile_name",
         "name",
         "address",
@@ -162,7 +163,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -372,6 +373,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_recipient_contact,
             _migrate_profile_identifiers,
             _migrate_invoice_number_retired,
+            _migrate_signatures,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -1741,6 +1743,19 @@ def _migrate_invoice_number_retired(connection):
     try:
         connection.execute("CREATE TABLE invoice_number_retired (organization_id INTEGER NOT NULL REFERENCES organizations(id), year INTEGER NOT NULL CHECK(year BETWEEN 1 AND 9999), serial INTEGER NOT NULL CHECK(serial BETWEEN 1 AND 12), PRIMARY KEY(organization_id, year, serial))")
         connection.execute("INSERT INTO schema_migrations(version) VALUES (12)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def _migrate_signatures(connection):
+    if get_schema_version(connection) != 12:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute("ALTER TABLE organizations ADD COLUMN signature_json TEXT")
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (13)")
         connection.commit()
     except Exception:
         connection.rollback()

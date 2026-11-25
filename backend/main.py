@@ -1,3 +1,5 @@
+from backend.models import SignatureLayout, SignatureUpload
+from backend.signatures import decode_png, validate_signature
 import calendar
 import base64
 import binascii
@@ -241,7 +243,7 @@ def _public_organization_settings(
     return {
         key: value
         for key, value in organization.items()
-        if key not in {"logo_data", "logo_path"}
+        if key not in {"logo_data", "logo_path", "signature_json"}
     } | {"logo_available": organization["logo_data"] is not None}
 
 
@@ -1197,6 +1199,47 @@ def export_data(database_path: DatabasePath, invoice_directory: InvoiceDirectory
         raise HTTPException(503, "Export fehlgeschlagen. Dokumente, Datenbank, Zugriffsrechte und freien Speicher prüfen.") from None
 
 
+@app.get("/api/organization/signature")
+def get_signature(database_path: DatabasePath):
+    organization = get_organization(database_path)
+    return json.loads(organization.get("signature_json") or "null")
+
+
+@app.post("/api/organization/signature")
+def upload_signature(payload: SignatureUpload, database_path: DatabasePath):
+    try:
+        _, width, height = decode_png(payload.data_base64)
+        signature = {**SignatureLayout().model_dump(), "data_base64": payload.data_base64,
+                     "image_width": width, "image_height": height}
+        # Tall images start higher on the page; retain the original aspect ratio.
+        signature["y_mm"] = max(0, min(245, 290 - 50 * height / width))
+        validate_signature(signature)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    update_organization({"signature_json": json.dumps(signature)}, database_path)
+    return signature
+
+
+@app.put("/api/organization/signature")
+def update_signature(payload: SignatureLayout, database_path: DatabasePath):
+    signature = get_signature(database_path)
+    if not signature:
+        raise HTTPException(404, "Bitte zuerst eine Unterschrift hinterlegen.")
+    signature.update(payload.model_dump())
+    try:
+        validate_signature(signature)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    update_organization({"signature_json": json.dumps(signature)}, database_path)
+    return signature
+
+
+@app.delete("/api/organization/signature")
+def delete_signature(database_path: DatabasePath):
+    update_organization({"signature_json": None}, database_path)
+    return {"deleted": True}
+
+
 app.mount(
     "/",
     StaticFiles(
@@ -1205,3 +1248,5 @@ app.mount(
     ),
     name="frontend",
 )
+
+
