@@ -279,7 +279,8 @@ function renderInvoices(rows, emptyMessage, invoices) {
 
   for (const invoice of invoices) {
     const row = element("tr");
-    const month = new Date(Date.UTC(invoice.year, invoice.month - 1, 1));
+    const month = new Date(0);
+    month.setUTCFullYear(invoice.year, invoice.month - 1, 1);
     row.append(
       element("td", monthFormatter.format(month)),
       element(
@@ -287,6 +288,7 @@ function renderInvoices(rows, emptyMessage, invoices) {
         dateFormatter.format(new Date(`${invoice.invoice_date}T00:00:00Z`)),
       ),
       element("td", invoice.invoice_number || "–"),
+      element("td", invoice.recipient || "Unbekannt (kein gespeicherter Empfänger)"),
       element("td", currencyFormatter.format(invoice.total_amount_cents / 100)),
     );
 
@@ -792,29 +794,63 @@ export function initializeSettings() {
   });
 
   let invoices = [];
-  function showMonthInvoices() {
-    const [year, month] = document.querySelector("#invoice-month").value.split("-").map(Number);
-    renderInvoices(invoiceRows, invoiceEmpty, invoices.filter((invoice) => invoice.year === year && invoice.month === month));
+  const archiveYear = document.querySelector("#archive-year");
+  const archiveMonth = document.querySelector("#archive-month");
+  const archiveSearch = document.querySelector("#archive-search");
+  const invoiceStatus = document.querySelector("#saved-invoices-status");
+  const currentYear = new Date().getFullYear();
+  archiveYear.add(new Option(String(currentYear), String(currentYear)));
+  for (let month = 1; month <= 12; month++) {
+    archiveMonth.add(new Option(monthFormatter.format(new Date(Date.UTC(2000, month - 1, 1))).replace(/\s*2000/, ""), String(month)));
   }
-  document.addEventListener("calendar-month-changed", showMonthInvoices);
+  let invoicesLoaded = false;
+  function showArchiveInvoices() {
+    if (!invoicesLoaded) return;
+    const year = Number(archiveYear.value);
+    const month = Number(archiveMonth.value);
+    const query = archiveSearch.value.trim().toLocaleLowerCase("de-DE");
+    const filtered = invoices.filter(invoice => invoice.year === year
+      && (!month || invoice.month === month)
+      && (!query || [invoice.invoice_number, invoice.recipient].some(value =>
+        (value || "").toLocaleLowerCase("de-DE").includes(query))));
+    renderInvoices(invoiceRows, invoiceEmpty, filtered);
+    invoiceEmpty.textContent = query || month
+      ? "Keine Rechnungen für diese Filter gefunden."
+      : "Für dieses Abrechnungsjahr wurde noch keine endgültige Rechnung gespeichert.";
+  }
+  archiveYear.addEventListener("change", showArchiveInvoices);
+  archiveMonth.addEventListener("change", showArchiveInvoices);
+  archiveSearch.addEventListener("input", showArchiveInvoices);
   let invoiceRequest = 0;
   async function loadInvoices() {
     const request = ++invoiceRequest;
+    invoicesLoaded = false;
+    invoices = [];
+    invoiceRows.replaceChildren();
+    invoiceEmpty.hidden = true;
     invoiceError.hidden = true;
+    invoiceStatus.hidden = false;
+    invoiceRows.closest("table").setAttribute("aria-busy", "true");
     reloadInvoicesButton.disabled = true;
     try {
       const result = await requestJson("/api/invoices");
       if (request !== invoiceRequest) return;
       invoices = result;
-      showMonthInvoices();
+      const selected = Number(archiveYear.value);
+      const years = [...new Set([currentYear, selected, ...invoices.map(invoice => invoice.year)])].sort((a, b) => b - a);
+      archiveYear.replaceChildren(...years.map(year => new Option(String(year), String(year))));
+      archiveYear.value = String(selected);
+      invoicesLoaded = true;
+      showArchiveInvoices();
     } catch (error) {
       if (request !== invoiceRequest) return;
-      showMessage(
-        invoiceError,
-        error instanceof Error ? error.message : "Rechnungen konnten nicht geladen werden.",
-      );
+      showMessage(invoiceError, error instanceof Error ? error.message : "Rechnungen konnten nicht geladen werden.");
     } finally {
-      if (request === invoiceRequest) reloadInvoicesButton.disabled = false;
+      if (request === invoiceRequest) {
+        reloadInvoicesButton.disabled = false;
+        invoiceStatus.hidden = true;
+        invoiceRows.closest("table").setAttribute("aria-busy", "false");
+      }
     }
   }
 

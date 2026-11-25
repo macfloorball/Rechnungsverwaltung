@@ -3302,3 +3302,30 @@ def test_weekly_recurrence_api_validation_and_result_header(client, calendar_act
     assert set(json.loads(response.headers['X-Weekly-Plan-Sync'])) == {'added', 'removed', 'updated', 'preserved'}
     assert response.json()[0]['start_date'] == '2032-12-02'
     assert response.json()[0]['repeat_weeks'] == 2
+
+
+def test_archive_uses_billing_period_and_saved_recipient(client):
+    from backend.database import create_record
+
+    database = client.app.state.test_database_path
+    base = {"year": 2025, "month": 12, "invoice_date": "2026-01-04",
+            "invoice_number": "2026-01", "total_amount_cents": 1500, "is_preview": 0}
+    historical = create_record("invoices", base | {"invoice_snapshot_json": json.dumps({
+        "recipient_name": "Alter Verein", "recipient_contact_name": "Erika Beispiel"})}, database)
+    create_record("invoices", base | {"month": 11, "invoice_number": "2026-02",
+                                       "invoice_snapshot_json": "broken"}, database)
+    create_record("invoices", base | {"year": 2026, "is_preview": 1}, database)
+    other = client.post('/api/profiles', json={"name": "Anderes Profil"}).json()['id']
+    from backend.database import ProfileDatabasePath
+    create_record("invoices", base, ProfileDatabasePath(database, other))
+    response = client.get('/api/invoices')
+    assert response.status_code == 200
+    invoices = response.json()
+    assert len(invoices) == 2
+    assert invoices[0]['id'] == historical
+    assert invoices[0]['year'] == 2025
+    assert invoices[0]['invoice_date'].startswith('2026')
+    assert invoices[0]['recipient'] == 'Alter Verein · Erika Beispiel'
+    assert invoices[1]['recipient'] == ''
+    assert 'invoice_snapshot_json' not in invoices[0]
+    assert 'logo_snapshot' not in invoices[0]

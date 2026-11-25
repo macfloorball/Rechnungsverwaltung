@@ -214,6 +214,7 @@ button {
 
 .organization-fields input,
 .organization-fields textarea,
+.organization-fields select,
 .organization-logo-controls input[type="file"] {
   width: 100%;
   min-height: 40px;
@@ -231,6 +232,7 @@ button {
 
 .organization-fields input:focus,
 .organization-fields textarea:focus,
+.organization-fields select:focus,
 .organization-logo-controls input:focus {
   border-color: #3b82b7;
   outline: 3px solid rgb(59 130 183 / 18%);
