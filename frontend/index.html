@@ -25,6 +25,7 @@
 
 <nav class="app-navigation" aria-label="Hauptnavigation">
 <a href="#view-calendar" data-view-link="calendar" aria-current="page">Kalender / Übersicht</a>
+<a href="#view-archive" data-view-link="archive">Rechnungsarchiv</a>
 <a href="#view-invoice" data-view-link="invoice">Rechnung konfigurieren</a>
 <a href="#view-weekly" data-view-link="weekly">Wochenplan konfigurieren</a>
 <a href="#view-activities" data-view-link="activities">Tätigkeiten und Preise</a>
@@ -131,19 +132,29 @@
             <p id="invoice-create-error" class="error-message" role="alert" hidden></p>
           </div>
         </section>
+</div>
+<div id="view-archive" data-view="archive" aria-labelledby="view-archive-title" hidden>
+<h2 id="view-archive-title" class="view-title" tabindex="-1">Rechnungsarchiv</h2>
 <section class="saved-invoices-section" aria-labelledby="saved-invoices-title">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Archiv</p>
-              <h2 id="saved-invoices-title">Endgültige Rechnungen des Monats</h2>
+              <h2 id="saved-invoices-title">Gespeicherte endgültige Rechnungen</h2>
             </div>
             <button id="reload-invoices" class="secondary-button" type="button">
               Liste aktualisieren
             </button>
           </div>
+          <div class="organization-fields">
+            <label>Abrechnungsjahr <select id="archive-year"></select></label>
+            <label>Abrechnungsmonat <select id="archive-month"><option value="">Alle Monate</option></select></label>
+            <label>Suche nach Rechnungsnummer oder Empfänger <input id="archive-search" type="search" autocomplete="off"></label>
+          </div>
+          <p class="section-description">Die Zuordnung folgt dem Abrechnungsmonat, unabhängig vom Rechnungsdatum. Neueste Abrechnungsmonate zuerst. Historische Empfänger stammen aus der gespeicherten Rechnung.</p>
+          <p id="saved-invoices-status" role="status" hidden>Rechnungen werden geladen …</p>
           <p id="saved-invoices-error" class="error-message" role="alert" hidden></p>
           <p id="saved-invoices-empty" class="invoice-empty" hidden>
-            Für diesen Monat wurde noch keine endgültige Rechnung gespeichert.
+            Für dieses Abrechnungsjahr wurde noch keine endgültige Rechnung gespeichert.
           </p>
           <div class="settings-table-wrapper">
             <table class="settings-table">
@@ -152,6 +163,7 @@
                   <th scope="col">Abrechnungsmonat</th>
                   <th scope="col">Rechnungsdatum</th>
                   <th scope="col">Rechnungsnummer</th>
+                  <th scope="col">Empfänger</th>
                   <th scope="col">Gesamtbetrag</th>
                   <th scope="col">Aktion</th>
                 </tr>

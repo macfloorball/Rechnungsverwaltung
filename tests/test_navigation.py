@@ -11,7 +11,7 @@ import pytest
 
 
 @pytest.mark.skipif(os.environ.get("TTC_RUN_ELECTRON_TESTS") != "1", reason="Opt-in Electron/GUI test")
-@pytest.mark.parametrize("scenario", ["navigation", "profiles", "recurrence", "invoice_layout", "numbering"])
+@pytest.mark.parametrize("scenario", ["navigation", "profiles", "recurrence", "invoice_layout", "numbering", "archive"])
 @pytest.mark.parametrize("mode", ["development", "production"])
 def test_navigation_drafts_month_and_restart(tmp_path, mode, scenario):
     root = Path(__file__).resolve().parent.parent

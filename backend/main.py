@@ -719,10 +719,23 @@ def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
         "logo_media_type",
         "is_preview",
     }
-    return [
-        {key: value for key, value in invoice.items() if key not in private_fields}
-        for invoice in sorted_invoices
-    ]
+    result = []
+    for invoice in sorted_invoices:
+        try:
+            snapshot = json.loads(invoice["invoice_snapshot_json"] or "null")
+        except (ValueError, TypeError):
+            snapshot = None
+        recipient = ""
+        if isinstance(snapshot, dict):
+            recipient = " · ".join(
+                value.strip() for key in ("recipient_name", "recipient_contact_name")
+                if isinstance(value := snapshot.get(key), str) and value.strip()
+            )
+        result.append({
+            **{key: value for key, value in invoice.items() if key not in private_fields},
+            "recipient": recipient,
+        })
+    return result
 
 
 def _invoice_pdf_details(organization, invoice_number):
