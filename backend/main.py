@@ -1,3 +1,7 @@
+from backend.database import list_archived_profiles
+from dataclasses import replace
+from backend.models import SignatureLayout, SignatureUpload, SignatureRevision
+from backend.signatures import decode_png, validate_signature
 import calendar
 import base64
 import binascii
@@ -145,7 +149,8 @@ def get_profile_database_path(request: Request, database_path: Annotated[Path, D
     if len(raw) > 19 or not raw.isascii() or not raw.isdigit() or not 1 <= int(raw) <= 9223372036854775807:
         raise HTTPException(status_code=422, detail="Ungültige Profil-ID")
     identifier = int(raw)
-    if get_organization(database_path, identifier) is None:
+    organization = get_organization(database_path, identifier)
+    if organization is None or organization.get("is_archived"):
         raise HTTPException(status_code=404, detail="Profil wurde nicht gefunden")
     return ProfileDatabasePath(database_path, identifier)
 
@@ -241,7 +246,7 @@ def _public_organization_settings(
     return {
         key: value
         for key, value in organization.items()
-        if key not in {"logo_data", "logo_path"}
+        if key not in {"logo_data", "logo_path", "signature_json"}
     } | {"logo_available": organization["logo_data"] is not None}
 
 
@@ -300,32 +305,11 @@ def get_profile_deletion(identifier: int, database_path: Annotated[Path, Depends
 
 @app.delete("/api/profiles/{identifier}")
 def remove_profile(identifier: int, payload: ProfileDeleteConfirmation,
-                   database_path: Annotated[Path, Depends(get_database_path)],
-                   invoice_directory: InvoiceDirectory):
-    selected = []
-    retained = 0
-    with document_operation("inspect"):
-        documents = DocumentStore(invoice_directory)
-    with delete_profile_transaction(identifier, payload.model_dump(), database_path) as invoices:
-        for invoice in invoices:
-            if not invoice["pdf_path"]:
-                continue
-            try:
-                reference = get_owned_invoice_document(invoice, database_path)
-                selected.append((reference, documents.get_identity(reference)))
-            except FileNotFoundError:
-                pass
-            except (ValueError, OSError):
-                retained += 1
-    # The committed deletion leaves no dangling database references even if a
-    # filesystem operation fails. Never delete an unverified or newly owned file.
-    for reference, identity in selected:
-        try:
-            with invoice_document_deletion_guard(reference, database_path):
-                documents.delete(reference, expected=identity, missing_ok=True)
-        except (OSError, ValueError, InvoiceDeletionConflictError, DatabaseAccessError):
-            retained += 1
-    return {"profiles": list_profiles(database_path), "retained_documents": retained}
+                   database_path: Annotated[Path, Depends(get_database_path)]):
+    with delete_profile_transaction(identifier, payload.model_dump(), database_path):
+        pass
+    return {"profiles": list_profiles(database_path), "retained_documents": 0}
+
 
 
 @app.get("/api/health")
@@ -651,6 +635,39 @@ def _build_invoice_items(
     return items, total_amount_cents
 
 
+def _with_invoice_signature(organization, override):
+    organization = dict(organization)
+    signature = json.loads(organization.get("signature_json") or "null")
+    if signature:
+        if override is not None:
+            signature.update(override.model_dump())
+        signature["name"] = " ".join(filter(None, (organization.get("issuer_first_name"), organization.get("issuer_last_name"))))
+        try:
+            validate_signature(signature)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+    organization["signature_json"] = json.dumps(signature)
+    return organization
+
+
+def _signature_preview_pdf(year, month, invoice_date, items, total, details):
+    layout = {}
+    lines = _pdf_lines(items)
+    content = render_invoice_pdf(year, month, invoice_date, lines, total, details, layout)
+    result = {"pdf_base64": base64.b64encode(content).decode(), "layout": layout}
+    if details.signature and details.signature.get("enabled"):
+        # An unsigned background prevents a stationary ghost image while dragging.
+        background = render_invoice_pdf(year, month, invoice_date, lines, total, replace(details, signature=None))
+        result["background_pdf_base64"] = base64.b64encode(background).decode()
+    return result
+
+
+def _pdf_lines(items):
+    return [InvoiceLine(description=item["description"], training_date=date.fromisoformat(item["training_date"]),
+        hours=Decimal(str(item["hours"])) if item["hours"] is not None else None,
+        amount_cents=item["amount_cents"], unit_rate_cents=item["unit_rate_cents"]) for item in items]
+
+
 @app.post("/api/invoices/preview")
 def preview_invoice(
     payload: InvoiceCreate,
@@ -679,9 +696,20 @@ def preview_invoice(
                 proposed, _ = select_number(connection, profile_id(database_path), invoice_date.year, payload.invoice_number)
             except NumberingError as error:
                 raise HTTPException(422, str(error)) from error
+    organization = _with_invoice_signature(organization, payload.signature)
+    signature = json.loads(organization.get("signature_json") or "null")
+    pdf_preview = {}
+    if payload.render_pdf:
+        try:
+            pdf_preview = _signature_preview_pdf(payload.year, payload.month, invoice_date,
+                items, total_amount_cents, _invoice_pdf_details(organization, proposed or ""))
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     return {
         "invoice_date": invoice_date.isoformat(),
         "invoice_number": proposed,
+        "signature": signature,
+        **pdf_preview,
         "numbering": numbering,
         "numbering_mode": "manual" if payload.invoice_number else "automatic",
         "tax_id": organization.get("tax_id"),
@@ -792,6 +820,7 @@ def _invoice_pdf_details(organization, invoice_number):
         if line
     )
     pdf_details = InvoiceDetails(
+        signature=json.loads(organization.get("signature_json") or "null"),
         contact=InvoiceContactDetails(
             recipient_lines=recipient_lines,
             sender_lines=sender_lines,
@@ -862,6 +891,7 @@ def post_invoice(
             invoice_number, sequence = select_number(connection, profile_id(database_path), invoice_date.year, payload.invoice_number)
         except NumberingError as error:
             raise HTTPException(409, str(error)) from error
+    organization = _with_invoice_signature(organization, payload.signature)
     invoice_snapshot = {
         key: value
         for key, value in organization.items()
@@ -980,13 +1010,19 @@ def post_invoice(
 @app.put("/api/invoices/{invoice_id}/number")
 def correct_invoice_number(invoice_id: int, payload: InvoiceNumberCorrection,
                            database_path: DatabasePath, invoice_directory: InvoiceDirectory):
+    return _revise_invoice(invoice_id, payload, database_path, invoice_directory)
+
+
+def _revise_invoice(invoice_id, payload, database_path, invoice_directory, signature_override=None):
     invoice = get_invoice(invoice_id, database_path)
+    if signature_override is not None and invoice and invoice["pdf_path"] != signature_override.expected_pdf_path:
+        raise HTTPException(409, "Die Rechnung wurde zwischenzeitlich geändert. Bitte erneut öffnen.")
     if invoice is None or invoice["is_preview"]:
         raise HTTPException(404, "Gespeicherte endgültige Rechnung wurde nicht gefunden")
     if invoice["invoice_number"] != payload.expected_invoice_number:
         raise HTTPException(409, "Die Rechnung wurde geändert. Bitte Archiv neu laden.")
     number = payload.invoice_number.strip()
-    if number == invoice["invoice_number"]:
+    if number == invoice["invoice_number"] and signature_override is None:
         raise HTTPException(422, "Bitte eine geänderte Rechnungsnummer eingeben.")
     try:
         invoice_date = date.fromisoformat(invoice["invoice_date"])
@@ -1005,6 +1041,16 @@ def correct_invoice_number(invoice_id: int, payload: InvoiceNumberCorrection,
             raise ValueError
     except (ValueError, TypeError, KeyError):
         raise HTTPException(409, "Diese Bestandsrechnung besitzt keine vollständigen, passenden historischen Rechnungsangaben. Eine sichere PDF-Neuerzeugung ist nicht möglich; Original und Nummer bleiben erhalten.") from None
+    if signature_override is not None:
+        signature = json.loads(snapshot.get("signature_json") or "null")
+        if not signature:
+            raise HTTPException(422, "Diese Rechnung enthält keinen gespeicherten Unterschriftenstand.")
+        signature.update(signature_override.model_dump(include=set(SignatureLayout.model_fields)))
+        try:
+            validate_signature(signature)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        snapshot["signature_json"] = json.dumps(signature)
     snapshot["invoice_number"] = number
     organization = {"recipient_salutation": "", "recipient_contact_name": "", "tax_id": None, **snapshot, "logo_data": invoice["logo_snapshot"], "logo_media_type": invoice["logo_media_type"]}
     old_reference = None
@@ -1210,6 +1256,115 @@ def export_data(database_path: DatabasePath, invoice_directory: InvoiceDirectory
         raise HTTPException(503, "Export fehlgeschlagen. Dokumente, Datenbank, Zugriffsrechte und freien Speicher prüfen.") from None
 
 
+@app.get("/api/organization/signature")
+def get_signature(database_path: DatabasePath):
+    organization = get_organization(database_path)
+    return json.loads(organization.get("signature_json") or "null")
+
+
+@app.post("/api/organization/signature")
+def upload_signature(payload: SignatureUpload, database_path: DatabasePath):
+    try:
+        _, width, height = decode_png(payload.data_base64)
+        signature = {**SignatureLayout().model_dump(), "data_base64": payload.data_base64,
+                     "image_width": width, "image_height": height}
+        # Tall images start higher on the page; retain the original aspect ratio.
+        signature["y_mm"] = max(0, min(245, 290 - 50 * height / width))
+        validate_signature(signature)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    update_organization({"signature_json": json.dumps(signature)}, database_path)
+    return signature
+
+
+@app.put("/api/organization/signature")
+def update_signature(payload: SignatureLayout, database_path: DatabasePath):
+    signature = get_signature(database_path)
+    if not signature:
+        raise HTTPException(404, "Bitte zuerst eine Unterschrift hinterlegen.")
+    signature.update(payload.model_dump())
+    try:
+        validate_signature(signature)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    update_organization({"signature_json": json.dumps(signature)}, database_path)
+    return signature
+
+
+@app.delete("/api/organization/signature")
+def delete_signature(database_path: DatabasePath):
+    update_organization({"signature_json": None}, database_path)
+    return {"deleted": True}
+
+
+@app.get("/api/invoices/{invoice_id}/signature")
+def saved_invoice_signature(invoice_id: int, database_path: DatabasePath):
+    invoice = get_invoice(invoice_id, database_path)
+    if not invoice or invoice["is_preview"]:
+        raise HTTPException(404, "Rechnung wurde nicht gefunden.")
+    snapshot = json.loads(invoice["invoice_snapshot_json"] or "{}")
+    return {"signature": json.loads(snapshot.get("signature_json") or "null"),
+            "invoice_number": invoice["invoice_number"], "pdf_path": invoice["pdf_path"]}
+
+
+@app.post("/api/invoices/{invoice_id}/signature/preview")
+def preview_saved_signature(invoice_id: int, payload: SignatureLayout, database_path: DatabasePath):
+    invoice = get_invoice(invoice_id, database_path)
+    if not invoice or invoice["is_preview"]:
+        raise HTTPException(404, "Rechnung wurde nicht gefunden.")
+    snapshot = json.loads(invoice["invoice_snapshot_json"] or "{}")
+    signature = json.loads(snapshot.get("signature_json") or "null")
+    if not signature:
+        raise HTTPException(422, "Diese Rechnung enthält keinen gespeicherten Unterschriftenstand.")
+    signature.update(payload.model_dump())
+    try:
+        validate_signature(signature)
+        organization = {**snapshot, "signature_json": json.dumps(signature),
+                        "logo_data": invoice["logo_snapshot"], "logo_media_type": invoice["logo_media_type"]}
+        result = _signature_preview_pdf(invoice["year"], invoice["month"], date.fromisoformat(invoice["invoice_date"]),
+            invoice["items"], invoice["total_amount_cents"], _invoice_pdf_details(organization, invoice["invoice_number"]))
+    except (ValueError, KeyError) as error:
+        raise HTTPException(422, "Der gespeicherte Rechnungsstand oder die Position ist ungültig.") from error
+    return {"signature": signature, **result}
+
+
+@app.put("/api/invoices/{invoice_id}/signature")
+def revise_saved_signature(invoice_id: int, payload: SignatureRevision, database_path: DatabasePath,
+                           invoice_directory: InvoiceDirectory):
+    invoice = get_invoice(invoice_id, database_path)
+    if not invoice or invoice["is_preview"]:
+        raise HTTPException(404, "Rechnung wurde nicht gefunden.")
+    if invoice["pdf_path"] != payload.expected_pdf_path:
+        raise HTTPException(409, "Die Rechnung wurde zwischenzeitlich geändert. Bitte erneut öffnen.")
+    return _revise_invoice(invoice_id, InvoiceNumberCorrection(invoice_number=invoice["invoice_number"],
+        expected_invoice_number=invoice["invoice_number"], confirmed=True), database_path,
+        invoice_directory, payload)
+
+
+def _archived_database(identifier, database_path):
+    organization = get_organization(database_path, identifier)
+    if organization is None or not organization.get("is_archived"):
+        raise HTTPException(404, "Archiviertes Profil wurde nicht gefunden.")
+    return ProfileDatabasePath(database_path, identifier)
+
+
+@app.get("/api/archived-profiles")
+def archived_profiles(database_path: Annotated[Path, Depends(get_database_path)]):
+    return list_archived_profiles(database_path)
+
+
+@app.get("/api/archived-profiles/{identifier}/invoices")
+def archived_invoices(identifier: int, database_path: Annotated[Path, Depends(get_database_path)]):
+    return list_invoices(_archived_database(identifier, database_path))
+
+
+@app.get("/api/archived-profiles/{identifier}/invoices/{invoice_id}/pdf")
+def archived_invoice_pdf(identifier: int, invoice_id: int,
+                         database_path: Annotated[Path, Depends(get_database_path)],
+                         invoice_directory: InvoiceDirectory):
+    return get_invoice_pdf(invoice_id, _archived_database(identifier, database_path), invoice_directory)
+
+
 app.mount(
     "/",
     StaticFiles(
@@ -1218,3 +1373,5 @@ app.mount(
     ),
     name="frontend",
 )
+
+

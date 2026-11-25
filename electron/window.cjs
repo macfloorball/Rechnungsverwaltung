@@ -7,9 +7,9 @@ const { APP_NAME, getWindowOptions } = require('./identity.cjs');
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'none'", "script-src 'self'", "style-src 'self'",
-  "img-src 'self'", "font-src 'self'", "connect-src 'self'",
+  "img-src 'self' data:", "font-src 'self' blob: data:", "connect-src 'self'",
   "object-src 'none'", "frame-src 'none'", "frame-ancestors 'none'",
-  "worker-src 'none'", "base-uri 'none'", "form-action 'self'",
+  "worker-src 'self'", "base-uri 'none'", "form-action 'self'",
 ].join('; ');
 
 function createMainWindow(frontendURL, onError) {

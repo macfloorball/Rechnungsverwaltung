@@ -641,10 +641,11 @@ async function run() {
   assert.deepEqual(Buffer.from(await (await fetch(otherUrl)).arrayBuffer()), otherPDF);
   assert.deepEqual(await fs.readFile(path.join(directory, 'Rechnung_TTC_2020-02.pdf')), otherPDF);
 
-  // The deleted number leaves an intentional gap; explicitly choose the next number.
-  await js(`document.querySelector('#manual-invoice-number').value='${originalInvoice.invoice_date.slice(0,4)}-03';document.querySelector('#manual-invoice-number').dispatchEvent(new Event('input'));`);
+  // Annual numbering intentionally blocks automatic allocation across a gap.
+  // Use a new explicit manual number; never silently reuse the deleted number.
   await js(`const month = document.querySelector('#invoice-month'); month.value='2020-01';
     month.dispatchEvent(new Event('input',{bubbles:true}));
+    document.querySelector('#manual-invoice-number').value='${originalInvoice.invoice_date.slice(0,4)}-03';
     document.querySelector('#invoice-preview-form').requestSubmit()`);
   await until(() => js(previewReady), 'preview after deletion');
   assert.equal(await js('document.querySelectorAll("#invoice-items tr").length'), 1);

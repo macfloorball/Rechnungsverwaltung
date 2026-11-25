@@ -1557,8 +1557,8 @@ eine Datenbankmigration ist dafür nicht erforderlich.
 Der Umschalter **Aktives Rechnungsprofil** steht dauerhaft oberhalb der Navigation.
 **Neues Profil** legt einen leeren Arbeitsbereich mit eigenen Standardwerten an;
 Tätigkeiten, Wochenplan oder Kontaktdaten werden nicht aus dem bisherigen Profil kopiert.
-**Profil umbenennen** ändert nur den Anzeigenamen. Profillöschung ist in dieser
-Erstversion bewusst nicht vorgesehen, damit historische Belege erhalten bleiben.
+**Profil umbenennen** ändert nur den Anzeigenamen. Beim bestätigten Löschen eines
+Profils bleiben historische Belege im schreibgeschützten Rechnungsarchiv erhalten.
 
 Jedes Profil hat eigene Absender-/Empfängerdaten, Zahlungseinstellungen, Logo,
 Tätigkeiten (höchstens zehn einschließlich deaktivierter Einträge), Wochenplanung,
@@ -1713,17 +1713,75 @@ werden. Nach bestätigter Löschung des aktiven Profils lädt die Oberfläche mi
 ersten verbleibenden Profil neu. Ausstehende Schreibanfragen verhindern den
 Profilwechsel; alte Leseantworten können das neue Dokument nicht verändern.
 
-Der Backend-Abgleich der bestätigten Übersicht und das Entfernen sämtlicher
-Profilzeilen erfolgen gemeinsam unter `BEGIN IMMEDIATE`. Dateizuordnung und
-Dateiidentität werden vor dem Commit geprüft. Anschließend werden ausschließlich
-eindeutig zugehörige PDFs unter erneuter Referenzprüfung entfernt. Fehler bei der
-Bereinigung hinterlassen unreferenzierte Dateien und eine sichtbare Meldung,
-keine ungültigen Datenbankreferenzen. Fremde Dateien, gemeinsam verwendete Dateien
-und externe Sicherungen bleiben erhalten. Die Löschung ist nicht rückgängig zu
-machen; eine externe vollständige Sicherung kann separat wiederhergestellt werden.
+Seit Issue #64 erfolgen der Backend-Abgleich der bestätigten Übersicht, das Löschen
+der Arbeitsdaten und die Archivierung des Profils gemeinsam unter `BEGIN IMMEDIATE`.
+Fertige Rechnungen, deren Positionen, historische Unterschriftenstände und PDFs
+werden nicht gelöscht. Vorschauen werden verworfen, Trainingsverknüpfungen an
+Rechnungspositionen werden gelöst. Die Profilunterschrift und das Logo werden aus
+dem Profil entfernt; unabhängige Rechnungskopien bleiben erhalten. Das Archiv ist
+unter Verwaltung / App-Einstellungen zugänglich und schreibgeschützt. Andere Profile,
+fremde Dokumente und externe Sicherungen bleiben unverändert. Eine Wiederherstellung
+gelöschter Arbeitsdaten ist nur aus einer vorher erstellten vollständigen Sicherung möglich.
 
 Migration 11 ergänzt `profile_identifiers` mit SQLite-AUTOINCREMENT und übernimmt
 alle bestehenden IDs ohne Änderung an Rechnungen oder Dokumenten. Gelöschte IDs
 werden nicht wiederverwendet, damit verspätete Anfragen kein neues Profil treffen.
 Die ID-Historie bleibt in vollständigen Sicherungen erhalten. Beim Neustart und
 bei künftigen Migrationen wird ein gelöschtes Standardprofil nicht neu angelegt.
+
+## Profilbezogene Unterschriften
+
+Unter **Rechnung konfigurieren → Unterschrift** lässt sich eine PNG-Datei importieren
+oder mit Maus, Touchpad, Touchscreen beziehungsweise Stift zeichnen. Der Zeichendialog
+bietet Rückgängig, Leeren und Abbrechen. Gezeichnete Bilder werden transparent und
+auf den belegten Bereich zugeschnitten gespeichert. Im Profil lassen sich Bild und
+Aktivierungsstatus verwalten; Layoutänderungen werden mit **Profilstandard speichern**
+bestätigt. Ein Import ersetzt das bisherige Profilbild und aktiviert die Unterschrift.
+
+Die PDF-Vorschau unter dem Kalender verwendet dieselbe ReportLab-Ausgabe wie der
+Export. X und Y bezeichnen die linke obere Bildecke in Millimetern ab der linken oberen
+A4-Seitenecke, die Breite wird ebenfalls in Millimetern gespeichert. Das Seitenverhältnis
+bleibt erhalten. Verschieben und der Größenänderungsgriff berücksichtigen den
+Vorschauzoom; alternativ stehen Zahlenfelder und Pfeiltasten zur Verfügung.
+Die Seitenbegrenzung umfasst den mittig gesetzten vollständigen Absendernamen.
+Eine konservative Kollisionsprüfung warnt bei Berührung des belegten Inhaltsbereichs
+auf der letzten Seite. Sie verändert Rechnungsinhalte nicht automatisch.
+
+Die Option **Unterschrift einfügen** gilt nur für die aktuelle Rechnung.
+**Als Profilstandard speichern** übernimmt Position, Breite und Aktivierungsstatus
+in das aktive Profil. **Auf Profilstandard zurücksetzen** übernimmt dessen Layout
+wieder in die Rechnung. Andere Profile bleiben unabhängig. Bei mehrseitigen PDFs
+werden Bild und Name ausschließlich auf der letzten Seite ausgegeben.
+
+Die Migration auf Schema 13 ergänzt `organizations.signature_json`; vorherige Daten
+bleiben erhalten und die vorhandene Sicherung vor Migration wird weiter verwendet.
+PNG-Daten (maximal 2 MB, 4000 × 4000 Pixel) werden nach vollständigem Dekodieren und
+PNG-Prüfung unverändert als Base64 in SQLite gespeichert. Es entstehen keine separaten
+Unterschriftendateien. Vollständige App-Sicherungen und deren Wiederherstellung
+enthalten dadurch sowohl Profilbilder als auch die Rechnungsstände. Beim bestätigten Löschen eines Profils werden dessen Arbeitsdaten und Profilbilder
+entfernt. Fertige Rechnungen mit ihren unabhängigen Unterschriftenständen und PDFs
+bleiben unter **Verwaltung / App-Einstellungen → Gelöschte Profile – Rechnungsarchiv**
+erhalten. Dort lassen sich PDFs öffnen und herunterladen; Änderungen sind gesperrt.
+Die Archivierung entfernt das Profil aus der aktiven Auswahl. Schema 14 ergänzt dazu
+`organizations.is_archived`; Datenbanktrigger verhindern auch verspätete Schreibzugriffe.
+Vorhandene Rechnungspositionen werden lediglich von gelöschten Terminen entkoppelt.
+Sicherungen enthalten das gesamte Archiv. Zusätzliche Bilddateien entstehen nicht.
+
+Fertige Rechnungen speichern Bild, Name, Aktivierungsstatus und Layout unabhängig
+im bestehenden `invoice_snapshot_json`. Profiländerungen schreiben keine PDFs um.
+Die Archivaktion **Unterschrift bearbeiten** lädt ausschließlich diesen historischen
+Stand. Erst **PDF ausdrücklich neu erstellen** erzeugt eine Revision. Eine inzwischen
+geänderte PDF-Referenz verhindert das Überschreiben eines konkurrierenden Stands.
+Auch eine Rechnungsnummernkorrektur verwendet weiterhin den gespeicherten Stand.
+Alte Rechnungen ohne Unterschriftenstand erhalten nicht nachträglich ein Profilbild.
+
+PDF.js 6.5.438 samt Worker und Standardschriften liegt unter `frontend/vendor/pdfjs`.
+Die Vorschau lädt ausschließlich lokale Ressourcen; Paketquelle, Prüfsumme und Lizenzen
+liegen daneben. Es gibt keinen CDN-Zugriff und keinen Signaturdienst. Ein zusätzliches
+unsigniertes Vorschaubild verhindert Doppelbilder beim Verschieben. Nur das endgültige
+PDF enthält die eingebettete Unterschrift, keine Bearbeitungsgriffe. Es handelt sich
+um eine visuelle Unterschrift ohne kryptografische Signatur.
+
+Automatisierte Unterschriftentests verwenden ausschließlich erzeugte Teststriche
+und temporäre Datenbanken. Ergänzend sind installierte Windows-/Linux-Pakete sowie
+reale Touch-/Stiftgeräte und Druckausgabe vor einer Veröffentlichung manuell zu prüfen.

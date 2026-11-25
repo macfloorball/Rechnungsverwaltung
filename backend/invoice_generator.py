@@ -1,3 +1,5 @@
+import base64
+from backend.signatures import geometry
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -93,6 +95,7 @@ class InvoiceDetails:
     city: str = ""
     invoice_text: str = ""
     standard_service_description: str = ""
+    signature: dict | None = None
     logo_data: bytes | None = None
     logo_media_type: str | None = None
 
@@ -210,6 +213,7 @@ def render_invoice_pdf(
     items: Sequence[InvoiceLine],
     total_amount_cents: int,
     details: InvoiceDetails | None = None,
+    layout_result: dict | None = None,
 ) -> bytes:
     build_invoice_filename(year, month)
     details = details or InvoiceDetails()
@@ -238,13 +242,58 @@ def render_invoice_pdf(
         intro_text=details.invoice_text,
         service_description=details.standard_service_description,
     )
-    table_bottom_y = draw_position_table(pdf, items, intro_y - 12)
-    draw_invoice_footer(
-        pdf,
-        total_amount_cents,
-        table_bottom_y,
-        details.footer,
-    )
+    # Split ReportLab's existing table; repeat its header on subsequent pages.
+    table = build_position_table(items)
+    top = intro_y - 12
+    page_count = 1
+    while True:
+        _, height = table.wrapOn(pdf, PAGE_WIDTH - 2 * PAGE_MARGIN, PAGE_HEIGHT)
+        if height <= top - PAGE_MARGIN:
+            table.drawOn(pdf, PAGE_MARGIN, top - height)
+            bottom = top - height
+            break
+        parts = table.splitOn(pdf, PAGE_WIDTH - 2 * PAGE_MARGIN, top - PAGE_MARGIN)
+        if not parts:
+            raise ValueError("Eine Rechnungsposition ist zu groß für eine PDF-Seite.")
+        _, height = parts[0].wrapOn(pdf, PAGE_WIDTH - 2 * PAGE_MARGIN, PAGE_HEIGHT)
+        parts[0].drawOn(pdf, PAGE_MARGIN, top - height)
+        pdf.showPage()
+        page_count += 1
+        top = PAGE_HEIGHT - PAGE_MARGIN
+        table = parts[1]
+    # Measure footer on a disposable canvas before drawing, to avoid partial output.
+    try:
+        final_y = draw_invoice_footer(Canvas(BytesIO(), pagesize=A4), total_amount_cents, bottom, details.footer)
+    except ValueError:
+        pdf.showPage()
+        page_count += 1
+        bottom = PAGE_HEIGHT - PAGE_MARGIN
+    def footer_page():
+        nonlocal page_count
+        pdf.showPage()
+        page_count += 1
+    final_y = draw_invoice_footer(pdf, total_amount_cents, bottom, details.footer, new_page=footer_page)
+    signature = details.signature
+    collision = False
+    if signature and signature.get('enabled') and signature.get('data_base64'):
+        left, top_mm, box_width, box_height = geometry(signature)
+        # All invoice content on the last page lies above final_y. Conservatively
+        # treat its full content band as occupied rather than permit hidden text.
+        mm = 72 / 25.4
+        content_top = PAGE_MARGIN if page_count > 1 else BLOCK_TOP
+        collision = (top_mm * mm < PAGE_HEIGHT - final_y and
+                     (top_mm + box_height) * mm > content_top and
+                     left * mm < PAGE_WIDTH - PAGE_MARGIN and
+                     (left + box_width) * mm > PAGE_MARGIN)
+        image_height = signature['width_mm'] * signature['image_height'] / signature['image_width']
+        pdf.drawImage(ImageReader(BytesIO(base64.b64decode(signature['data_base64']))),
+                      signature['x_mm'] * mm, PAGE_HEIGHT - (top_mm + image_height) * mm,
+                      width=signature['width_mm'] * mm, height=image_height * mm, mask='auto')
+        pdf.setFont(BODY_FONT, BODY_FONT_SIZE)
+        pdf.drawCentredString((signature['x_mm'] + signature['width_mm'] / 2) * mm,
+                             PAGE_HEIGHT - (top_mm + image_height + 5) * mm, signature.get('name', ''))
+    if layout_result is not None:
+        layout_result.update(pages=page_count, collision=collision)
     pdf.save()
     return output.getvalue()
 
@@ -411,6 +460,7 @@ def draw_invoice_footer(
     total_amount_cents: int,
     table_bottom_y: float,
     details: InvoiceFooterDetails = FOOTER_DETAILS,
+    *, new_page=None,
 ) -> float:
     if total_amount_cents < 0:
         raise ValueError("Die Rechnungssumme darf nicht negativ sein")
@@ -453,7 +503,7 @@ def draw_invoice_footer(
         for paragraph in rendered
     ]
     final_y = content_top_y - sum(height + 4 for height in heights)
-    if final_y < PAGE_MARGIN:
+    if final_y < PAGE_MARGIN and new_page is None:
         raise ValueError("Die Rechnungspositionen passen nicht mit dem Footer auf eine Seite")
 
     pdf.setLineWidth(0.5)
@@ -469,6 +519,9 @@ def draw_invoice_footer(
 
     y = content_top_y
     for paragraph, height in zip(rendered, heights, strict=True):
+        if y - height < PAGE_MARGIN and new_page is not None:
+            new_page()
+            y = PAGE_HEIGHT - PAGE_MARGIN
         paragraph.drawOn(pdf, PAGE_MARGIN, y - height)
         y -= height + 4
-    return final_y
+    return y
