@@ -1,3 +1,6 @@
+import { initializeProfileArchive } from "./profile-archive.js";
+import { initializeSavedSignatures } from "./signature-preview.js";
+import { initializeSignatures } from "./signatures.js";
 import { initializeProfiles } from "./profiles.js";
 import { profileFetch as fetch, profileUrl } from "./profiles.js";
 import { initializeNavigation } from "./navigation.js";
@@ -11,6 +14,9 @@ initializeNavigation();
 initializeCalendar();
 initializeInvoicePreview();
 initializeSettings();
+initializeSignatures();
+initializeSavedSignatures();
+initializeProfileArchive();
 initializeDesktopUpdates();
 }
 

@@ -41,6 +41,7 @@ function invoiceUI(create) {
     .replace(/^import .*;\r?\n/gm, '')
     .replace('export function initializeInvoicePreview', 'function initializeInvoicePreview');
   vm.runInNewContext(source + '\ninitializeInvoicePreview();', {
+    SignaturePreview: class { constructor() { this.root = {}; } async render() {} }, clearTimeout, setTimeout,
     document, Event, Intl, Date, Error, profileUrl: url => url,
     HTMLElement: Element, HTMLFormElement: Element, HTMLInputElement: Element,
     HTMLButtonElement: Element, HTMLTableSectionElement: Element,

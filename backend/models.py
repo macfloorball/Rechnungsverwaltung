@@ -207,7 +207,24 @@ class InvoicePeriod(APIModel):
     month: int = Field(ge=1, le=12)
 
 
+class SignatureLayout(APIModel):
+    enabled: bool = True
+    x_mm: float = Field(default=25, ge=0, le=210, allow_inf_nan=False)
+    y_mm: float = Field(default=245, ge=0, le=297, allow_inf_nan=False)
+    width_mm: float = Field(default=50, ge=10, le=150, allow_inf_nan=False)
+
+
+class SignatureRevision(SignatureLayout):
+    expected_pdf_path: str
+
+
+class SignatureUpload(APIModel):
+    data_base64: str = Field(min_length=1, max_length=2_800_000)
+
+
 class InvoiceCreate(InvoicePeriod):
+    render_pdf: bool = False
+    signature: SignatureLayout | None = None
     invoice_date: date | None = None
     invoice_number: str | None = Field(default=None, max_length=50)
 

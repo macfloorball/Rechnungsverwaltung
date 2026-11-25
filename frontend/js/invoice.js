@@ -1,3 +1,4 @@
+import { SignaturePreview } from "./signature-preview.js";
 import { profileFetch as fetch, profileUrl } from "./profiles.js";
 const monthFormatter = new Intl.DateTimeFormat("de-DE", {
   month: "long",
@@ -138,6 +139,33 @@ export function initializeInvoicePreview() {
     throw new Error("Elemente für die Rechnungsvorschau fehlen im HTML.");
   }
 
+  let signatureOverride = null;
+  let signatureTimer;
+  let latestPayload = null;
+  let signatureVersion = 0;
+  const signatureEditor = new SignaturePreview(preview, layout => {
+    signatureOverride = layout;
+    clearTimeout(signatureTimer);
+    createButton.disabled = true;
+    const version = ++signatureVersion;
+    signatureTimer = setTimeout(async () => {
+      if (!latestPayload) return;
+      try {
+        const response = await fetch('/api/invoices/preview', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...latestPayload, signature: layout }) });
+        const data = await response.json();
+        if (version !== signatureVersion) return;
+        if (!response.ok) throw new Error(formatRequestError(data.detail) || 'Unterschriftenlayout konnte nicht geprüft werden.');
+        await signatureEditor.render(data);
+        if (version !== signatureVersion) return;
+        if (previewPeriod) previewPeriod.signature = layout;
+        createError.hidden = true;
+        createButton.disabled = !previewPeriod || !data.items.length || !data.invoice_number;
+      } catch (error) { createError.textContent = error.message; createError.hidden = false; }
+    }, 180);
+  });
+  document.addEventListener('signature-profile-updated', () => { signatureOverride = null; invalidatePreview(); });
   let requestVersion = 0;
   let previewPeriod = null;
   let creating = false;
@@ -149,6 +177,9 @@ export function initializeInvoicePreview() {
 
   function invalidatePreview() {
     requestVersion += 1;
+    signatureVersion += 1;
+    clearTimeout(signatureTimer);
+    latestPayload = null;
     loadingMessage.hidden = true;
     previewPeriod = null;
     errorMessage.hidden = true;
@@ -202,6 +233,8 @@ export function initializeInvoicePreview() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          render_pdf: true,
+          signature: signatureOverride,
           year: Number(match[1]),
           month: Number(match[2]),
           invoice_date: dateInput.value,
@@ -221,6 +254,9 @@ export function initializeInvoicePreview() {
 
       const data = await response.json();
       if (version !== requestVersion) return;
+      signatureEditor.root.inert = false;
+      await signatureEditor.render(data);
+      if (version !== requestVersion) return;
       renderPreview(data, {
         preview,
         periodTitle,
@@ -229,11 +265,13 @@ export function initializeInvoicePreview() {
         empty,
       });
       previewPeriod = {
+        signature: data.signature ? { enabled: data.signature.enabled, x_mm: data.signature.x_mm, y_mm: data.signature.y_mm, width_mm: data.signature.width_mm } : null,
         year: Number(match[1]),
         month: Number(match[2]),
         invoice_date: data.invoice_date,
         invoice_number: manualNumber.value.trim() || null,
       };
+      latestPayload = { ...previewPeriod, render_pdf: true };
       createButton.disabled = data.items.length === 0 || !data.invoice_number;
       loadingMessage.hidden = true;
     } catch (error) {
@@ -302,6 +340,7 @@ export function initializeInvoicePreview() {
       const details = document.querySelector("#invoice-preview-details");
       if (details) details.textContent = `Gespeicherte Rechnungsnummer: ${invoice.invoice_number}\nRechnungsdatum: ${invoice.invoice_date}`;
       saved = true;
+      signatureEditor.root.inert = true;
     } catch (error) {
       if (version !== requestVersion) return;
       createError.textContent = error instanceof Error

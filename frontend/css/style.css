@@ -1111,3 +1111,29 @@ dialog .number-correction-confirmation input {
   flex: 0 0 auto;
   margin-top: 3px;
 }
+
+/* Local signature management and true A4 PDF preview. */
+.signature-thumbnail { display: block; max-width: 280px; max-height: 100px; margin: 1rem 0; background: #fff; border: 1px solid #ccd5de; }
+.signature-fields { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+.signature-fields label { display: flex; flex-direction: column; gap: .3rem; }
+.signature-fields input[type=number] { width: 9rem; }
+.signature-fields input[type=checkbox] { width: 1.2rem; height: 1.2rem; }
+.signature-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin: .8rem 0; }
+.signature-dialog { width: min(95vw, 900px); }
+.signature-dialog canvas { display: block; width: 100%; height: auto; background: #fff; border: 1px solid #718197; touch-action: none; }
+.signature-pages-scroll { overflow: auto; max-height: 75vh; background: #d9dfe7; padding: .7rem; }
+.signature-pages { width: 100%; min-width: 240px; }
+.signature-page { position: relative; width: 100%; aspect-ratio: 210 / 297; margin-bottom: 1rem; background: white; }
+.signature-page > canvas { display: block; width: 100%; height: 100%; }
+.signature-overlay { position: absolute; border: 2px dashed #286797; box-sizing: border-box; cursor: move; touch-action: none; }
+.signature-overlay > img, .signature-overlay > span { visibility: hidden; }
+.signature-overlay.moving { background: #ffffffdd; }
+.signature-overlay.moving > img, .signature-overlay.moving > span { visibility: visible; }
+.signature-overlay > img { display: block; width: 100%; height: calc(100% - 7mm); object-fit: contain; }
+.signature-overlay > span { display: block; text-align: center; white-space: nowrap; font-family: Helvetica, Arial, sans-serif; font-size: .8rem; }
+.signature-resize { position: absolute; right: -7px; bottom: -7px; min-width: 14px; min-height: 14px; width: 14px; height: 14px; padding: 0; background: #286797; border: 1px solid white; cursor: nwse-resize; touch-action: none; }
+.signature-preview-editor { margin-top: 1rem; }
+@font-face { font-family: SignatureHelvetica; src: url('../vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf') format('truetype'); }
+.signature-overlay > svg { visibility: hidden; display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.signature-overlay.moving > svg { visibility: visible; }
+#archived-profiles-list button { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
