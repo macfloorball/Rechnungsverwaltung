@@ -387,15 +387,23 @@ export function initializeSettings() {
   const counterNext = document.querySelector("#counter-next");
   const counterSave = document.querySelector("#counter-save");
   const counterMessage = document.querySelector("#counter-message");
+  const counterStart = document.querySelector("#counter-start");
+  const counterExternal = document.querySelector("#counter-confirm-external");
+  const counterStartSave = document.querySelector("#counter-start-save");
+  const counterStartStatus = document.querySelector("#counter-start-status");
+  function disableStartNumber() {
+    counterStart.disabled = counterExternal.disabled = counterStartSave.disabled = true;
+  }
   counterYear.value = new Date().getFullYear();
   let loadedYear = null;
   let counterVersion = 0;
-  counterYear.addEventListener("input", () => { loadedYear = null; counterSave.disabled = true; });
+  counterYear.addEventListener("input", () => { loadedYear = null; counterSave.disabled = true; disableStartNumber(); });
   async function loadCounter() {
     if (!counterYear.reportValidity()) return;
     const year = Number(counterYear.value);
     const version = ++counterVersion;
     counterSave.disabled = true;
+    disableStartNumber();
     document.querySelector("#counter-confirm-reuse").checked = false;
     try {
       const data = await requestJson(`/api/organization/invoice-counter/${year}`);
@@ -405,6 +413,12 @@ export function initializeSettings() {
       loadedYear = year;
       counterSave.disabled = !data.release_required || data.next_number > 12 || data.gaps.length > 0 || data.records.some(record => !record.serial) || data.issues.some(issue => issue.startsWith("Doppelte"));
       counterMessage.textContent = data.message;
+      counterStart.value = data.start_number;
+      counterExternal.checked = false;
+      counterStart.disabled = counterExternal.disabled = counterStartSave.disabled = !data.start_number_editable;
+      counterStartStatus.textContent = data.start_number_editable
+        ? "Die Startnummer gilt nur für dieses Profil und das oben geladene Rechnungsjahr."
+        : `Bestätigte Startnummer: ${String(data.start_number).padStart(2, "0")}. Eine Änderung ist nur vor der ersten endgültigen Rechnung ohne gesperrte Wiederverwendung möglich.`;
       const records = document.querySelector("#counter-records");
       records.replaceChildren(...data.records.map(record => {
         const row = element("li");
@@ -439,6 +453,36 @@ export function initializeSettings() {
       unlock();
       await loadCounter();
       if (releaseError) counterMessage.textContent = releaseError;
+    }
+  });
+  counterStartSave.addEventListener("click", async () => {
+    if (counterStartSave.disabled || loadedYear !== Number(counterYear.value) || !counterStart.reportValidity()) return;
+    if (!counterExternal.checked) {
+      counterStartStatus.textContent = "Bitte bestätigen, dass kleinere Nummern bereits außerhalb der App vergeben wurden.";
+      counterExternal.focus();
+      return;
+    }
+    const year = loadedYear;
+    const startNumber = Number(counterStart.value);
+    const unlock = lockForm(counterForm);
+    let startError = null;
+    try {
+      await requestJson(`/api/organization/invoice-counter/${year}/start`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_number: startNumber, confirm_external: true }),
+      });
+      document.dispatchEvent(new Event("invoice-numbering-changed"));
+    } catch (error) { startError = error.message; }
+    finally {
+      unlock();
+      await loadCounter();
+      if (startError) {
+        if (!counterStart.disabled) {
+          counterStart.value = String(startNumber);
+          counterExternal.checked = true;
+        }
+        counterStartStatus.textContent = startError;
+      }
     }
   });
   loadCounter();

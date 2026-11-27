@@ -219,6 +219,14 @@
             </div>
             <p id="counter-message" role="status"></p>
             <label><input id="counter-confirm-reuse" type="checkbox"> Ich bestätige ausdrücklich die Wiederverwendung der angezeigten gelöschten oder früher gesperrten nächsten Nummer.</label>
+            <fieldset class="organization-settings-group invoice-start-settings">
+              <legend>Startnummer für außerhalb der App geschriebene Rechnungen</legend>
+              <p id="counter-start-hint">Wenn du für das gewählte Jahr bereits Rechnungen außerhalb der App geschrieben hast, lege hier vor der ersten App-Rechnung die nächste Nummer fest. Beispiel: Startnummer 11 → erste App-Rechnung 11, danach automatisch 12. Der Jahresbereich bleibt 01–12.</p>
+              <label>Startnummer <input id="counter-start" type="number" min="1" max="12" step="1" value="1" required disabled aria-describedby="counter-start-hint counter-start-status"></label>
+              <label><input id="counter-confirm-external" type="checkbox" disabled> Ich bestätige, dass kleinere Nummern bereits außerhalb der App vergeben wurden.</label>
+              <button id="counter-start-save" class="secondary-button" type="button" disabled>Startnummer übernehmen</button>
+              <p id="counter-start-status" role="status"></p>
+            </fieldset>
             <p>Lücken und ungültige Nummern werden nicht automatisch korrigiert. Wähle unten die betroffene Rechnung und korrigiere ihre Nummer ausdrücklich.</p>
             <ul id="counter-records"></ul>
           </form>

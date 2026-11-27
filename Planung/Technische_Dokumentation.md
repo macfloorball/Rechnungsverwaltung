@@ -1646,8 +1646,34 @@ Vergabe bleibt dann gesperrt. Unter „Rechnung konfigurieren“ → „Jährlic
 Rechnungsnummernkreis“ werden die betroffenen Rechnungen mit einer direkten
 Korrekturaktion angezeigt. Beispiel: `01, 02, 04` → ausdrücklich `04` auf `03`
 korrigieren → nächster automatischer Vorschlag `04`. Es erfolgt niemals eine
-selbstständige Umnummerierung. Ein frei einstellbarer Zählersprung ist nicht mehr
-zulässig. Nach laufender Nummer 12 wird keine automatische 13 vergeben.
+selbstständige Umnummerierung. Nach laufender Nummer 12 wird keine automatische
+13 vergeben.
+
+Wer bereits außerhalb der App Rechnungen geschrieben hat, kann vor der ersten
+endgültigen App-Rechnung eines Profils und Rechnungsjahres eine Startnummer
+festlegen. Unter „Rechnung konfigurieren“ → „Jährlicher Rechnungsnummernkreis“
+das Rechnungsjahr laden, bei „Startnummer“ beispielsweise 11 eintragen, die
+bereits außerhalb der App vergebenen kleineren Nummern bestätigen und
+„Startnummer übernehmen“ wählen. Die nächste Rechnung erhält `JAHR-11`, danach
+folgt automatisch `JAHR-12`. Das optionale manuelle Nummernfeld kann weiterhin
+verwendet werden; ein Präfix ändert die laufende Nummer nicht.
+
+Die bestätigten kleineren Nummern gelten nicht als Lücken und können in der App
+nicht vergeben werden. Ab der Startnummer bleiben Lückenprüfung, Duplikatschutz
+und die ausdrückliche Freigabe gelöschter Nummern erhalten. Nach einer endgültigen
+Rechnung kann die Startnummer nicht mehr geändert werden, um Lücken zu verdecken.
+Eine gesperrte Wiederverwendung verhindert ebenfalls die Änderung. Vorschauen
+reservieren weiterhin keine Nummer. Andere Profile und Jahre sind unabhängig.
+
+Schema 15 ergänzt `invoice_counters.start_number` mit Standardwert 1. Bestehende
+Nummern, PDFs und Sperren bleiben erhalten; vorhandene Lücken werden bei der
+Migration nicht als externe Rechnungen interpretiert. Die bestehende
+Migrationssicherung wird vor dem Upgrade erstellt. Startnummern bleiben in
+vollständigen Sicherungen und im CSV-Export enthalten.
+`PUT /api/organization/invoice-counter/{year}/start` verlangt `start_number`
+(1–12) und `confirm_external: true` und prüft den Jahresbestand unter
+`BEGIN IMMEDIATE`. Freie Sprünge im bereits begonnenen App-Nummernkreis bleiben
+unzulässig.
 
 „Nummer korrigieren“ im Archiv oder Jahresbestand öffnet einen echten modalen
 HTML-Dialog. Die ausdrückliche Bestätigung ist auch im Backend erforderlich.

@@ -27,13 +27,15 @@ async function run() {
   }
   if(process.env.TTC_TEST_RESUME==='1') {
     const invoices=await api('/api/invoices',undefined,'GET');
-    assert.deepEqual(invoices.map(invoice=>invoice.invoice_number).sort(),['2026-01','2026-02','2026-03']);
+    assert.deepEqual(invoices.filter(invoice=>invoice.invoice_date.startsWith('2026')).map(invoice=>invoice.invoice_number).sort(),['2026-01','2026-02','2026-03']);
     assert.equal((await api('/api/organization/invoice-counter/2026',undefined,'GET')).invoice_number,'2026-04');
+    assert.deepEqual(invoices.filter(invoice=>invoice.invoice_date.startsWith('2028')).map(invoice=>invoice.invoice_number).sort(), ['2028-11','2028-12']);
+    assert.equal((await api('/api/organization/invoice-counter/2028',undefined,'GET')).start_number, 11);
     console.log('NUMBERING_RESTART_OK');return;
   }
   const a=(await api('/api/settings',{activities:[{name:'Isoliertes Testtraining',hourly_rate_cents:1500}]},'PUT')).activities[0];
   await api('/api/organization/settings',{name:'Historischer Testverein',invoice_number_prefix:'RE'},'PUT');
-  for(const month of [1,2,3]) await api('/api/trainings',{training_date:`2025-0${month}-02`,activity_type_id:a.id,hours:1,status:'completed'});
+  for(const month of [1,2,3,4,5]) await api('/api/trainings',{training_date:`2025-0${month}-02`,activity_type_id:a.id,hours:1,status:'completed'});
   await api('/api/invoices',{year:2025,month:1,invoice_date:'2026-01-02'});
   const wrong=await api('/api/invoices',{year:2025,month:2,invoice_date:'2026-02-02',invoice_number:'2026-04'});
   await js(`document.querySelector('[data-view-link=invoice]').click(); document.querySelector('#reload-invoices').click(); document.querySelector('#counter-year').value='2026';document.querySelector('#counter-load').click();`);
@@ -71,6 +73,34 @@ async function run() {
   await js(`document.querySelector('#counter-confirm-reuse').checked=true;document.querySelector('#invoice-counter-form').requestSubmit()`);
   await until(()=>js(`document.querySelector('#counter-message').textContent.includes('Nächste automatische Nummer: 2026-03') && document.querySelector('#counter-save').disabled`),'released explicitly');
   assert.equal((await api('/api/invoices',{year:2025,month:3,invoice_date:'2026-03-02'})).invoice_number,'2026-03');
+  // An external starting point is explicit, persists and advances automatically.
+  await js(`document.querySelector('#counter-year').value='2028'; document.querySelector('#counter-year').dispatchEvent(new Event('input')); document.querySelector('#counter-load').click()`);
+  await until(()=>js(`!document.querySelector('#counter-start-save').disabled && document.querySelector('#counter-next').value==='1'`),'start number available');
+  await js(`document.querySelector('#counter-start').value='11'; document.querySelector('#counter-start-save').click()`);
+  assert.match(await js(`document.querySelector('#counter-start-status').textContent`), /Bitte bestätigen/);
+  await js(`window.startOriginalFetch=window.fetch; window.fetch=(url,options)=>String(url).endsWith('/2028/start') ? Promise.resolve(new Response(JSON.stringify({detail:'Testfehler Startnummer'}),{status:503,headers:{'Content-Type':'application/json'}})) : window.startOriginalFetch(url,options); document.querySelector('#counter-confirm-external').checked=true; document.querySelector('#counter-start-save').click()`);
+  await until(()=>js(`document.querySelector('#counter-start-status').textContent.includes('Testfehler') && !document.querySelector('#counter-start-save').disabled`),'start failure retains draft');
+  assert.equal(await js(`document.querySelector('#counter-start').value`),'11');
+  assert.equal(await js(`document.querySelector('#counter-confirm-external').checked`),true);
+  await js(`window.fetch=window.startOriginalFetch; document.querySelector('#counter-start-save').click()`);
+  await until(()=>js(`document.querySelector('#counter-next').value==='11' && !document.querySelector('#counter-start-save').disabled`),'start saved');
+  win.setMinimumSize(320,400);
+  for (const width of [360,1280]) {
+    win.setSize(width,900);
+    await new Promise(resolve=>setTimeout(resolve,150));
+    await js(`document.querySelector('#counter-start').scrollIntoView({block:'center'}); document.querySelector('#counter-start').focus()`);
+    assert.equal(await js(`document.documentElement.scrollWidth<=innerWidth`),true);
+    await new Promise(resolve=>setTimeout(resolve,100));
+    await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,`numbering-start-${width}.png`),(await contents.capturePage()).toPNG());
+  }
+  for (const [month, serial] of [[4,11],[5,12]]) {
+    await js(`document.querySelector('[data-view-link=calendar]').click(); document.dispatchEvent(new CustomEvent('calendar-month-changed',{detail:{year:2025,month:${month}}})); document.querySelector('#manual-invoice-number').value=''; document.querySelector('#manual-invoice-number').dispatchEvent(new Event('input')); document.querySelector('#invoice-date').value='2028-11-01'; document.querySelector('#invoice-date').dispatchEvent(new Event('input')); document.querySelector('#invoice-preview-form').requestSubmit()`);
+    await until(()=>js(`!document.querySelector('#invoice-preview').hidden && document.querySelector('#invoice-preview-details').textContent.includes('Automatischer Vorschlag: 2028-${serial}')`),'external start preview');
+    await js(`document.querySelector('#create-invoice').click()`);
+    await until(async()=>(await api('/api/invoices',undefined,'GET')).some(invoice=>invoice.invoice_number===`2028-${serial}`),'external start finalized');
+  }
+  await js(`document.querySelector('[data-view-link=invoice]').click(); document.querySelector('#counter-load').click()`);
+  await until(()=>js(`document.querySelector('#counter-next').value==='13' && document.querySelector('#counter-start-save').disabled`),'start locked after finalization');
   await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,'numbering.png'),(await contents.capturePage()).toPNG());
   console.log('NUMBERING_OK');
 }
