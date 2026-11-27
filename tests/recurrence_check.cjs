@@ -74,6 +74,74 @@ async function run() {
   await new Promise(resolve=>setTimeout(resolve,150));
   assert.equal(await js(`document.documentElement.scrollWidth <= innerWidth`),true);
   await fs.writeFile(path.join(output,'recurrence-mobile.png'),(await contents.capturePage()).toPNG());
+  // Real native controls must remain usable inside narrow day cards and every view.
+  window.setMinimumSize(320, 400);
+  for (const width of [360, 700, 900, 1440, 1920]) {
+    window.setSize(width, 900);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await js(`document.querySelector('[data-plan-start]').scrollIntoView({block:'center'})`);
+    const layout = await js(`(() => {
+      const date = document.querySelector('[data-plan-start]');
+      const row = date.closest('.weekly-plan-row');
+      const bounds = row.getBoundingClientRect();
+      return {
+        dateWidth: date.getBoundingClientRect().width,
+        dateHeight: date.getBoundingClientRect().height,
+        fits: [...row.querySelectorAll('input,select,button')].filter(el => el.checkVisibility()).every(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+        }),
+        pageFits: document.documentElement.scrollWidth <= innerWidth,
+      };
+    })()`);
+    assert.ok(layout.dateWidth >= 190 && layout.dateHeight >= 40, JSON.stringify({width, ...layout}));
+    assert.ok(layout.fits && layout.pageFits, JSON.stringify({width, ...layout}));
+    await fs.writeFile(path.join(output, `controls-weekly-${width}.png`), (await contents.capturePage()).toPNG());
+  }
+  window.setSize(540, 900);
+  await new Promise(resolve => setTimeout(resolve, 150));
+  await js(`document.querySelector('[data-plan-start]').scrollIntoView({block:'center'}); document.activeElement.blur()`);
+  const datePoint = await js(`(() => { const r = document.querySelector('[data-plan-start]').getBoundingClientRect(); return {x:Math.round(r.x + r.width / 2), y:Math.round(r.y + r.height / 2)}; })()`);
+  contents.sendInputEvent({type:'mouseMove', ...datePoint});
+  await new Promise(resolve => setTimeout(resolve, 100));
+  await fs.writeFile(path.join(output, 'controls-hover.png'), (await contents.capturePage()).toPNG());
+  await js(`document.querySelector('[data-plan-start]').showPicker()`);
+  await new Promise(resolve => setTimeout(resolve, 150));
+  await fs.writeFile(path.join(output, 'controls-native-picker.png'), (await contents.capturePage()).toPNG());
+  contents.sendInputEvent({type:'keyDown', keyCode:'Escape'});
+  contents.sendInputEvent({type:'keyUp', keyCode:'Escape'});
+  await js(`document.querySelector('[data-plan-start]').disabled = true`);
+  assert.equal(await js(`document.querySelector('[data-plan-start]').willValidate`), false);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  await fs.writeFile(path.join(output, 'controls-disabled.png'), (await contents.capturePage()).toPNG());
+  await js(`const date = document.querySelector('[data-plan-start]'); date.disabled = false; date.value = ''; date.setAttribute('aria-invalid', 'true'); date.focus();`);
+  assert.equal(await js(`document.querySelector('[data-plan-start]').checkValidity()`), false);
+  assert.equal(await js(`getComputedStyle(document.querySelector('[data-plan-start]')).borderTopColor`), 'rgb(166, 53, 53)', 'Invalid styling must take precedence over hover and focus');
+  await new Promise(resolve => setTimeout(resolve, 100));
+  await fs.writeFile(path.join(output, 'controls-invalid.png'), (await contents.capturePage()).toPNG());
+  await js(`document.querySelector('[data-plan-start]').removeAttribute('aria-invalid'); document.querySelector('[data-plan-start]').value = '2032-12-02'`);
+  for (const width of [360, 1440]) {
+    window.setSize(width, 900);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    for (const view of ['calendar', 'archive', 'annual', 'invoice', 'activities', 'management']) {
+      await js(`document.querySelector('[data-view-link="${view}"]').click(); document.querySelector('#view-${view}').scrollIntoView({block:'start'})`);
+      await new Promise(resolve => setTimeout(resolve, 150));
+      await fs.writeFile(path.join(output, `controls-${view}-${width}.png`), (await contents.capturePage()).toPNG());
+      assert.equal(await js(`document.documentElement.scrollWidth <= innerWidth`), true, `${view} at ${width}px`);
+      const fieldSelector = {calendar:'#invoice-date', invoice:'#organization-logo-file', management:'#backup-directory'}[view];
+      if (fieldSelector) {
+        await js(`document.querySelector('${fieldSelector}').scrollIntoView({block:'center'})`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await fs.writeFile(path.join(output, `controls-${view}-fields-${width}.png`), (await contents.capturePage()).toPNG());
+      }
+    }
+  }
+  await js(`document.querySelector('[data-view-link="weekly"]').click(); document.querySelector('[data-plan-start]').scrollIntoView({block:'center'})`);
+  window.maximize();
+  await until(() => window.isMaximized(), 'maximized window');
+  await new Promise(resolve => setTimeout(resolve, 150));
+  assert.equal(await js(`document.documentElement.scrollWidth <= innerWidth`), true);
+  await fs.writeFile(path.join(output, 'controls-maximized.png'), (await contents.capturePage()).toPNG());
   console.log('RECURRENCE_OK');
 }
 run().then(()=>app.quit()).catch(error=>{console.error(error.stack);app.exit(1);});
