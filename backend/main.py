@@ -1384,9 +1384,18 @@ def archived_invoice_pdf(identifier: int, invoice_id: int,
     return get_invoice_pdf(invoice_id, _archived_database(identifier, database_path), invoice_directory)
 
 
+class RevalidatedStaticFiles(StaticFiles):
+    """Revalidate local assets across desktop updates, including ES modules."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 app.mount(
     "/",
-    StaticFiles(
+    RevalidatedStaticFiles(
         directory=PROJECT_ROOT / os.environ.get("TTC_FRONTEND_DIRECTORY", "frontend"),
         html=True,
     ),

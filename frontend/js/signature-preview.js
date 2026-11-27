@@ -84,17 +84,6 @@ export class SignaturePreview {
           const handle = document.createElement('button'); handle.type = 'button'; handle.className = 'signature-resize'; handle.setAttribute('aria-label', 'Unterschrift proportional vergrößern oder verkleinern');
           overlay.append(handle); wrapper.append(overlay); this.overlay = overlay; this.position();
           let background = null;
-          if (data.background_pdf_base64) {
-            const backgroundTask = getDocument({ data: Uint8Array.from(atob(data.background_pdf_base64), char => char.charCodeAt(0)),
-              isEvalSupported: false, useSystemFonts: false,
-              standardFontDataUrl: new URL('../vendor/pdfjs/standard_fonts/', import.meta.url).href });
-            try {
-              const backgroundPdf = await backgroundTask.promise;
-              const backgroundPage = await backgroundPdf.getPage(backgroundPdf.numPages);
-              background = document.createElement('canvas'); background.width = canvas.width; background.height = canvas.height;
-              await backgroundPage.render({ canvasContext: background.getContext('2d'), viewport }).promise;
-            } finally { await backgroundTask.destroy(); }
-          }
           let drag = null;
           overlay.addEventListener('pointerdown', event => {
             if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -119,6 +108,17 @@ export class SignaturePreview {
             else { layout.x_mm += delta[0]; layout.y_mm += delta[1]; }
             this.update(layout);
           });
+          if (data.background_pdf_base64) {
+            const backgroundTask = getDocument({ data: Uint8Array.from(atob(data.background_pdf_base64), char => char.charCodeAt(0)),
+              isEvalSupported: false, useSystemFonts: false,
+              standardFontDataUrl: new URL('../vendor/pdfjs/standard_fonts/', import.meta.url).href });
+            try {
+              const backgroundPdf = await backgroundTask.promise;
+              const backgroundPage = await backgroundPdf.getPage(backgroundPdf.numPages);
+              background = document.createElement('canvas'); background.width = canvas.width; background.height = canvas.height;
+              await backgroundPage.render({ canvasContext: background.getContext('2d'), viewport }).promise;
+            } finally { await backgroundTask.destroy(); }
+          }
           // The PDF already contains the signature. This transparent interactive
           // image is visible only while moving, avoiding a duplicate at rest.
           const ns = 'http://www.w3.org/2000/svg';
