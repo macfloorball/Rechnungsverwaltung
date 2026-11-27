@@ -1,3 +1,4 @@
+import { initializeAnnualOverview } from "./annual-overview.js";
 import { initializeProfileArchive } from "./profile-archive.js";
 import { initializeSavedSignatures } from "./signature-preview.js";
 import { initializeSignatures } from "./signatures.js";
@@ -11,6 +12,7 @@ import { initializeDesktopUpdates } from "./updates.js";
 
 if (await initializeProfiles()) {
 initializeNavigation();
+initializeAnnualOverview();
 initializeCalendar();
 initializeInvoicePreview();
 initializeSettings();

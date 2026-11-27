@@ -26,12 +26,31 @@
 <nav class="app-navigation" aria-label="Hauptnavigation">
 <a href="#view-calendar" data-view-link="calendar" aria-current="page">Kalender / Übersicht</a>
 <a href="#view-archive" data-view-link="archive">Rechnungsarchiv</a>
+<a href="#view-annual" data-view-link="annual">Jahresübersicht</a>
 <a href="#view-invoice" data-view-link="invoice">Rechnung konfigurieren</a>
 <a href="#view-weekly" data-view-link="weekly">Wochenplan konfigurieren</a>
 <a href="#view-activities" data-view-link="activities">Tätigkeiten und Preise</a>
 <a href="#view-management" data-view-link="management">Verwaltung / App-Einstellungen</a>
 </nav>
       <main id="main-content">
+<div id="view-annual" data-view="annual" aria-labelledby="view-annual-title" hidden>
+<h2 id="view-annual-title" class="view-title" tabindex="-1">Jahresübersicht</h2>
+<section class="invoice-section">
+<p>Abgerechneter Betrag aus gespeicherten endgültigen Rechnungen des aktiven Profils, zugeordnet nach Abrechnungsmonat.</p>
+<div class="annual-toolbar">
+<label for="annual-year">Abrechnungsjahr
+<select id="annual-year"></select></label>
+<button id="annual-reload" class="secondary-button" type="button">Aktualisieren</button>
+<button id="annual-pdf" class="secondary-button" type="button" disabled>PDF exportieren</button>
+<button id="annual-csv" class="secondary-button" type="button" disabled>CSV exportieren</button>
+</div>
+<p id="annual-message" role="status" aria-live="polite"></p>
+<div class="invoice-table-wrapper"><table id="annual-table" class="invoice-table" hidden>
+<thead><tr><th scope="col">Monat</th><th scope="col">Abgerechneter Betrag</th></tr></thead>
+<tbody id="annual-months"></tbody>
+<tfoot><tr><th scope="row">Jahressumme</th><td id="annual-total"></td></tr></tfoot>
+</table></div>
+</section></div>
 <div id="view-calendar" data-view="calendar" aria-labelledby="view-calendar-title">
 <h2 id="view-calendar-title" class="view-title" tabindex="-1">Kalender / Übersicht</h2>
 <section class="calendar-section" aria-labelledby="calendar-title">

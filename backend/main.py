@@ -724,6 +724,25 @@ def preview_invoice(
     }
 
 
+@app.get("/api/annual-overview/{year}")
+def annual_overview(year: int, database_path: DatabasePath):
+    if not 1 <= year <= 9999:
+        raise HTTPException(422, "Abrechnungsjahr muss zwischen 1 und 9999 liegen.")
+    from backend.annual_overview import overview
+    return overview(database_path, year)
+
+
+@app.get("/api/annual-overview/{year}/{format}")
+def annual_overview_export(year: int, format: str, database_path: DatabasePath):
+    from backend.annual_overview import export_csv, export_pdf
+    if format not in ("csv", "pdf"):
+        raise HTTPException(404, "Unbekanntes Exportformat")
+    data = annual_overview(year, database_path)
+    content = export_csv(data) if format == "csv" else export_pdf(data)
+    return Response(content, media_type="text/csv" if format == "csv" else "application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="Jahresuebersicht-{year}.{format}"'})
+
+
 @app.get("/api/invoices")
 def list_invoices(database_path: DatabasePath) -> list[dict[str, Any]]:
     invoices = [
