@@ -1139,3 +1139,9 @@ dialog .number-correction-confirmation input {
 .signature-overlay > svg { visibility: hidden; display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .signature-overlay.moving > svg { visibility: visible; }
 #archived-profiles-list button { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+
+.annual-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.annual-toolbar label { display: grid; gap: 6px; color: #40566d; font-weight: 600; }
+.annual-toolbar select { min-width: 140px; padding: 10px 12px; border: 1px solid #c5d4e3; border-radius: 8px; background: white; color: inherit; font: inherit; }
+#annual-table { min-width: 0; }
+#annual-table th:first-child { text-align: left; }

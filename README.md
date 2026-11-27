@@ -139,3 +139,9 @@ Die Anwendung ist für den lokalen Betrieb gedacht und besitzt keine Benutzerkon
 ## Lizenz
 
 Der eigene Projektcode steht unter der **[MIT-Lizenz](LICENSE)**. Fremdkomponenten behalten ihre jeweiligen Lizenzen; die Hinweise dazu stehen in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+### Jahresübersicht
+
+Der Tab „Jahresübersicht“ zeigt für das aktive Profil alle zwölf Monatsbeträge und die Jahressumme des ausgewählten Abrechnungsjahres. Grundlage sind ausschließlich die gespeicherten Gesamtbeträge endgültiger Rechnungen; Vorschauen und noch nicht abgerechnete Trainings zählen nicht dazu. Die Zuordnung folgt dem Abrechnungsmonat, unabhängig vom Rechnungsdatum. Historische Abrechnungsjahre sind über die Jahresauswahl erreichbar.
+
+PDF und CSV exportieren dieselbe Auswertung für das ausgewählte Profil und Jahr. CSV verwendet UTF-8 mit BOM, Semikolon und deutsche Dezimalbeträge für Excel/LibreOffice. „Abgerechneter Betrag“ beschreibt keine tatsächlichen Zahlungseingänge.
