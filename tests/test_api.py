@@ -3329,3 +3329,26 @@ def test_archive_uses_billing_period_and_saved_recipient(client):
     assert invoices[1]['recipient'] == ''
     assert 'invoice_snapshot_json' not in invoices[0]
     assert 'logo_snapshot' not in invoices[0]
+
+
+def test_calendar_status_cycle_survives_database_reinitialization(client):
+    activity_id = client.put('/api/settings', json={
+        'activities': [{'name': 'Status-Test', 'hourly_rate_cents': 1500}],
+    }).json()['activities'][0]['id']
+    payload = {'training_date': '2032-12-02', 'activity_type_id': activity_id,
+               'hours': 1, 'note': 'Unverändert'}
+    first = client.post('/api/trainings', json=payload).json()
+    second = client.post('/api/trainings', json=payload).json()
+    assert first['status'] == second['status'] == 'planned'
+    for status in ('completed', 'cancelled', 'planned', 'cancelled', 'completed'):
+        response = client.put(f"/api/trainings/{first['id']}", json={'status': status})
+        assert response.status_code == 200
+        initialize_database(client.app.state.test_database_path)
+        with TestClient(app) as restarted:
+            trainings = {t['id']: t for day in restarted.get('/api/calendar/2032/12').json()['days']
+                         for t in day['trainings']}
+        assert trainings[first['id']]['status'] == status
+        assert trainings[second['id']]['status'] == 'planned'
+        for field in ('training_date', 'activity_type_id', 'hours', 'note'):
+            assert trainings[first['id']][field] == first[field]
+    assert client.put(f"/api/trainings/{first['id']}", json={'status': 'invalid'}).status_code == 422

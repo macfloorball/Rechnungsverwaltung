@@ -31,7 +31,7 @@ button {
 }
 
 .app-shell {
-  width: min(1120px, calc(100% - 32px));
+  width: calc(100% - 32px);
   margin: 0 auto;
   padding: 32px 0 56px;
 }
@@ -600,7 +600,10 @@ button {
   line-height: 1;
 }
 
+#calendar { overflow-x: auto; }
+
 .calendar-grid {
+  min-width: 840px;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   overflow: hidden;
@@ -700,49 +703,88 @@ button {
   color: #526579;
 }
 
-.training__completion {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #40566d;
-  cursor: pointer;
+.training { container-type: inline-size; }
+
+.training__statuses {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  gap: 3px;
+  border: 0;
 }
 
-.training__completion input {
-  margin: 0;
-  accent-color: #2a8b61;
-}
-
-.training__actions {
+.training__status {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 4px 8px;
-}
-
-.training__not-done {
-  padding: 2px 4px;
-  color: #8e2525;
-  font-size: 0.68rem;
-  font-weight: 700;
-  background: #fff;
-  border: 1px solid #e4bcbc;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 3px 1px;
+  color: var(--status-color);
+  background: var(--status-background);
+  border: 1px solid var(--status-border);
   border-radius: 5px;
   cursor: pointer;
 }
 
-.training__not-done:hover:not(:disabled) {
-  background: #fcf0f0;
+.training__status--completed {
+  --status-color: #206844;
+  --status-background: #edf8f2;
+  --status-border: #a5cfb8;
 }
 
-.training__not-done:focus-visible {
-  outline: 2px solid #8e2525;
+.training__status--planned {
+  --status-color: #245d89;
+  --status-background: #edf6fc;
+  --status-border: #a9cce6;
+}
+
+.training__status--cancelled {
+  --status-color: #963838;
+  --status-background: #fcf0f0;
+  --status-border: #e2b2b2;
+}
+
+.training__status input {
+  appearance: none;
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  margin: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+  cursor: inherit;
+}
+
+.training__status input:checked { background: currentColor; }
+.training__status:has(input:checked) {
+  border-color: var(--status-color);
+  box-shadow: inset 0 0 0 1px var(--status-color);
+  font-weight: 700;
+}
+.training__status:has(input:focus-visible) {
+  outline: 2px solid #153c61;
   outline-offset: 2px;
 }
+.training__status:hover { border-color: var(--status-color); }
+.training__statuses:disabled { opacity: 0.65; }
+.training__statuses:disabled label { cursor: wait; }
+.training__status-symbol { font-size: 1rem; }
+.training__status-label { font-size: 0.65rem; overflow-wrap: anywhere; }
 
-.training__not-done:disabled {
-  cursor: default;
-  opacity: 0.6;
+@container (max-width: 250px) {
+  .training__status-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 
 .add-training-button {
@@ -921,7 +963,7 @@ dialog textarea {
 
 @media (max-width: 700px) {
   .app-shell {
-    width: min(100% - 20px, 560px);
+    width: calc(100% - 20px);
     padding-top: 10px;
   }
 

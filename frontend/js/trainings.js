@@ -105,27 +105,6 @@ export function bindTrainingEditor(calendar, onSaved) {
     if (!(target instanceof Element)) {
       return;
     }
-    const notDoneButton = target.closest("[data-training-cancelled]");
-    if (notDoneButton instanceof HTMLButtonElement) {
-      const training = JSON.parse(notDoneButton.dataset.trainingCancelled || "null");
-      if (!training || training.status === "cancelled") {
-        return;
-      }
-      notDoneButton.disabled = true;
-      calendarErrorMessage.hidden = true;
-      requestJson(`/api/trainings/${training.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "cancelled" }),
-      })
-        .then(onSaved)
-        .catch((error) => showError(calendarErrorMessage, error))
-        .finally(() => {
-          notDoneButton.disabled = false;
-        });
-      return;
-    }
-
     const addButton = target.closest("[data-new-date]");
     if (addButton instanceof HTMLButtonElement) {
       openEditor({
@@ -150,29 +129,33 @@ export function bindTrainingEditor(calendar, onSaved) {
 
   calendar.addEventListener("change", async (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement) || !target.matches("[data-training-completion]")) {
+    if (!(target instanceof HTMLInputElement) || !target.matches("[data-training-status]")) {
       return;
     }
 
-    const training = JSON.parse(target.dataset.trainingCompletion || "null");
+    const training = JSON.parse(target.dataset.trainingStatus || "null");
     if (!training) {
       return;
     }
 
-    target.disabled = true;
+    const group = target.closest("fieldset");
+    if (!group || group.disabled || target.value === training.status) return;
+    group.disabled = true;
     calendarErrorMessage.hidden = true;
     try {
       await requestJson(`/api/trainings/${training.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: target.checked ? "completed" : "planned" }),
+        body: JSON.stringify({ status: target.value }),
       });
       await onSaved();
     } catch (error) {
-      target.checked = training.status === "completed";
+      for (const input of group.querySelectorAll("input")) {
+        input.checked = input.value === training.status;
+      }
       showError(calendarErrorMessage, error);
     } finally {
-      target.disabled = false;
+      group.disabled = false;
     }
   });
 
