@@ -55,6 +55,16 @@ async function run() {
   await drag('.signature-dialog canvas',60,25);
   await js('document.querySelector("[data-undo]").click();document.querySelector("[data-save]").click()');
   await until(() => js('!document.querySelector(".signature-dialog").open'), 'saved drawn signature');
+  // Exercise PNG import through the real file input, not only drawing/API upload.
+  await js(`(async()=>{
+    const canvas=document.createElement('canvas');canvas.width=400;canvas.height=100;
+    const ctx=canvas.getContext('2d');ctx.beginPath();ctx.moveTo(10,70);ctx.lineTo(80,20);ctx.lineTo(380,30);ctx.stroke();
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    const transfer=new DataTransfer();transfer.items.add(new File([blob],'synthetic.png',{type:'image/png'}));
+    const input=document.querySelector('.organization-settings-group input[type=file][accept="image/png,.png"]');
+    input.files=transfer.files;input.dispatchEvent(new Event('change'));
+  })()`);
+  await until(async()=> (await api('/api/organization/signature')).image_width===400,'PNG import');
   const profile = await api('/api/organization/signature');
   assert.ok(profile.data_base64);
   const activity = (await api('/api/settings',{activities:[{name:'Künstliches Testtraining',hourly_rate_cents:1500}]},'PUT')).activities[0];

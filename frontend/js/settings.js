@@ -426,6 +426,7 @@ export function initializeSettings() {
       return;
     }
     const unlock = lockForm(counterForm);
+    let releaseError = null;
     try {
       await requestJson(`/api/organization/invoice-counter/${year}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
@@ -433,8 +434,12 @@ export function initializeSettings() {
       });
       await loadCounter();
       document.dispatchEvent(new Event("invoice-numbering-changed"));
-    } catch (error) { counterMessage.textContent = error.message; }
-    finally { unlock(); await loadCounter(); }
+    } catch (error) { releaseError = error.message; }
+    finally {
+      unlock();
+      await loadCounter();
+      if (releaseError) counterMessage.textContent = releaseError;
+    }
   });
   loadCounter();
 
