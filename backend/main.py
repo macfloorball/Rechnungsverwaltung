@@ -38,7 +38,7 @@ from backend.storage_import import prepare_database
 from backend.storage_errors import DatabaseAccessError, MESSAGES, error_code
 
 from backend.database import (
-    get_invoice_counter, set_invoice_counter, get_connection,
+    get_invoice_counter, set_invoice_counter, set_invoice_start_number, get_connection,
     profile_deletion_summary, delete_profile_transaction,
     ProfileDatabasePath, profile_id, list_profiles, create_profile, rename_profile,
     save_activities,
@@ -77,6 +77,7 @@ from backend.invoice_generator import (
 )
 from backend.models import (
     InvoiceCounterUpdate,
+    InvoiceStartNumberUpdate,
     InvoiceNumberCorrection,
     ProfileInput,
     ProfileDeleteConfirmation,
@@ -354,6 +355,15 @@ def read_invoice_counter(year: int, database_path: DatabasePath):
 def write_invoice_counter(year: int, payload: InvoiceCounterUpdate, database_path: DatabasePath):
     try:
         return set_invoice_counter(year, payload.next_number, database_path, confirm_reuse=payload.confirm_reuse)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.put("/api/organization/invoice-counter/{year}/start")
+def write_invoice_start_number(year: int, payload: InvoiceStartNumberUpdate, database_path: DatabasePath):
+    try:
+        return set_invoice_start_number(year, payload.start_number, database_path,
+                                        confirm_external=payload.confirm_external)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

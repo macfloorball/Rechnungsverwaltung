@@ -164,7 +164,7 @@ def get_connection(
             connection.close()
 
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 
 def get_schema_version(connection: sqlite3.Connection) -> int:
@@ -376,6 +376,7 @@ def initialize_database(database_path: Path | None = None) -> None:
             _migrate_invoice_number_retired,
             _migrate_signatures,
             _migrate_profile_archive,
+            _migrate_invoice_start_number,
         ):
             migration(connection)
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -1796,3 +1797,35 @@ def _migrate_profile_archive(connection):
     except Exception:
         connection.rollback()
         raise
+
+
+def _migrate_invoice_start_number(connection):
+    if get_schema_version(connection) != 14:
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        if "start_number" not in {row[1] for row in connection.execute("PRAGMA table_info(invoice_counters)")}:
+            connection.execute("ALTER TABLE invoice_counters ADD COLUMN start_number INTEGER NOT NULL DEFAULT 1 CHECK(start_number BETWEEN 1 AND 12)")
+        connection.execute("INSERT INTO schema_migrations(version) VALUES (15)")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def set_invoice_start_number(year, start_number, database_path=None, *, confirm_external=False):
+    """Reserve earlier external numbers only before this year's first app invoice."""
+    from backend.invoice_numbering import numbering_state, remember_next
+    if type(year) is not int or not 1 <= year <= 9999 or type(start_number) is not int or not 1 <= start_number <= 12:
+        raise ValueError("Jahr und Startnummer (1–12) müssen gültig sein.")
+    if confirm_external is not True:
+        raise ValueError("Bitte bestätigen, dass kleinere Nummern bereits außerhalb der App vergeben wurden.")
+    with get_connection(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        identifier = profile_id(database_path)
+        state = numbering_state(connection, identifier, year)
+        if not state["start_number_editable"]:
+            raise ValueError("Die Startnummer kann nur vor der ersten endgültigen Rechnung dieses Profils und Jahres festgelegt werden, wenn keine Wiederverwendung gesperrt ist.")
+        remember_next(connection, identifier, year, start_number)
+        connection.execute("UPDATE invoice_counters SET start_number=? WHERE organization_id=? AND year=?", (start_number, identifier, year))
+    return get_invoice_counter(year, database_path)

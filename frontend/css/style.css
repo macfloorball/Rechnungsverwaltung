@@ -269,6 +269,33 @@ input[type="file"]:disabled::file-selector-button { color: #63778b; cursor: not-
 .organization-fields select,
 .organization-logo-controls input[type="file"] { width: 100%; }
 
+/* Use the shared field surface with a clear, stacked start-number confirmation. */
+.invoice-start-settings {
+  display: grid;
+  gap: 12px;
+}
+.invoice-start-settings > p { margin: 0; }
+.invoice-start-settings > label:first-of-type {
+  display: grid;
+  gap: 6px;
+  max-width: 180px;
+  color: #40566d;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.invoice-start-settings > label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.invoice-start-settings input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+}
+.invoice-start-settings > button { justify-self: start; max-width: 100%; }
+
 .organization-field-wide {
   grid-column: 1 / -1;
 }

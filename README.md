@@ -86,6 +86,7 @@ Pro Rechnungsprofil sind bis zu **zehn Tätigkeiten** mit eigenen Stundenpreisen
 - Eigene Absender-, Empfänger-, Steuer- und Zahlungsangaben sowie ein optionales Logo.
 - Lokale Unterschriften je Profil: PNG-Import oder Zeichnen, Position und Größe in der PDF-Vorschau bearbeiten; unabhängige Unterschriftenstände je Rechnung.
 - Jährliche Rechnungsnummern 01–12 je Profil, automatisch oder manuell mit optionalem Präfix.
+- Bestätigte Startnummer beim Wechsel von außerhalb der App geschriebenen Rechnungen: beispielsweise mit 11 beginnen und danach automatisch 12 vergeben.
 - Lückenprüfung und ausdrückliche Nummernkorrektur mit neuem PDF aus den gespeicherten Rechnungsangaben.
 - Eigenes Rechnungsarchiv mit Abrechnungsjahr, optionalem Monatsfilter und Suche nach Rechnungsnummer oder historischem Empfänger; gespeicherte PDFs öffnen und herunterladen.
 
