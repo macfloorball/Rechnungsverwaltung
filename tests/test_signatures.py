@@ -231,7 +231,7 @@ def test_archive_migration_preserves_existing_signed_records(tmp_path, monkeypat
     assert db.list_profiles(database) == [{'id': 1, 'name': 'TTC'}]
     assert db.list_archived_profiles(database) == []
     with db.get_connection(database) as connection:
-        assert db.get_schema_version(connection) == 14
+        assert db.get_schema_version(connection) == db.SCHEMA_VERSION
     assert list(tmp_path.glob('*.before-migration-*.sqlite3'))
 
 

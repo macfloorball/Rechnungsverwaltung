@@ -46,12 +46,13 @@ def numbering_state(connection, identifier, year):
         except (ValueError, TypeError):
             issues.append(f"Ungültige Bestandsnummer: Rechnung {row[0]} ({row[2] or 'ohne Nummer'}).")
         records.append(record)
-    maximum = max(serials, default=0)
-    gaps = sorted(set(range(1, maximum + 1)) - set(serials))
+    counter = connection.execute("SELECT next_number, start_number FROM invoice_counters WHERE organization_id=? AND year=?", (identifier, year)).fetchone()
+    start_number = counter[1] if counter else 1
+    maximum = max(serials, default=start_number - 1)
+    gaps = sorted(set(range(start_number, maximum + 1)) - set(serials))
     if gaps:
         issues.append("Lücken in der Nummernfolge: " + ", ".join(map(str, gaps)) + ".")
-    next_number = maximum + 1
-    counter = connection.execute("SELECT next_number FROM invoice_counters WHERE organization_id=? AND year=?", (identifier, year)).fetchone()
+    next_number = max(start_number, maximum + 1)
     legacy = connection.execute("SELECT minimum_number FROM invoice_number_legacy_floors WHERE organization_id=?", (identifier,)).fetchone()
     previous_next = counter[0] if counter else (legacy[0] if legacy else 1)
     retired = [row[0] for row in connection.execute("SELECT serial FROM invoice_number_retired WHERE organization_id=? AND year=? ORDER BY serial", (identifier, year))]
@@ -64,7 +65,10 @@ def numbering_state(connection, identifier, year):
         message = " ".join(issues) + " Unter Rechnung konfigurieren → Nummernkreis und gespeicherte Rechnungen prüfen. Rechnungen werden niemals automatisch umnummeriert."
     else:
         message = f"Nächste automatische Nummer: {year:04d}-{next_number:02d}. Die Vorschau verbraucht keine Nummer."
+    if start_number > 1:
+        message += f" Startnummer {start_number:02d}; kleinere Nummern wurden als außerhalb der App vergeben bestätigt."
     return {"year": year, "next_number": next_number, "minimum_number": next_number,
+            "start_number": start_number, "start_number_editable": not records and not retired and not issues,
             "invoice_number": f"{year:04d}-{next_number:02d}" if not issues else None,
             "issues": issues, "gaps": gaps, "records": records,
             "release_required": release_required, "retired_numbers": retired,
@@ -78,6 +82,8 @@ def select_number(connection, identifier, year, manual=None, exclude_id=None):
         if prefix is None:
             raise NumberingError("Profil wurde nicht gefunden.")
         serial = parse_number(manual, year, prefix[0])
+        if serial < state["start_number"]:
+            raise NumberingError("Diese Nummer liegt unter der bestätigten Startnummer und ist für außerhalb der App geschriebene Rechnungen reserviert.")
         for row in year_rows(connection, identifier, year):
             if row[0] == exclude_id:
                 continue
@@ -96,5 +102,5 @@ def select_number(connection, identifier, year, manual=None, exclude_id=None):
 
 
 def remember_next(connection, identifier, year, next_number):
-    connection.execute("INSERT INTO invoice_counters VALUES (?, ?, ?, ?) ON CONFLICT(organization_id, year) DO UPDATE SET next_number=excluded.next_number, minimum_number=excluded.minimum_number", (identifier, year, next_number, next_number))
+    connection.execute("INSERT INTO invoice_counters (organization_id, year, next_number, minimum_number) VALUES (?, ?, ?, ?) ON CONFLICT(organization_id, year) DO UPDATE SET next_number=excluded.next_number, minimum_number=excluded.minimum_number", (identifier, year, next_number, next_number))
     connection.execute("UPDATE organizations SET next_invoice_number=? WHERE id=?", (next_number, identifier))

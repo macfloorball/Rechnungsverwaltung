@@ -43,6 +43,10 @@ def validate_database(connection: sqlite3.Connection, *, current: bool = False) 
             columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
             if not required_columns <= columns:
                 raise ValueError("Die Rechnungsnummernkreise fehlen in der Datenbank")
+    if get_schema_version(connection) >= 15:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(invoice_counters)")}
+        if "start_number" not in columns:
+            raise ValueError("Die Startnummern der Rechnungsnummernkreise fehlen")
     if get_schema_version(connection) >= 7:
         validate_profile_relationships(connection)
     if connection.execute("PRAGMA foreign_key_check").fetchall():

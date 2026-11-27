@@ -145,6 +145,11 @@ class InvoiceCounterUpdate(APIModel):
     confirm_reuse: bool = False
 
 
+class InvoiceStartNumberUpdate(APIModel):
+    start_number: int = Field(gt=0, le=12, strict=True)
+    confirm_external: Literal[True]
+
+
 class LogoUpload(APIModel):
     media_type: Literal["image/png", "image/jpeg"]
     data_base64: str = Field(min_length=1, max_length=2_800_000)
