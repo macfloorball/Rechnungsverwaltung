@@ -9,9 +9,9 @@ benötigt. Die Rechnungsverwaltung arbeitet lokal ohne Benutzerkonto.
 
 | System | Download / Installationsweg | Nachweis und Grenze |
 | --- | --- | --- |
-| Windows 10/11, x64 (Intel/AMD 64 Bit) | [Desktop 0.2.3: Setup-EXE](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.2.3/ttc-rechnungsverwaltung-0.2.3-windows-x64-setup.exe) | Windows-Live-Update 0.1.2 → 0.1.3 belegt; neue Features in CI geprüft, zusätzliche Sonderfälle siehe [#46](https://github.com/macfloorball/Rechnungsverwaltung/issues/46) |
-| Linux, x86_64 / amd64 | [Desktop 0.2.3: AppImage](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.2.3/ttc-rechnungsverwaltung-0.2.3-linux-x64.AppImage) | Native Fedora-45-Nachweise für Vorgängerversionen; Ubuntu 24.04 LTS ist Ziel-/CI-System, keine vollständige GUI-Abnahme |
-| Fedora 45, x86_64 | [Signiertes DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/) | RPM 0.2.2-1; Installation, Update, Entfernung und Signaturablehnung im isolierten Fedora-Container geprüft |
+| Windows 10/11, x64 (Intel/AMD 64 Bit) | [Desktop 0.2.4: Setup-EXE](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.2.4/ttc-rechnungsverwaltung-0.2.4-windows-x64-setup.exe) | Windows-Live-Update 0.1.2 → 0.1.3 belegt; neue Features in CI geprüft, zusätzliche Sonderfälle siehe [#46](https://github.com/macfloorball/Rechnungsverwaltung/issues/46) |
+| Linux, x86_64 / amd64 | [Desktop 0.2.4: AppImage](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.2.4/ttc-rechnungsverwaltung-0.2.4-linux-x64.AppImage) | Native Fedora-45-Nachweise für Vorgängerversionen; Ubuntu 24.04 LTS ist Ziel-/CI-System, keine vollständige GUI-Abnahme |
+| Fedora 45, x86_64 | [Signiertes DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/) | RPM 0.2.4-1; Installation, Update, Entfernung und Signaturablehnung im isolierten Fedora-Container geprüft |
 
 Für ARM und macOS sind keine fertigen Pakete veröffentlicht. Andere
 Linux-Distributionen sind nicht pauschal als geprüft zugesagt. Auf Fedora ist
@@ -19,24 +19,23 @@ DNF der integrierte Installationsweg; das AppImage ist eine separate Alternative
 Beide Linux-Ausgaben teilen das Benutzerprofil: vor einem Wechsel sichern und
 alle Instanzen schließen. Nicht gleichzeitig mit demselben Datenbestand starten.
 
-Der [stabile Desktop-Release 0.2.3](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.3)
+Der [stabile Desktop-Release 0.2.4](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v0.2.4)
 enthält beide Desktopdateien. Unter „Assets“ die oben genannte Datei wählen,
 nicht „Source code“, `desktop-update.json` oder die Drittanbieter-Quellarchive.
 Der neueste allgemeine GitHub-Release kann stattdessen ein RPM-Release sein.
 
-### Update auf 0.2.3
+### Update auf 0.2.4
 
 Vor Installation beziehungsweise DNF-Upgrade eine **vollständige App-Sicherung**
 mit Datenbank und Dokumenten erstellen und die App schließen. Desktop-Version
-0.2.3 ergänzt das bestätigte Löschen von Rechnungsprofilen einschließlich
-Datenübersicht sowie manuelle Rechnungsnummern mit optionalem Präfix. Die
-Nummerierung läuft pro Profil und Rechnungsdatum-Jahr von 01 bis 12. Lücken und
-ungültige Bestandsnummern werden erkannt; eine ausdrückliche Nummernkorrektur
-erzeugt das PDF aus den gespeicherten historischen Rechnungsangaben neu.
-Gelöschte letzte Nummern werden erst nach ausdrücklicher Freigabe wiederverwendet.
-Der erste Start migriert die Datenbank auf Schema 12; bestehende Rechnungen,
-Nummern und PDFs bleiben ohne ausdrückliche Nutzeraktion unverändert.
-Der separate, bisher veröffentlichte RPM-Stand ist 0.2.2-1.
+0.2.4 ergänzt profilbezogene Unterschriften mit Zeichenfläche, PNG-Import und
+maßstabsgetreuer PDF-Vorschau. Das Rechnungsarchiv bietet Jahresauswahl und Suche;
+Rechnungen gelöschter Profile bleiben schreibgeschützt erhalten. Die Jahresübersicht
+zeigt Monatsbeträge und bietet PDF- und CSV-Export. Kalendereinträge haben eine
+direkte Auswahl für Durchgeführt, Geplant und Abgesagt. Die Oberfläche passt sich
+an die Fensterbreite an; in schmalen Fenstern lässt sich der Kalender horizontal
+scrollen. Der erste Start migriert die Datenbank auf Schema 14 und erhält vorhandene
+Rechnungen, Nummern und PDFs. Der zugehörige DNF-Paketstand ist 0.2.4-1.
 
 Beim erstmaligen Update von einer Version vor 0.2.0 migriert der erste Start
 die Datenbank für Profile, Wiederholungen und Jahresnummernkreise.
@@ -48,13 +47,13 @@ passende Sicherung benötigt. Details zur Bedienung stehen in der README.
 
 ## 2. Windows installieren und starten
 
-1. Die oben verlinkte Datei `ttc-rechnungsverwaltung-0.2.3-windows-x64-setup.exe`
+1. Die oben verlinkte Datei `ttc-rechnungsverwaltung-0.2.4-windows-x64-setup.exe`
    herunterladen, zum Beispiel in „Downloads“.
-2. Optional die Datei [SHA256SUMS](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.2.3/SHA256SUMS)
+2. Optional die Datei [SHA256SUMS](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v0.2.4/SHA256SUMS)
    desselben Releases herunterladen. Im Downloadordner in PowerShell prüfen:
 
    ```powershell
-   Get-FileHash -Algorithm SHA256 .\ttc-rechnungsverwaltung-0.2.3-windows-x64-setup.exe
+   Get-FileHash -Algorithm SHA256 .\ttc-rechnungsverwaltung-0.2.4-windows-x64-setup.exe
    ```
 
    Den vollständigen Hash mit der Zeile für genau diesen Dateinamen vergleichen.
@@ -106,14 +105,14 @@ wird das bestehende Profil wiederverwendet.
    ```sh
    mkdir -p "$HOME/Anwendungen/TT-Rechnungsverwaltung"
    cd "$HOME/Anwendungen/TT-Rechnungsverwaltung"
-   chmod u+rwx ttc-rechnungsverwaltung-0.2.3-linux-x64.AppImage
+   chmod u+rwx ttc-rechnungsverwaltung-0.2.4-linux-x64.AppImage
    ```
 
 2. Optional `SHA256SUMS` vom Desktop-Release in denselben Ordner herunterladen
    und den Wert für das AppImage mit dieser Ausgabe vergleichen:
 
    ```sh
-   sha256sum ttc-rechnungsverwaltung-0.2.3-linux-x64.AppImage
+   sha256sum ttc-rechnungsverwaltung-0.2.4-linux-x64.AppImage
    ```
 
    Bei Abweichung nicht starten.
@@ -121,7 +120,7 @@ wird das bestehende Profil wiederverwendet.
 
    ```sh
    cd "$HOME/Anwendungen/TT-Rechnungsverwaltung"
-   ./ttc-rechnungsverwaltung-0.2.3-linux-x64.AppImage
+   ./ttc-rechnungsverwaltung-0.2.4-linux-x64.AppImage
    ```
 
    Später denselben Start wiederholen. Ein automatischer Menüeintrag wird für das
