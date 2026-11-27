@@ -40,7 +40,7 @@ function createTraining(training) {
   const statusLabels = {
     planned: "Geplant",
     completed: "Durchgeführt",
-    cancelled: "Ausgefallen",
+    cancelled: "Abgesagt",
   };
   button.append(
     createElement("span", "training__name", name),
@@ -50,28 +50,24 @@ function createTraining(training) {
       `${training.hours === null ? "Pauschale" : `${training.hours} Std.`} · ${statusLabels[training.status] || training.status}`,
     ),
   );
-  const completionLabel = createElement("label", "training__completion");
-  const completionCheckbox = createElement("input");
-  completionCheckbox.type = "checkbox";
-  completionCheckbox.checked = training.status === "completed";
-  completionCheckbox.disabled = training.status === "cancelled";
-  completionCheckbox.dataset.trainingCompletion = JSON.stringify(training);
-  completionCheckbox.setAttribute(
-    "aria-label",
-    `${name} am ${training.training_date} als durchgeführt markieren`,
-  );
-  completionLabel.append(completionCheckbox, document.createTextNode("Durchgeführt"));
-
-  const notDoneButton = createElement("button", "training__not-done", "Nicht gemacht");
-  notDoneButton.type = "button";
-  notDoneButton.dataset.trainingCancelled = JSON.stringify(training);
-  notDoneButton.disabled = training.status === "cancelled";
-  notDoneButton.setAttribute(
-    "aria-label",
-    `${name} am ${training.training_date} als nicht durchgeführt markieren`,
-  );
-  const actions = createElement("div", "training__actions");
-  actions.append(completionLabel, notDoneButton);
+  const actions = createElement("fieldset", "training__statuses");
+  const legend = createElement("legend", "visually-hidden", `Status für ${name} am ${training.training_date}`);
+  actions.append(legend);
+  for (const [status, symbol] of [["completed", "✓"], ["planned", "◷"], ["cancelled", "✕"]]) {
+    const label = createElement("label", `training__status training__status--${status}`);
+    label.title = statusLabels[status];
+    const input = createElement("input");
+    input.type = "radio";
+    input.name = `training-status-${training.id}`;
+    input.value = status;
+    input.checked = training.status === status;
+    input.dataset.trainingStatus = JSON.stringify(training);
+    input.setAttribute("aria-label", statusLabels[status]);
+    const icon = createElement("span", "training__status-symbol", symbol);
+    icon.setAttribute("aria-hidden", "true");
+    label.append(input, icon, createElement("span", "training__status-label", statusLabels[status]));
+    actions.append(label);
+  }
   item.append(button, actions);
   return item;
 }

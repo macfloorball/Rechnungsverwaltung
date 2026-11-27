@@ -305,8 +305,25 @@ async function run() {
     return button && JSON.parse(button.dataset.training).status === '${status}'
       && document.querySelector('#calendar').getAttribute('aria-busy') === 'false';
   })()`), `appointment ${id}: ${status}`);
-  const clickCompletion = id => js(`${trainingButton(id)}.parentElement.querySelector('[data-training-completion]').click()`);
-  const clickCancelled = id => js(`${trainingButton(id)}.parentElement.querySelector('[data-training-cancelled]').click()`);
+  const clickCompletion = id => js(`${trainingButton(id)}.parentElement.querySelector('[data-training-status][value="completed"]').click()`);
+  const clickCancelled = id => js(`${trainingButton(id)}.parentElement.querySelector('[data-training-status][value="cancelled"]').click()`);
+  // Keep all three choices usable inside narrow calendar entries.
+  const originalSize = window.getSize();
+  for (const width of [1280, 800, 540]) {
+    window.setMinimumSize(400, 400);
+    window.setSize(width, 900);
+    await new Promise(resolve => setTimeout(resolve, 120));
+    assert.equal(await js(`Array.from(document.querySelectorAll('.training__statuses')).every(group => {
+      const labels = Array.from(group.querySelectorAll('label'));
+      const rect = group.getBoundingClientRect();
+      return labels.length === 3 && labels.every(label => {
+        const box = label.getBoundingClientRect();
+        return box.width >= 24 && box.height >= 32 && box.left >= rect.left - 1 && box.right <= rect.right + 1;
+      });
+    })`), true);
+    await fs.writeFile(path.join(output, `calendar-status-${width}.png`), (await contents.capturePage()).toPNG());
+  }
+  window.setSize(...originalSize);
   // Force a real API storage failure; only the disposable test database moves.
   const database = path.join(process.env.TTC_DATA_DIRECTORY, 'ttc.db');
   const heldDatabase = path.join(output, 'temporarily-unavailable.db');
@@ -315,8 +332,8 @@ async function run() {
   try {
     await clickCompletion(manual.id);
     await until(() => js(`!document.querySelector('#calendar-error').hidden &&
-      !${trainingButton(manual.id)}.parentElement.querySelector('[data-training-completion]').disabled`), 'failed status save');
-    assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-completion]').checked`), false);
+      !${trainingButton(manual.id)}.parentElement.querySelector('fieldset').disabled`), 'failed status save');
+    assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-status][value="completed"]').checked`), false);
   } finally {
     await fs.rename(heldDatabase, database);
     expectedHTTPFailure = null;
@@ -325,12 +342,18 @@ async function run() {
   await clickCompletion(manual.id);
   await waitStatus(manual.id, 'completed');
   assert.equal(await js('document.querySelector("#calendar-error").hidden'), true);
-  await clickCompletion(manual.id);
+  await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-status][value="planned"]').click()`);
   await waitStatus(manual.id, 'planned');
   await clickCancelled(manual.id);
   await waitStatus(manual.id, 'cancelled');
-  assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-completion]').disabled`), true);
-  assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-cancelled]').disabled`), true);
+  assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-status][value="completed"]').matches(':disabled')`), false);
+  assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelector('[data-training-status][value="cancelled"]').checked`), true);
+  assert.deepEqual(await js(`Array.from(${trainingButton(manual.id)}.parentElement.querySelectorAll('[data-training-status]')).map(input => input.value)`), ['completed', 'planned', 'cancelled']);
+  assert.equal(await js(`${trainingButton(manual.id)}.parentElement.querySelectorAll('input:checked').length`), 1);
+  await clickCompletion(manual.id);
+  await waitStatus(manual.id, 'completed');
+  await clickCancelled(manual.id);
+  await waitStatus(manual.id, 'cancelled');
   await js(`${trainingButton(manual.id)}.click()`);
   await until(() => js('!document.querySelector("#save-training-edit").disabled'), 'cancelled appointment editor');
   await js(`const status = document.querySelector('#training-status'); status.value = 'planned';
