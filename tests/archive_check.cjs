@@ -62,7 +62,7 @@ async function run() {
   await js(`window.fetch=window.__originalFetch;document.querySelector('#reload-invoices').click();`);
   await until(()=>js(`!document.querySelector('#reload-invoices').disabled && document.querySelectorAll('#saved-invoices-rows tr').length===1`),'archive retry');
   const second=await api('/api/profiles',{name:'Leeres Archivprofil'});
-  await js(`window.confirm=()=>true;document.querySelector('#active-profile').add(new Option('Leeres Archivprofil','${second.id}'));document.querySelector('#active-profile').value='${second.id}';document.querySelector('#active-profile').dispatchEvent(new Event('change'));`);
+  await js(`document.querySelector('#active-profile').add(new Option('Leeres Archivprofil','${second.id}'));document.querySelector('#active-profile').value='${second.id}';document.querySelector('#active-profile').dispatchEvent(new Event('change'));document.querySelector('#confirm-profile-switch').click();`);
   await until(()=>js(`document.querySelector('#active-profile').value==='${second.id}' && !document.querySelector('#reload-invoices').disabled && !document.querySelector('#saved-invoices-empty').hidden`),'profile archive isolation');
   assert.equal(await js(`document.querySelectorAll('#saved-invoices-rows a, #saved-invoices-rows button').length`),0);
   console.log('ARCHIVE_OK');

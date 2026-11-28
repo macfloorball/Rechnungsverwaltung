@@ -920,12 +920,14 @@ dialog textarea { width: 100%; }
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 12px;
 }
 
 .primary-button,
-.secondary-button {
+.secondary-button,
+.danger-button {
   min-height: 40px;
   padding: 8px 14px;
   font: inherit;
@@ -944,6 +946,26 @@ dialog textarea { width: 100%; }
   color: #153c61;
   background: #fff;
   border: 1px solid #cbd6e0;
+}
+
+.danger-button {
+  color: #fff;
+  background: #a12626;
+  border: 1px solid #a12626;
+}
+
+.primary-button:hover:not(:disabled) { background: #0e2d49; }
+.secondary-button:hover:not(:disabled) { background: #edf3f8; }
+.danger-button:hover:not(:disabled) { background: #801e1e; }
+
+:is(.primary-button, .secondary-button, .danger-button):focus-visible {
+  outline: 2px solid #153c61;
+  outline-offset: 3px;
+}
+
+:is(.secondary-button, .danger-button):disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .primary-button:disabled {
