@@ -1,6 +1,8 @@
 !include WordFunc.nsh
 !include "${__FILEDIR__}\native_helpers.nsh"
 ; The separately packaged third-party notices are informational and remain available.
+; Agreement pages and state belong only to the installer, never its uninstaller.
+!ifndef BUILD_UNINSTALLER
 !ifdef TTC_LICENSE_HASH
   !ifndef TTC_AGREEMENT_KEY
     !define TTC_AGREEMENT_KEY "Software\mac-floorball\TT Rechnungsverwaltung\Agreements"
@@ -20,6 +22,7 @@
       WriteRegStr HKCU "${TTC_AGREEMENT_KEY}" "AcceptedSHA256" "${TTC_LICENSE_HASH}"
     ${EndIf}
   !macroend
+!endif
 !endif
 
 !define MUI_BGCOLOR "F5F7FA"

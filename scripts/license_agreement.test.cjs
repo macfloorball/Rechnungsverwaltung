@@ -22,6 +22,7 @@ test('actual NSIS page uses content decision even for --updated and records only
   assert.match(page, /MUI_PAGE_CUSTOMFUNCTION_LEAVE TTC_LicenseAccepted/);
   assert.doesNotMatch(page, /skipPageIfUpdated\s+!insertmacro licensePage/);
   const hook = await fs.readFile(path.join(__dirname, '../build/windows/installer.nsh'), 'utf8');
+  assert.match(hook, /!ifndef BUILD_UNINSTALLER[\s\S]*Function TTC_LicensePre/);
   assert.match(hook, /ReadRegStr.*AcceptedSHA256/);
   assert.match(hook, /\$R0 == "\$\{TTC_LICENSE_HASH\}"/);
   assert.match(hook, /ElseIf.*Silent[\s\S]*SetErrorLevel 6/);
