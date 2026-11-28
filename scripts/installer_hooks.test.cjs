@@ -104,3 +104,48 @@ SectionEnd
     }
   }
 });
+
+test('native agreement hooks persist explicit consent and reject missing or changed silent consent', (t) => {
+  if (!process.env.TTC_MAKENSIS || !process.env.TTC_NSIS_PLUGINS) return t.skip('NSIS toolchain required');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ttc-native-agreement-'));
+  t.after(() => fs.rmSync(root, { recursive:true, force:true }));
+  const registryKey = `Software\\TTC-agreement-test-${randomUUID()}`;
+  const text = require('./license_agreement.cjs').agreementHash('Testvereinbarung');
+  const include = path.join(__dirname, '../build/windows/installer.nsh');
+  for (const accept of [false, true]) {
+    const script = path.join(root, `${accept ? 'accept' : 'check'}.nsi`);
+    fs.writeFileSync(script, `
+Unicode true
+!include LogicLib.nsh
+!include FileFunc.nsh
+!addplugindir /x86-unicode "${process.env.TTC_NSIS_PLUGINS}"
+!include "${path.join(__dirname, '../node_modules/app-builder-lib/templates/nsis/include/StdUtils.nsh')}"
+!define TTC_LICENSE_HASH "${text}"
+!define TTC_AGREEMENT_KEY "${registryKey}"
+!define UNINSTALL_REGISTRY_KEY "${registryKey}-installation"
+!define VERSION "1.0.0"
+!include "${include}"
+Name "Agreement regression"
+OutFile "${path.join(root, accept ? 'accept.exe' : 'check.exe')}"
+RequestExecutionLevel user
+Function .onInit
+  ${accept ? 'Call TTC_LicenseAccepted' : '!insertmacro customInit'}
+FunctionEnd
+Section
+  !insertmacro customInstall
+SectionEnd
+`);
+    const result = spawnSync(process.env.TTC_MAKENSIS, ['-V2', script], {encoding:'utf8',env:{...process.env,NSISDIR:process.env.NSISDIR || path.dirname(path.dirname(process.env.TTC_MAKENSIS))}});
+    assert.equal(result.status,0,result.stdout+result.stderr);
+  }
+  if (process.platform !== 'win32') return; // compilation is not native Windows execution
+  const run = (exe, args) => spawnSync(exe,args,{encoding:'utf8',timeout:20000});
+  const key = `HKCU\\${registryKey}`;
+  t.after(() => run('reg.exe',['delete',key,'/f']));
+  const check = () => run(path.join(root,'check.exe'),['/S']);
+  assert.equal(check().status,6,'legacy/missing consent requires the interactive page');
+  assert.equal(run(path.join(root,'accept.exe'),['/S']).status,0,'test adapter invokes the real license-page leave hook');
+  assert.equal(check().status,0,'a fresh process reuses the saved content hash');
+  assert.equal(run('reg.exe',['add',key,'/v','AcceptedSHA256','/d','old-content-hash','/f']).status,0);
+  assert.equal(check().status,6,'changed agreement cannot be silently accepted');
+});

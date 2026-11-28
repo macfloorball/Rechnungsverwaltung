@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { packageWindows } = require('./package_windows.cjs');
 const { copyDesktopRuntime } = require('./package_desktop_runtime.cjs');
+const { agreementHash } = require('./license_agreement.cjs');
 const { installerConfig } = require('./installer_config.cjs');
 const { withNsisTemplates } = require('./nsis_templates.cjs');
 const { createInstallationManifest, validateInstallation } = require('../electron/installation.cjs');
@@ -55,6 +56,15 @@ async function buildInstaller(root = path.join(__dirname, '..')) {
     // A failed compiler/Wine run must not replace a usable installer with its
     // small intermediate uninstaller generator.
     config.directories.output = staging;
+    // Hash only the agreement displayed for consent, never the notices inventory.
+    const agreement = await fs.readFile(config.nsis.license, 'utf8');
+    const hash = agreementHash(agreement);
+    // electron-builder adds a BOM: keep that transformation in disposable staging.
+    config.nsis.license = path.join(staging, 'agreement.txt');
+    await fs.writeFile(config.nsis.license, agreement);
+    const include = path.join(staging, 'agreement.nsh');
+    await fs.writeFile(include, `!define TTC_LICENSE_HASH "${hash}"\n!include "${config.nsis.include}"\n`);
+    config.nsis.include = include;
     const artifacts = await withNsisTemplates(path.join(staging, 'templates'), () =>
       build({ projectDir: root, prepackaged: output[0],
         targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), config, publish: 'never' }));

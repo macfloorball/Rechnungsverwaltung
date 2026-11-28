@@ -24,6 +24,15 @@ async function prepareNsisTemplates(destination, source = require('app-builder-l
     if (calls !== expected.calls || patched.includes('WinShell::')) throw Error(`NSIS template calls changed: ${name}`);
     await fs.writeFile(file, patched);
   }
+  const assisted = path.join(destination, 'assistedInstaller.nsh');
+  const original = await fs.readFile(assisted);
+  if (createHash('sha256').update(original).digest('hex') !== '8aa1230e9717b428664d613fcc5c6a060883410b34cb7853b517fe11b4ee0a76') {
+    throw Error('NSIS assisted template changed; review license decision.');
+  }
+  // Stock skipPageIfUpdated ignores changed agreements. Decide by content instead.
+  await fs.writeFile(assisted, original.toString('utf8').replace(
+    '    !insertmacro skipPageIfUpdated\n    !insertmacro licensePage',
+    '    !define MUI_PAGE_CUSTOMFUNCTION_PRE TTC_LicensePre\n    !define MUI_PAGE_CUSTOMFUNCTION_LEAVE TTC_LicenseAccepted\n    !define MUI_LICENSEPAGE_CHECKBOX\n    !insertmacro licensePage'));
   return destination;
 }
 
