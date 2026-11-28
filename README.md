@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v1.0.0"><img src="https://img.shields.io/badge/Desktop-1.0.0-173e60?style=flat-square" alt="Desktop-Version 1.0.0"></a>
+  <a href="https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v1.0.1"><img src="https://img.shields.io/badge/Desktop-1.0.1-173e60?style=flat-square" alt="Desktop-Version 1.0.1"></a>
   <img src="https://img.shields.io/badge/Windows%20%7C%20Linux-Desktop-426b87?style=flat-square" alt="Desktop-App für Windows und Linux">
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-3a3a3a?style=flat-square" alt="MIT-Lizenz"></a>
 </p>
@@ -42,18 +42,20 @@ Die fertige Desktop-App benötigt **kein separat installiertes Python, Node.js, 
 
 | System | Download / Installation |
 | --- | --- |
-| **Windows x64** | [Setup-EXE im Desktop-Release 1.0.0](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v1.0.0) |
-| **Linux x86_64** | [AppImage im Desktop-Release 1.0.0](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v1.0.0) |
+| **Windows x64** | [Setup-EXE im Desktop-Release 1.0.1](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v1.0.1) |
+| **Linux x86_64** | [AppImage im Desktop-Release 1.0.1](https://github.com/macfloorball/Rechnungsverwaltung/releases/tag/desktop-v1.0.1) |
 | **Fedora 45 x86_64** | [Signiertes DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/) |
 
 Download, Installation, Start und Updates sind in der **[deutschsprachigen Installationsanleitung](Planung/Installation.md)** beschrieben.
 Der Windows-Installer besitzt derzeit keine Authenticode-Signatur; Windows kann deshalb Warnungen anzeigen.
 
-Version **1.0.0** ist die erste stabile Vollversion für Windows und Linux. Sie
-bündelt Trainingsplanung, Rechnungsprofile, Unterschriften, Archiv und
-Jahresübersicht. Native Formularfelder sind im App-Design vereinheitlicht;
-Datumswahl, Tastaturbedienung und Validierung bleiben erhalten. Das signierte
-DNF-Paket trägt die Version **1.0.0-1**.
+Version **1.0.1** ergänzt bestätigte Rechnungsstartnummern je Profil und Jahr:
+Wer bereits außerhalb der App Rechnungen geschrieben hat, kann vor der ersten
+endgültigen App-Rechnung beispielsweise bei 11 beginnen. Profilwechsel und
+Profillöschung verwenden einheitliche Dialoge und Schaltflächen im App-Design.
+Beim ersten Start wird die Datenbank von Schema 14 auf 15 migriert; vorhandene
+Rechnungen und PDFs bleiben erhalten. Das signierte DNF-Paket bleibt vorerst
+bei Version **1.0.0-1**.
 
 > [!IMPORTANT]
 > **Vor einem Update eine vollständige App-Sicherung erstellen.** Version 0.2.0 migriert die Datenbank; bestehende Daten werden dem Standardprofil TTC zugeordnet. Für eine Rückkehr zu einer älteren Version ist eine passende Sicherung erforderlich. Bei Windows 0.1.0/0.1.1 ist einmalig ein vollständiges Setup ab 0.1.2 nötig. Details stehen in der Installationsanleitung.
