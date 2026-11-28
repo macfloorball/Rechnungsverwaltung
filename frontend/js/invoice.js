@@ -90,6 +90,9 @@ function renderPreview(data, elements) {
     elements.items.append(row);
   }
 
+  const taxNotice = document.querySelector("#invoice-tax-notice");
+  taxNotice.textContent = data.additional_tax_info || "";
+  taxNotice.hidden = !taxNotice.textContent.trim();
   elements.total.textContent = currencyFormatter.format(data.total_amount_cents / 100);
   elements.empty.hidden = data.items.length > 0;
   elements.preview.hidden = false;

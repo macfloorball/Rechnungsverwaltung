@@ -1,3 +1,4 @@
+import { initializeExportFolder } from "./export-folder.js";
 import { initializeAnnualOverview } from "./annual-overview.js";
 import { initializeProfileArchive } from "./profile-archive.js";
 import { initializeSavedSignatures } from "./signature-preview.js";
@@ -16,6 +17,7 @@ initializeAnnualOverview();
 initializeCalendar();
 initializeInvoicePreview();
 initializeSettings();
+initializeExportFolder();
 initializeSignatures();
 initializeSavedSignatures();
 initializeProfileArchive();

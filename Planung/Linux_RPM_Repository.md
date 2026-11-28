@@ -10,7 +10,9 @@ vollständige Desktop-Abnahme anderer Plattformen. Für normale Nutzer steht die
 ## Installation aus dem veröffentlichten Repository
 
 Das Repository ist unter der in `rpm-repository-policy.json` festgelegten URL
-veröffentlicht (RPM 1.0.0-1, Stand 27.11.2026). Installation:
+veröffentlicht. Appversion 1.0.2 wird als RPM 1.0.2-1 über den getrennten
+Release-Workflow verteilt; erst dessen erfolgreicher Abschluss einschließlich
+Pages aktualisiert DNF. Stand: 28.11.2026. Installation:
 
 ```sh
 sudo dnf config-manager addrepo --from-repofile=https://macfloorball.github.io/Rechnungsverwaltung/rpm/ttc-rechnungsverwaltung.repo

@@ -85,6 +85,7 @@ class InvoiceFooterDetails:
     payment_notice: str = ""
     invoice_footer: str = ""
     due_date: date | None = None
+    tax_notice: str = ""
 
 
 @dataclass(frozen=True)
@@ -491,10 +492,13 @@ def draw_invoice_footer(
     content_top_y = rule_bottom_y - 30
     if lines:
         lines.insert(0, "Bankverbindung:")
+    tax_lines = details.tax_notice.split("\n") if details.tax_notice.strip() else []
+    bank_heading_index = len(tax_lines)
+    lines = tax_lines + lines
     rendered = [
         Paragraph(
-            escape(line),
-            CONTENT_BOLD_STYLE if index == 0 and lines[0] == "Bankverbindung:" else CONTENT_STYLE,
+            escape(line) or "<br/>",
+            CONTENT_BOLD_STYLE if index == bank_heading_index and line == "Bankverbindung:" else CONTENT_STYLE,
         )
         for index, line in enumerate(lines)
     ]

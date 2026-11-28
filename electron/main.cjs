@@ -4,6 +4,7 @@ const { app, dialog, ipcMain, safeStorage } = require('electron');
 const { getDesktopConfig } = require('./config.cjs');
 const { createBackend } = require('./backend.cjs');
 const { createMainWindow } = require('./window.cjs');
+const { createExportFolders } = require('./export_folders.cjs');
 const { registerAppIPC } = require('./ipc.cjs');
 const { APP_NAME, configureIdentity } = require('./identity.cjs');
 const { createDesktopUpdates } = require('./updates.cjs');
@@ -14,6 +15,7 @@ let mainWindow = null;
 let frontendURL;
 let backend;
 let updates;
+let exportFolders;
 let stopping = false;
 let shutdownComplete = false;
 let shutdownPromise;
@@ -59,6 +61,7 @@ function openMainWindow() {
     return;
   }
   mainWindow = createMainWindow(frontendURL, fail);
+  exportFolders?.attach(mainWindow, frontendURL);
   mainWindow.on('close', (event) => { if (updates?.installer?.isBusy() && !updateExitApproved) event.preventDefault(); });
   mainWindow.once('closed', () => { mainWindow = null; });
 }
@@ -96,7 +99,8 @@ else app.whenReady().then(async () => {
   await backend.start();
   if (stopping) return;
   frontendURL = config.url;
-  const disposeIPC = registerAppIPC({ ipcMain, app, getMainWindow: () => mainWindow, getFrontendURL: () => frontendURL,
+  exportFolders = createExportFolders({ directory: app.getPath('userData'), dialog, getWindow: () => mainWindow });
+  const disposeIPC = registerAppIPC({ ipcMain, app, exportFolders, getMainWindow: () => mainWindow, getFrontendURL: () => frontendURL,
     getUpdateService: () => updates?.service, getUpdateController: () => updates?.controller });
   app.once('will-quit', disposeIPC);
   openMainWindow();

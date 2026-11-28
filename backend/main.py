@@ -723,6 +723,7 @@ def preview_invoice(
         "numbering": numbering,
         "numbering_mode": "manual" if payload.invoice_number else "automatic",
         "tax_id": organization.get("tax_id"),
+        "additional_tax_info": organization.get("additional_tax_info"),
         "iban": " ".join(organization["iban"][i:i+4] for i in range(0, len(organization["iban"]), 4)),
         "bic": organization["bic"],
         "account_holder": organization["account_holder"],
@@ -844,7 +845,6 @@ def _invoice_pdf_details(organization, invoice_number):
             f"USt-IdNr.: {organization['vat_id']}"
             if organization["vat_id"]
             else "",
-            organization["additional_tax_info"] or "",
         )
         if line
     )
@@ -856,6 +856,7 @@ def _invoice_pdf_details(organization, invoice_number):
             tax_lines=tax_lines,
         ),
         footer=InvoiceFooterDetails(
+            tax_notice=organization.get("additional_tax_info") or "",
             account_holder=organization["account_holder"],
             iban=organization["iban"],
             bic=organization["bic"] or "",

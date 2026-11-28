@@ -1,8 +1,53 @@
-; Keep installation scope stable even if the installer is launched by an admin.
 !include WordFunc.nsh
 !include "${__FILEDIR__}\native_helpers.nsh"
+; The separately packaged third-party notices are informational and remain available.
+; Agreement pages and state belong only to the installer, never its uninstaller.
+!ifndef BUILD_UNINSTALLER
+!ifdef TTC_LICENSE_HASH
+  !ifndef TTC_AGREEMENT_KEY
+    !define TTC_AGREEMENT_KEY "Software\mac-floorball\TT Rechnungsverwaltung\Agreements"
+  !endif
+  Var TTCAgreementAccepted
+  Function TTC_LicensePre
+    ReadRegStr $R0 HKCU "${TTC_AGREEMENT_KEY}" "AcceptedSHA256"
+    ${If} $R0 == "${TTC_LICENSE_HASH}"
+      Abort
+    ${EndIf}
+  FunctionEnd
+  Function TTC_LicenseAccepted
+    StrCpy $TTCAgreementAccepted "1"
+  FunctionEnd
+  !macro customInstall
+    ${If} $TTCAgreementAccepted == "1"
+      WriteRegStr HKCU "${TTC_AGREEMENT_KEY}" "AcceptedSHA256" "${TTC_LICENSE_HASH}"
+    ${EndIf}
+  !macroend
+!endif
+!endif
+
+!define MUI_BGCOLOR "F5F7FA"
+!define MUI_TEXTCOLOR "17212B"
+!define MUI_INSTFILESPAGE_HEADER_TEXT "TT Rechnungsverwaltung installieren"
+!define MUI_INSTFILESPAGE_HEADER_SUBTEXT "Die Anwendung wird eingerichtet. Persönliche Rechnungsdaten bleiben erhalten."
+!macro customHeader
+  SetFont "Segoe UI" 9
+  BrandingText "TT Rechnungsverwaltung · mac-floorball"
+!macroend
+
+; Keep installation scope stable even if the installer is launched by an admin.
 
 !macro customInit
+  !ifdef TTC_LICENSE_HASH
+    StrCpy $TTCAgreementAccepted "0"
+    ReadRegStr $R0 HKCU "${TTC_AGREEMENT_KEY}" "AcceptedSHA256"
+    ${If} $R0 == "${TTC_LICENSE_HASH}"
+      StrCpy $TTCAgreementAccepted "1"
+    ${ElseIf} ${Silent}
+      ; Missing legacy state is not evidence of consent. Require interactive setup.
+      SetErrorLevel 6
+      Quit
+    ${EndIf}
+  !endif
   ; A command-line /D override could put program files in a data directory.
   ClearErrors
   ; NSIS strips /D from $CMDLINE; StdUtils retrieves the original OS command line.

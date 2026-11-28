@@ -11,7 +11,7 @@ function calendar(fetch, lineEnding) {
   function node(){return {hidden:true,disabled:false,textContent:'',events:{},attributes:{},
     addEventListener(name,fn){this.events[name]=fn;},
     setAttribute(name,value){this.attributes[name]=value;},
-    append(){},replaceChildren(...children){this.children=children;}};}
+    focus(){this.focused=true;},showModal(){this.open=true;},close(value=''){this.returnValue=value;this.open=false;this.events.close();},append(){},replaceChildren(...children){this.children=children;}};}
   const elements=new Map();
   const document={querySelector(selector){if(!elements.has(selector))elements.set(selector,node());return elements.get(selector);},addEventListener(){},dispatchEvent(){},createElement:node};
   const source=fs.readFileSync(path.join(__dirname,'../frontend/js/calendar.js'),'utf8')
@@ -41,4 +41,37 @@ for(const kind of ['HTTP','network'])test(`calendar shows ${kind} failures and r
   await new Promise(setImmediate);
   assert.equal(message.hidden,true);
   assert.ok(elements.get('#calendar').children.length>0);
+});
+
+for (const action of ['cancel', '', 'confirm']) test(`monthly completion ${action || 'Escape'} sends only the confirmed request once`, async () => {
+  let posts = 0;
+  const elements = calendar(async (_url, options) => {
+    if (options?.method === 'POST') { posts++; return {ok:true,json:async()=>({updated_count:2})}; }
+    return {ok:true,json:async()=>({year:2026,month:11,days:[]})};
+  }, '\n');
+  await new Promise(setImmediate);
+  const button = elements.get('#complete-month');
+  const pending = button.events.click();
+  await button.events.click(); // a second activation while the modal is open
+  const dialog = elements.get('#complete-month-dialog');
+  assert.equal(dialog.open, true);
+  assert.match(elements.get('#complete-month-description').textContent, /aktuellen Profil/);
+  dialog.close(action);
+  await pending;
+  assert.equal(posts, action === 'confirm' ? 1 : 0);
+  assert.equal(button.focused, true);
+  assert.equal(button.disabled, false);
+});
+
+test('confirmed monthly HTTP failure retains error handling and allows a new attempt', async()=>{
+  const elements=calendar(async(_url,options)=>options?.method==='POST'
+    ? {ok:false,status:503} : {ok:true,json:async()=>({year:2026,month:11,days:[]})},'\n');
+  await new Promise(setImmediate);
+  const button=elements.get('#complete-month');
+  for(let attempt=0;attempt<2;attempt++){
+    const pending=button.events.click();elements.get('#complete-month-dialog').close('confirm');await pending;
+    assert.equal(elements.get('#calendar-error').hidden,false);
+    assert.match(elements.get('#calendar-error').textContent,/HTTP 503/);
+    assert.equal(button.disabled,false);
+  }
 });

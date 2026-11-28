@@ -356,3 +356,15 @@ def test_total_rules_have_equal_clearance_from_font_bounds():
     top, bottom = (line[1] for line in pdf.lines)
     assert abs(top - (baseline + ascent) - FOOTER_LINE_GAP) < 0.001
     assert abs(baseline - bottom - FOOTER_LINE_GAP) < 0.001
+
+
+def test_tax_notice_long_lines_and_empty_value_keep_footer_geometry():
+    from dataclasses import replace
+    footer = InvoiceFooterDetails(tax_notice='')
+    empty = Canvas(BytesIO())
+    baseline = draw_invoice_footer(empty, 9000, 500, footer)
+    assert baseline == draw_invoice_footer(Canvas(BytesIO()), 9000, 500, replace(footer, tax_notice='  '))
+    note = 'Gemäß §19 Abs.1 UStG enthält der Rechnungsbetrag keine Umsatzsteuer.\n' + 'Langtext ' * 90
+    pdf = render_invoice_pdf(2026, 11, date(2026, 12, 1), [], 9000,
+                             InvoiceDetails(footer=replace(footer, tax_notice=note)))
+    assert pdf.startswith(b'%PDF-')

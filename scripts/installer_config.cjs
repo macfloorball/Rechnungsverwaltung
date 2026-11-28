@@ -30,6 +30,8 @@ function installerConfig(root, metadata, release = { formatVersion: 1, version: 
         rfc3161TimeStampServer: policy.windows.timestampUrl } } : {}),
     },
     nsis: { oneClick: false, perMachine: false,
+      installerIcon: path.join(root, 'electron', 'assets', 'app-icon.ico'),
+      uninstallerIcon: path.join(root, 'electron', 'assets', 'app-icon.ico'),
       license: path.join(root, 'build', 'windows', 'DISTRIBUTION-LICENSE.txt'),
       include: path.join(root, 'build', 'windows', 'installer.nsh'),
       allowElevation: false, allowToChangeInstallationDirectory: false,
