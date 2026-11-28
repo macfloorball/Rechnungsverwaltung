@@ -144,6 +144,7 @@ export function initializeCalendar() {
   visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
   let loading = false;
   let reloadPending = false;
+  let completing = false;
 
   async function loadMonth(month) {
     if (loading) {
@@ -204,16 +205,23 @@ export function initializeCalendar() {
   });
 
   completeMonthButton.addEventListener("click", async () => {
-    if (
-      loading
-      || !window.confirm(
-        "Sollen alle geplanten Wochenplan-Termine dieses Monats als durchgeführt markiert werden?",
-      )
-    ) {
+    if (loading || completing) return;
+    completing = true;
+    const month = visibleMonth;
+    const dialog = document.querySelector("#complete-month-dialog");
+    document.querySelector("#complete-month-description").textContent =
+      `Alle noch geplanten Wochenplan-Termine im ${monthFormatter.format(month)} werden im aktuellen Profil als durchgeführt markiert. Manuelle, abgesagte und bereits durchgeführte Termine bleiben unverändert.`;
+    dialog.returnValue = "";
+    const confirmed = await new Promise((resolve) => {
+      dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+      dialog.showModal();
+    });
+    if (!confirmed) {
+      completing = false;
+      completeMonthButton.focus();
       return;
     }
 
-    const month = visibleMonth;
     const year = month.getFullYear();
     const monthNumber = month.getMonth() + 1;
     completeMonthButton.disabled = true;
@@ -247,9 +255,11 @@ export function initializeCalendar() {
         : "Termine konnten nicht aktualisiert werden.";
       errorMessage.hidden = false;
     } finally {
+      completing = false;
       completeMonthButton.disabled = false;
       previousButton.disabled = false;
       nextButton.disabled = false;
+      completeMonthButton.focus();
     }
   });
 
