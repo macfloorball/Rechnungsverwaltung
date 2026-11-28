@@ -54,8 +54,7 @@ Wer bereits außerhalb der App Rechnungen geschrieben hat, kann vor der ersten
 endgültigen App-Rechnung beispielsweise bei 11 beginnen. Profilwechsel und
 Profillöschung verwenden einheitliche Dialoge und Schaltflächen im App-Design.
 Beim ersten Start wird die Datenbank von Schema 14 auf 15 migriert; vorhandene
-Rechnungen und PDFs bleiben erhalten. Das signierte DNF-Paket bleibt vorerst
-bei Version **1.0.0-1**.
+Rechnungen und PDFs bleiben erhalten. Das signierte DNF-Paket trägt die Version **1.0.1-1**.
 
 > [!IMPORTANT]
 > **Vor einem Update eine vollständige App-Sicherung erstellen.** Version 0.2.0 migriert die Datenbank; bestehende Daten werden dem Standardprofil TTC zugeordnet. Für eine Rückkehr zu einer älteren Version ist eine passende Sicherung erforderlich. Bei Windows 0.1.0/0.1.1 ist einmalig ein vollständiges Setup ab 0.1.2 nötig. Details stehen in der Installationsanleitung.
