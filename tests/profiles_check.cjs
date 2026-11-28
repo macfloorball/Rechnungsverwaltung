@@ -28,7 +28,7 @@ async function run() {
     await action(); await finished; await loaded();
   }
   const selected=()=>js(`document.querySelector('#active-profile').value`);
-  const switchTo=identifier=>reload(()=>js(`window.confirm=()=>true; document.querySelector('#active-profile').value=${JSON.stringify(String(identifier))};document.querySelector('#active-profile').dispatchEvent(new Event('change'));`));
+  const switchTo=identifier=>reload(()=>js(`document.querySelector('#active-profile').value=${JSON.stringify(String(identifier))};document.querySelector('#active-profile').dispatchEvent(new Event('change'));document.querySelector('#confirm-profile-switch').click();`));
   if(process.env.TTC_TEST_RESUME==='1') {
     assert.equal(await selected(),'2');
     assert.equal(await js(`document.querySelector('#active-profile').selectedOptions[0].textContent`),'Firma neu');
@@ -107,13 +107,23 @@ async function run() {
   await js(`document.querySelector('#next-month').click()`);
   await until(()=>js(`document.querySelector('#calendar').getAttribute('aria-busy')==='false'`),'month loaded');
   const month=await js(`document.querySelector('#invoice-month').value`);
-  await js(`document.querySelector('[data-view-link="invoice"]').click();document.querySelector('[name="issuer_first_name"]').value='A Entwurf';window.confirm=()=>false;document.querySelector('#active-profile').value='2';document.querySelector('#active-profile').dispatchEvent(new Event('change'));`);
+  await js(`document.querySelector('[data-view-link="invoice"]').click();document.querySelector('[name="issuer_first_name"]').value='A Entwurf';document.querySelector('#active-profile').value='2';document.querySelector('#active-profile').dispatchEvent(new Event('change'));`);
   assert.equal(await selected(),'1');
   assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'A Entwurf');
+  assert.equal(await js(`document.querySelector('#profile-switch-dialog').open`),true);
+  assert.equal(await js('document.activeElement.id'),'cancel-profile-switch');
+  await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,'profile-switch-dialog.png'),(await contents.capturePage()).toPNG());
+  await key('Escape');
+  assert.equal(await js(`document.querySelector('#profile-switch-dialog').open`),false);
+  await until(()=>js("document.activeElement.id==='active-profile'"),'switch focus returned');
+  assert.equal(await js(`document.querySelector('[name="issuer_first_name"]').value`),'A Entwurf');
+  await js(`document.querySelector('#active-profile').value='2';document.querySelector('#active-profile').dispatchEvent(new Event('change'));document.querySelector('#cancel-profile-switch').click()`);
+  assert.equal(await selected(),'1');
+  assert.equal(await js(`localStorage.getItem('ttc.activeProfile')`),'1');
   // Save in flight keeps A, and cannot be applied to B. Delay transport before send.
   await js(`window.__nativeFetch=window.fetch;window.fetch=(url,options)=>url==='/api/organization/settings' && options?.method==='PUT' ? new Promise(resolve=>setTimeout(()=>resolve(window.__nativeFetch(url,options)),700)) : window.__nativeFetch(url,options);document.querySelector('[name="issuer_first_name"]').value='A gespeichert';document.querySelector('#organization-settings-form').requestSubmit();`);
   await pause();
-  await js(`window.confirm=()=>true;document.querySelector('#active-profile').value='2';document.querySelector('#active-profile').dispatchEvent(new Event('change'));`);
+  await js(`document.querySelector('#active-profile').value='2';document.querySelector('#active-profile').dispatchEvent(new Event('change'));`);
   assert.equal(await selected(),'1');
   assert.match(await js(`document.querySelector('#profile-message').textContent`),/Speicherung läuft/);
   await until(()=>js(`!document.querySelector('#organization-settings-success').hidden`),'A save done');
@@ -156,6 +166,14 @@ async function run() {
   assert.equal(await js(`document.querySelector('#active-profile').options.length`),3);
   await click('#delete-profile');
   await until(()=>js(`document.querySelector('#profile-delete-dialog').open`),'delete dialog again');
+  await js(`window.__deleteFetch=window.fetch;window.fetch=(url,options)=>options?.method==='DELETE' ? Promise.resolve(new Response(JSON.stringify({detail:'Testfehler beim Löschen'}),{status:503})) : window.__deleteFetch(url,options);document.querySelector('#confirm-profile-delete').click()`);
+  await until(()=>js(`document.querySelector('#profile-delete-error').textContent.includes('Testfehler')`),'delete error');
+  assert.equal(await js(`document.querySelector('#profile-delete-dialog').open && !document.querySelector('#confirm-profile-delete').disabled`),true);
+  await js(`window.fetch=window.__deleteFetch;void 0;`);
+  await key('Escape');
+  await until(()=>js("document.activeElement.id==='delete-profile'"),'delete focus returned');
+  await click('#delete-profile');
+  await until(()=>js(`document.querySelector('#profile-delete-dialog').open`),'delete retry');
   await reload(()=>js(`document.querySelector('#confirm-profile-delete').click()`));
   assert.equal(await selected(),'1');
   assert.equal(await js(`document.querySelector('#active-profile').options.length`),2);

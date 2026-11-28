@@ -61,7 +61,7 @@ async function run() {
   await js(`window.fetch=window.__originalFetch;document.querySelector('#annual-reload').click()`);
   await until(()=>js(`!document.querySelector('#annual-pdf').disabled`),'retry');
   const second=await api('/api/profiles',{name:'Leere Jahresübersicht'});
-  await js(`window.confirm=()=>true;document.querySelector('#active-profile').add(new Option('Leere Jahresübersicht','${second.id}'));document.querySelector('#active-profile').value='${second.id}';document.querySelector('#active-profile').dispatchEvent(new Event('change'))`);
+  await js(`document.querySelector('#active-profile').add(new Option('Leere Jahresübersicht','${second.id}'));document.querySelector('#active-profile').value='${second.id}';document.querySelector('#active-profile').dispatchEvent(new Event('change'));document.querySelector('#confirm-profile-switch').click()`);
   await until(()=>js(`document.querySelector('#active-profile').value==='${second.id}' && !document.querySelector('#annual-pdf').disabled && document.querySelector('#annual-message').textContent.includes('keine endgültigen')`),'profile isolation');
   assert.equal(await js(`document.querySelector('#annual-total').textContent`),'0,00 €');
   console.log('ANNUAL_OK');

@@ -544,6 +544,16 @@
         </div>
       </form>
     </dialog>
+    <dialog id="profile-switch-dialog" aria-labelledby="profile-switch-title" aria-describedby="profile-switch-description">
+      <form id="profile-switch-form">
+        <div class="dialog-heading"><h2 id="profile-switch-title">Profil wechseln?</h2></div>
+        <p id="profile-switch-description">Ungespeicherte Eingaben und offene Dialoge werden verworfen. Gespeicherte Daten bleiben erhalten.</p>
+        <div class="dialog-actions">
+          <button id="cancel-profile-switch" class="secondary-button" type="button" autofocus>Abbrechen</button>
+          <button id="confirm-profile-switch" class="primary-button" type="submit">Profil wechseln</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="profile-delete-dialog" aria-labelledby="profile-delete-title">
       <form id="profile-delete-form">
         <h2 id="profile-delete-title">Profil löschen</h2>
@@ -551,8 +561,8 @@
         <p>Das Profil wird aus der aktiven Auswahl entfernt. Arbeitsdaten, Logo und Profilunterschrift werden gelöscht. Fertige Rechnungen samt Unterschriftenständen und PDFs bleiben im schreibgeschützten Rechnungsarchiv gelöschter Profile erhalten. Andere Profile und externe Sicherungen bleiben unverändert.</p>
         <p id="profile-delete-error" role="alert"></p>
         <div class="dialog-actions">
-          <button id="cancel-profile-delete" type="button">Abbrechen</button>
-          <button id="confirm-profile-delete" type="submit">Profil endgültig löschen</button>
+          <button id="cancel-profile-delete" class="secondary-button" type="button">Abbrechen</button>
+          <button id="confirm-profile-delete" class="danger-button" type="submit">Profil endgültig löschen</button>
         </div>
       </form>
     </dialog>

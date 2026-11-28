@@ -56,18 +56,41 @@ export async function initializeProfiles() {
     return false;
   }
 
+  const switchDialog = document.querySelector('#profile-switch-dialog');
+  const switchForm = document.querySelector('#profile-switch-form');
+  const switchCancel = document.querySelector('#cancel-profile-switch');
+  let requestedProfile = null;
   select.addEventListener('change', () => {
     const requested = select.value;
     select.value = String(activeId);
+    if (requested === String(activeId) || switchDialog.open || switching) return;
     if (editing || deletion || pendingWrites) {
       message.textContent = 'Speicherung läuft. Bitte vor dem Profilwechsel warten.';
       select.focus();
       return;
     }
-    if (!window.confirm('Profil wechseln? Ungespeicherte Eingaben und offene Dialoge werden verworfen. Gespeicherte Daten bleiben erhalten.')) return;
+    requestedProfile = requested;
+    message.textContent = '';
+    switchDialog.showModal();
+    switchCancel.focus();
+  });
+  switchCancel.addEventListener('click', () => switchDialog.close());
+  switchDialog.addEventListener('close', () => {
+    requestedProfile = null;
+    if (!switching) select.focus();
+  });
+  switchForm.addEventListener('submit', event => {
+    event.preventDefault();
+    if (!switchDialog.open || !requestedProfile || switching) return;
+    // A write may have started after the confirmation was opened.
+    if (editing || deletion || pendingWrites) {
+      switchDialog.close();
+      message.textContent = 'Speicherung läuft. Bitte vor dem Profilwechsel warten.';
+      return;
+    }
     switching = true;
     select.disabled = createButton.disabled = renameButton.disabled = deleteButton.disabled = true;
-    storage.set('ttc.activeProfile', requested);
+    storage.set('ttc.activeProfile', requestedProfile);
     // Reload is an isolation boundary: no callback from the old document can
     // update the new profile. Already started requests retain their profile ID.
     location.reload();
