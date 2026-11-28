@@ -11,7 +11,7 @@ benötigt. Die Rechnungsverwaltung arbeitet lokal ohne Benutzerkonto.
 | --- | --- | --- |
 | Windows 10/11, x64 (Intel/AMD 64 Bit) | [Desktop 1.0.1: Setup-EXE](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v1.0.1/ttc-rechnungsverwaltung-1.0.1-windows-x64-setup.exe) | Windows-Live-Update 0.1.2 → 0.1.3 belegt; neue Features in CI geprüft, zusätzliche Sonderfälle siehe [#46](https://github.com/macfloorball/Rechnungsverwaltung/issues/46) |
 | Linux, x86_64 / amd64 | [Desktop 1.0.1: AppImage](https://github.com/macfloorball/Rechnungsverwaltung/releases/download/desktop-v1.0.1/ttc-rechnungsverwaltung-1.0.1-linux-x64.AppImage) | Native Fedora-45-Nachweise für Vorgängerversionen; Ubuntu 24.04 LTS ist Ziel-/CI-System, keine vollständige GUI-Abnahme |
-| Fedora 45, x86_64 | [Signiertes DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/) | RPM 1.0.0-1; Installation, Update, Entfernung und Signaturablehnung im isolierten Fedora-Container geprüft |
+| Fedora 45, x86_64 | [Signiertes DNF-Repository](https://macfloorball.github.io/Rechnungsverwaltung/rpm/) | RPM 1.0.1-1; Installation, Update, Entfernung und Signaturablehnung im isolierten Fedora-Container geprüft |
 
 Für ARM und macOS sind keine fertigen Pakete veröffentlicht. Andere
 Linux-Distributionen sind nicht pauschal als geprüft zugesagt. Auf Fedora ist
@@ -45,7 +45,7 @@ Die bestehende Migrationssicherung wird vor dem Upgrade erstellt. Vorhandene
 Rechnungen, Nummern und PDFs bleiben erhalten; bestehende Nummernlücken werden
 nicht als externe Rechnungen interpretiert. Für eine Rückkehr zu einer älteren
 Appversion ist eine passende Sicherung erforderlich. Der separat veröffentlichte
-DNF-Paketstand bleibt vorerst 1.0.0-1; DNF-Updates laufen über die Paketverwaltung.
+DNF-Paketstand ist 1.0.1-1; DNF-Updates laufen über die Paketverwaltung.
 
 Beim erstmaligen Update von einer Version vor 0.2.0 migriert der erste Start
 die Datenbank für Profile, Wiederholungen und Jahresnummernkreise.
