@@ -1,6 +1,6 @@
 {
   "name": "ttc-rechnungsverwaltung",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "license": "MIT",
   "description": "Lokale TT Rechnungsverwaltung für Windows und Linux",
