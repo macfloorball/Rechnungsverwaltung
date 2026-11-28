@@ -93,11 +93,16 @@ async function run() {
     await new Promise(resolve=>setTimeout(resolve,100));
     await fs.writeFile(path.join(process.env.TTC_TEST_OUTPUT,`numbering-start-${width}.png`),(await contents.capturePage()).toPNG());
   }
+  await js(`document.querySelector('[data-view-link=calendar]').click()`);
+  await until(()=>js(`document.querySelector('#calendar').getAttribute('aria-busy')==='false'`),'calendar ready before external preview');
   for (const [month, serial] of [[4,11],[5,12]]) {
-    await js(`document.querySelector('[data-view-link=calendar]').click(); document.dispatchEvent(new CustomEvent('calendar-month-changed',{detail:{year:2025,month:${month}}})); document.querySelector('#manual-invoice-number').value=''; document.querySelector('#manual-invoice-number').dispatchEvent(new Event('input')); document.querySelector('#invoice-date').value='2028-11-01'; document.querySelector('#invoice-date').dispatchEvent(new Event('input')); document.querySelector('#invoice-preview-form').requestSubmit()`);
+    await js(`document.querySelector('#invoice-month').value='2025-${String(month).padStart(2,'0')}'; document.querySelector('#invoice-month').dispatchEvent(new Event('input')); document.querySelector('#manual-invoice-number').value=''; document.querySelector('#manual-invoice-number').dispatchEvent(new Event('input')); document.querySelector('#invoice-date').value='2028-11-01'; document.querySelector('#invoice-date').dispatchEvent(new Event('input')); document.querySelector('#invoice-preview-form').requestSubmit()`);
     await until(()=>js(`!document.querySelector('#invoice-preview').hidden && document.querySelector('#invoice-preview-details').textContent.includes('Automatischer Vorschlag: 2028-${serial}')`),'external start preview');
     await js(`document.querySelector('#create-invoice').click()`);
     await until(async()=>(await api('/api/invoices',undefined,'GET')).some(invoice=>invoice.invoice_number===`2028-${serial}`),'external start finalized');
+    // Persistence can precede the renderer's response handling. Wait for its
+    // completion before submitting the next preview.
+    await until(()=>js(`document.querySelector('#create-invoice').getAttribute('aria-busy')==='false' && !document.querySelector('#invoice-month').disabled`),'external invoice UI settled');
   }
   await js(`document.querySelector('[data-view-link=invoice]').click(); document.querySelector('#counter-load').click()`);
   await until(()=>js(`document.querySelector('#counter-next').value==='13' && document.querySelector('#counter-start-save').disabled`),'start locked after finalization');
