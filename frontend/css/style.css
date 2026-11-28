@@ -1219,3 +1219,5 @@ dialog .number-correction-confirmation input {
 .annual-toolbar select { min-width: 140px; }
 #annual-table { min-width: 0; }
 #annual-table th:first-child { text-align: left; }
+
+.invoice-tax-notice { white-space: pre-wrap; overflow-wrap: anywhere; }

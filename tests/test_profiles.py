@@ -298,3 +298,40 @@ def test_profile_delete_database_failure_rolls_back_before_archiving(environment
     request(client, 'DELETE', '/api/profiles/1', body=summary, expected=409)
     assert request(client, 'GET', '/api/profiles/1/deletion') == summary
     assert (documents / invoice['pdf_path']).read_bytes() == pdf
+
+
+def test_tax_notice_persists_per_profile_and_is_in_preview_and_final_pdf(environment, tmp_path):
+    import base64
+    import subprocess
+    import shutil
+    from backend.models import OrganizationSettingsUpdate
+    client, database, _documents = environment
+    second = request(client, 'POST', '/api/profiles', body={'name': 'Ohne Hinweis'}, expected=201)['id']
+    note = 'Gemäß §19 Abs.1 UStG enthält der Rechnungsbetrag keine Umsatzsteuer.\nZweite Zeile <frei> & bearbeitbar.'
+    body = OrganizationSettingsUpdate().model_dump() | {'additional_tax_info': note}
+    request(client, 'PUT', '/api/organization/settings', body=body)
+    db.initialize_database(database)  # reopening/migration must preserve the saved text
+    assert request(client, 'GET', '/api/organization/settings')['additional_tax_info'] == note
+    assert not request(client, 'GET', '/api/organization/settings', second)['additional_tax_info']
+    identifier = activity(client, 1)
+    training(client, 1, identifier)
+    preview = request(client, 'POST', '/api/invoices/preview', body={'year': 2025, 'month': 1, 'render_pdf': True})
+    assert preview['additional_tax_info'] == note
+    invoice = request(client, 'POST', '/api/invoices', body={'year': 2025, 'month': 1}, expected=201)
+    for kind, pdf in [('preview', base64.b64decode(preview['pdf_base64'])), ('final', request(client, 'GET', f'/api/invoices/{invoice["id"]}/pdf'))]:
+        file = tmp_path / f'{kind}.pdf'
+        file.write_bytes(pdf)
+        if not shutil.which('pdftotext'):
+            pytest.skip('PDF text extraction requires Poppler; persistence verified above')
+        text = subprocess.check_output(['pdftotext', '-layout', str(file), '-'], text=True)
+        assert 'keine Umsatzsteuer.' in text
+        assert 'Zweite Zeile <frei> & bearbeitbar.' in text
+        assert text.index('Endsumme:') < text.index('Gemäß')
+        assert text.count('keine Umsatzsteuer.') == 1
+    before = request(client, 'GET', f'/api/invoices/{invoice["id"]}/pdf')
+    request(client, 'PUT', '/api/organization/settings', body=body | {'additional_tax_info': None})
+    assert request(client, 'GET', f'/api/invoices/{invoice["id"]}/pdf') == before
+    preview = request(client, 'POST', '/api/invoices/preview', body={'year': 2025, 'month': 1, 'render_pdf': True})
+    file = tmp_path / 'empty.pdf'
+    file.write_bytes(base64.b64decode(preview['pdf_base64']))
+    assert 'keine Umsatzsteuer' not in subprocess.check_output(['pdftotext', str(file), '-'], text=True)

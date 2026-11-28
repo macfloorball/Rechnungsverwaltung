@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 // Run the production renderer with a small DOM fixture. The integration test
 // additionally checks the real archive, backend, CSS and Electron window.
-function invoiceUI(create) {
+function invoiceUI(create, taxNotice = "") {
   class Element {
     constructor() {
       this.hidden = true;
@@ -52,7 +52,7 @@ function invoiceUI(create) {
         return create(options);
       }
       const period = JSON.parse(options.body);
-      return { ok: true, json: async () => ({ ...period, invoice_number: period.invoice_number || '2026-01', total_amount_cents: 3000,
+      return { ok: true, json: async () => ({ ...period, additional_tax_info: taxNotice, invoice_number: period.invoice_number || '2026-01', total_amount_cents: 3000,
         items: [{ description: 'Training', training_date: '2026-11-01', hours: 2, amount_cents: 3000 }] }) };
     },
   });
@@ -158,4 +158,12 @@ test('manual number is optional, explicit and invalidates a previous preview', a
   await ui.preview();
   await ui.click();
   assert.equal(saved.invoice_number, 'RE-2026-04');
+});
+
+test('preview shows the optional tax notice literally and hides an empty notice',async()=>{
+  for(const text of ['', 'Gemäß §19 Abs.1 UStG keine Umsatzsteuer.\n<frei> & bearbeitbar']){
+    const ui=invoiceUI(success,text);await ui.preview();
+    assert.equal(ui.get('#invoice-tax-notice').textContent,text);
+    assert.equal(ui.get('#invoice-tax-notice').hidden,!text);
+  }
 });
