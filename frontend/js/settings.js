@@ -143,6 +143,7 @@ function buildActivityRow(activity) {
   if (activity.id === undefined) {
     const discard = element("button", "Verwerfen");
     discard.type = "button";
+    discard.className = "secondary-button";
     discard.addEventListener("click", () => {
       row.remove();
       updateActivityCapacity();
