@@ -236,3 +236,5 @@ export async function initializeProfiles() {
   if (notice) { message.textContent = notice; storage.set('ttc.profileDeletionNotice', ''); }
   return true;
 }
+
+export function currentProfileId() { return activeId; }

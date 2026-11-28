@@ -27,7 +27,7 @@ const ACTION_ERRORS = Object.freeze({
 });
 const error = (code, message) => ({ ok: false, error: { code, message } });
 
-function registerAppIPC({ ipcMain, app, getMainWindow, getFrontendURL, getUpdateService, getUpdateController }) {
+function registerAppIPC({ ipcMain, app, exportFolders, getMainWindow, getFrontendURL, getUpdateService, getUpdateController }) {
   function allowed(event) {
     const window = getMainWindow(), sender = event.sender, frame = event.senderFrame;
     if (!window || window.isDestroyed() || sender !== window.webContents || sender.isDestroyed()
@@ -46,6 +46,15 @@ function registerAppIPC({ ipcMain, app, getMainWindow, getFrontendURL, getUpdate
         return action(...args);
       } catch { return error('INTERNAL_ERROR', 'Anfrage konnte nicht verarbeitet werden.'); }
     });
+  }
+  if (exportFolders) {
+    const profileArgument = (args) => args.length === 1 && Number.isSafeInteger(args[0]) && args[0] > 0;
+    for (const method of ['get', 'choose', 'clear']) {
+      handle(`ttc:request:exports:${method}`, async (id) => {
+        try { return { ok: true, value: await exportFolders[method](id) }; }
+        catch { return error('EXPORT_UNAVAILABLE', 'PDF-Zielordner konnte nicht gelesen oder gespeichert werden.'); }
+      }, profileArgument);
+    }
   }
   handle(GET_VERSION_CHANNEL, () => ({ ok: true, value: app.getVersion() }));
   if (getUpdateService) {

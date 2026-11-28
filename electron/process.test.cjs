@@ -8,7 +8,7 @@ const path = require('node:path');
 
 function run(file, requireMock, globals = {}) {
   vm.runInNewContext(readFileSync(path.join(__dirname, file), 'utf8'), {
-    require: requireMock, console, __dirname, ...globals,
+    require: (name) => name === './export_folders.cjs' ? { createExportFolders: () => ({ attach() {} }) } : requireMock(name), console, __dirname, ...globals,
   }, { filename: file });
 }
 
@@ -20,7 +20,7 @@ test('preload exposes only named update methods without generic IPC', () => {
   });
   assert.equal(exposed.key, 'ttcDesktop');
   assert.equal(exposed.api.apiVersion, 1);
-  assert.deepEqual(Object.keys(exposed.api), ['apiVersion', 'getVersion', 'getUpdateStatus', 'checkForUpdates', 'acknowledgeUpdate', 'deferUpdate', 'requestUpdate', 'cancelUpdateDownload', 'installUpdate', 'setUpdateAccessToken', 'clearUpdateAccessToken', 'onUpdateStatus']);
+  assert.deepEqual(Object.keys(exposed.api), ['apiVersion', 'getInvoiceExportFolder', 'chooseInvoiceExportFolder', 'clearInvoiceExportFolder', 'getVersion', 'getUpdateStatus', 'checkForUpdates', 'acknowledgeUpdate', 'deferUpdate', 'requestUpdate', 'cancelUpdateDownload', 'installUpdate', 'setUpdateAccessToken', 'clearUpdateAccessToken', 'onUpdateStatus']);
   assert.equal(typeof exposed.api.getVersion, 'function');
   assert.ok(Object.isFrozen(exposed.api));
 });

@@ -2,7 +2,7 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-// No generic channels, URLs, paths, Electron events or installation commands.
+// No generic IPC, filesystem operations, URLs or installation commands.
 async function request(channel, args, valid = args.length === 0) {
   if (!valid) return { ok: false, error: { code: 'INVALID_ARGUMENT', message: 'Ungültige Argumente.' } };
   try { return await ipcRenderer.invoke(channel, ...args); }
@@ -15,6 +15,9 @@ function versionArgument(args) {
 }
 const desktopAPI = Object.freeze({
   apiVersion: 1,
+  getInvoiceExportFolder(...args) { return request('ttc:request:exports:get', args, args.length === 1 && Number.isSafeInteger(args[0]) && args[0] > 0); },
+  chooseInvoiceExportFolder(...args) { return request('ttc:request:exports:choose', args, args.length === 1 && Number.isSafeInteger(args[0]) && args[0] > 0); },
+  clearInvoiceExportFolder(...args) { return request('ttc:request:exports:clear', args, args.length === 1 && Number.isSafeInteger(args[0]) && args[0] > 0); },
   getVersion(...args) { return request('ttc:request:app:get-version', args); },
   getUpdateStatus(...args) { return request('ttc:request:updates:get-status', args); },
   checkForUpdates(...args) { return request('ttc:request:updates:check', args); },

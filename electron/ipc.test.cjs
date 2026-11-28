@@ -58,3 +58,19 @@ test('preload fixes channel, validates arguments and sanitizes transport failure
   assert.equal(result.error.code,'IPC_UNAVAILABLE');assert.ok(!JSON.stringify(result).includes('private'));
   assert.equal(api.invoke,undefined);assert.equal(api.send,undefined);assert.equal(api.on,undefined);
 });
+
+test('export folder IPC accepts only positive profile IDs from the trusted main frame', async()=>{
+  const handlers=new Map();const calls=[];
+  const frame={url:'http://127.0.0.1:8000/'};
+  const sender={mainFrame:frame,isDestroyed:()=>false};
+  const window={webContents:sender,isDestroyed:()=>false};
+  const service=Object.fromEntries(['get','choose','clear'].map(method=>[method,async id=>{calls.push([method,id]);return '/chosen';}]));
+  const dispose=registerAppIPC({ipcMain:{handle:(key,fn)=>handlers.set(key,fn),removeHandler:key=>handlers.delete(key)},app:{getVersion:()=> '1.0.1'},exportFolders:service,getMainWindow:()=>window,getFrontendURL:()=>frame.url});
+  for(const method of ['get','choose','clear']){
+    const invoke=handlers.get(`ttc:request:exports:${method}`);
+    for(const id of [0,-1,'1',{path:'/arbitrary'},null,Number.MAX_SAFE_INTEGER+1]) assert.equal((await invoke({sender,senderFrame:frame},id)).error.code,'INVALID_ARGUMENT');
+    assert.equal((await invoke({sender:{},senderFrame:frame},1)).error.code,'FORBIDDEN');
+    assert.deepEqual(await invoke({sender,senderFrame:frame},1),{ok:true,value:'/chosen'});
+  }
+  assert.equal(calls.length,3);dispose();assert.equal(handlers.size,0);
+});
